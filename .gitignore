@@ -1,0 +1,38 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug and profiling
+*.pdb
+perf.data
+perf.data.old
+flamegraph.svg
+
+# Testing artifacts
+*.profraw
+*.profdata
+
+# Backup files
+*.bak
+*.tmp
+
+# Cargo configuration (may contain sensitive data)
+.cargo/config.toml
+
+# Generated documentation
+/doc/
+
+# Fuzzing artifacts
+fuzz/artifacts/
+fuzz/corpus/
+
+# OS-specific files
+Thumbs.db
