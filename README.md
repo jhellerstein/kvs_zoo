@@ -78,7 +78,7 @@ Strongest consistency guarantee using Paxos consensus for total ordering.
 
 - **`lattice_core.rs`**: Coordination-free KVS using lattice merge operations
 - **`vector_clock.rs`**: Vector clocks for causal ordering
-- **Causal Values**: `DomPair<VCWrapper, SetUnion<T>>` for causally-consistent multi-values
+- **Causal Values**: `DomPair<VectorClock, SetUnion<T>>` for causally-consistent multi-values
 
 ### Supporting Infrastructure
 
@@ -224,13 +224,13 @@ let replica_kvs = KVSCore::put(replica_ops);
 
 The KVS Zoo demonstrates the spectrum of consistency models:
 
-| Variant            | Consistency      | Coordination        | Latency    | Fault Tolerance  |
-| ------------------ | ---------------- | ------------------- | ---------- | ---------------- |
-| Local              | N/A              | None                | Lowest     | None             |
-| Replicated         | Eventual         | Gossip              | Low        | High             |
-| Sharded            | Per-Key          | Hash routing        | Low        | Medium           |
-| Sharded+Replicated | Causal           | Gossip+Hash         | Medium     | High             |
-| **Linearizable**   | **Linearizable** | **Paxos Consensus** | **Higher** | **Configurable** |
+| Variant | Consistency | Coordination | Latency | Fault Tolerance |
+|---------|------------|--------------|---------|-----------------|
+| Local | N/A | None | Lowest | None |
+| Replicated | Eventual | Gossip | Low | High |
+| Sharded | Per-Key | Hash routing | Low | Medium |
+| Sharded+Replicated | Causal | Gossip+Hash | Medium | High |
+| **Linearizable** | **Linearizable** | **Paxos Consensus** | **Higher** | **Configurable** |
 
 ## 🧪 Testing
 

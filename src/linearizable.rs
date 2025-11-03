@@ -1,16 +1,12 @@
-use super::paxos::{CorePaxos, PaxosConfig};
-use super::paxos_with_client::PaxosLike;
-use crate::core::KVSNode;
+use crate::core::KVSCore;
+use crate::local::KVSNode;
+use crate::paxos::{CorePaxos, PaxosConfig};
+use crate::paxos_with_client::PaxosLike;
 use crate::protocol::KVSOperation;
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::location::external_process::{ExternalBincodeSink, ExternalBincodeStream};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-
-// Type aliases to reduce complexity warnings
-type LinearizableInputSink<V> = ExternalBincodeSink<KVSOperation<V>>;
-type LinearizableOutputStream<V> = ExternalBincodeStream<(String, Option<V>)>;
-type LinearizablePorts<V> = (LinearizableInputSink<V>, LinearizableOutputStream<V>);
 
 /// A linearizable Key-Value Store implementation using Paxos consensus
 ///
@@ -59,8 +55,6 @@ where
         + Eq
         + Default
         + std::fmt::Debug
-        + Send
-        + Sync
         + 'static,
 {
     /// Run a linearizable KVS using Paxos consensus
@@ -78,13 +72,17 @@ where
     /// - Failures port for GET operations on missing keys
     pub fn run_linearizable_kvs<'a>(
         proxy: &Process<'a, ()>,
-        proposers: &Cluster<'a, super::paxos::Proposer>,
-        acceptors: &Cluster<'a, super::paxos::Acceptor>,
+        proposers: &Cluster<'a, crate::paxos::Proposer>,
+        acceptors: &Cluster<'a, crate::paxos::Acceptor>,
         replicas: &Cluster<'a, KVSNode>,
         client_external: &External<'a, ()>,
         f: usize,
         _checkpoint_frequency: usize,
-    ) -> LinearizablePorts<V> {
+    ) -> (
+        ExternalBincodeSink<KVSOperation<V>>,
+        ExternalBincodeStream<(String, V)>,
+        ExternalBincodeStream<String>,
+    ) {
         let paxos_config = PaxosConfig {
             f,
             i_am_leader_send_timeout: 5,
@@ -137,30 +135,34 @@ where
             .values();
 
         // Each replica applies operations to its local KVS using KVSCore
+        // We batch operations per tick before applying them
         let replica_tick = replicas.tick();
-
-        // Demux operations once at the caller level
-        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(replica_operations.clone());
-
+        let batched_operations = replica_operations
+            .clone()
+            .batch(&replica_tick, nondet!(/** batch operations */));
+        
         // Put operations into the KVS
-        let replica_kvs = crate::lww::KVSLww::put(put_tuples);
+        let replica_kvs = KVSCore::put(replica_operations.clone());
 
         // Handle GET operations with linearizable reads
-        // The assume_ordering is crucial for linearizability - it ensures reads see
+        // The assume_ordering is crucial for linearizability - it ensures reads see 
         // all preceding writes in the total order established by Paxos
-        let replica_results = crate::lww::KVSLww::get(
-            get_keys
-                .batch(&replica_tick, nondet!(/** batch gets */))
-                .assume_ordering::<TotalOrder>(nondet!(/** total order from paxos */)),
+        let (replica_results, replica_failures) = KVSCore::get(
+            batched_operations.assume_ordering::<TotalOrder>(nondet!(/** total order from paxos */)),
             replica_kvs.snapshot(&replica_tick, nondet!(/** snapshot for gets */)),
         );
 
         // Collect results back to proxy and send to client
-        let proxy_results = replica_results.all_ticks().send_bincode(proxy).values();
+        let proxy_results = replica_results.send_bincode(proxy).values();
+        let proxy_failures = replica_failures.send_bincode(proxy).values();
+
         let get_results_port = proxy_results
             .assume_ordering::<TotalOrder>(nondet!(/** maintain total order for results */))
             .send_bincode_external(client_external);
-
+        let get_fails_port = proxy_failures
+            .assume_ordering::<TotalOrder>(nondet!(/** maintain total order for failures */))
+            .send_bincode_external(client_external);
+        
         // Complete the checkpoint channel (unused for now, but required by PaxosLike trait)
         // Provide an empty stream that is converted to Optional using a vec instead of std::iter::empty
         let empty_checkpoint = acceptors
@@ -168,7 +170,7 @@ where
             .max();
         acceptor_checkpoint_complete.complete(empty_checkpoint);
 
-        (input_port, get_results_port)
+        (input_port, get_results_port, get_fails_port)
     }
 }
 

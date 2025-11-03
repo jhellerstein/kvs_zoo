@@ -1,247 +1,175 @@
-//! Sharded KVS support and implementations
-//!
-//! This module provides the `ShardableKVS` trait that allows different storage
-//! implementations to work with sharded routing systems, plus implementations
-//! of this trait for all storage types.
-
-use crate::core::KVSNode;
-use crate::values::LwwWrapper;
-use hydro_lang::live_collections::stream::NoOrder;
+use crate::core::KVSCore;
+use crate::local::KVSNode;
+use crate::protocol::KVSOperation;
+use hydro_lang::location::MemberId;
+use hydro_lang::location::external_process::{ExternalBincodeSink, ExternalBincodeStream};
 use hydro_lang::prelude::*;
-use lattices::Merge;
+use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-// Type aliases to reduce complexity warnings
-type ShardedGetResult<'a, V> =
-    Stream<(String, Option<V>), Tick<Cluster<'a, KVSNode>>, Bounded, NoOrder>;
+/// A sharded Key-Value Store implementation using Hydro
+///
+/// This implementation partitions data across multiple cluster nodes based on key hashing.
+/// Each key is consistently routed to the same shard, providing horizontal scalability.
+///
+/// ## Sharding Strategy
+///
+/// 1. **Consistent Hashing**: Keys are hashed and modulo'd by shard count
+/// 2. **Specialized Proxy**: Proxy calculates shard for each key and unicasts to specific cluster member
+/// 3. **Independent Shards**: Each shard maintains its own local KVS state
+/// 4. **No Cross-Shard Communication**: Shards operate independently for maximum performance
+///
+/// ## Architecture
+///
+/// ```text
+/// External Client
+///       ↓
+/// Sharding Proxy (hash key → shard ID)
+///       ↓
+/// Shard 0  Shard 1  Shard 2  ...
+/// [KVS]    [KVS]    [KVS]
+/// ```
+pub struct ShardedKVSServer<V>
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
+{
+    _phantom: std::marker::PhantomData<V>,
+}
 
-/// Calculate which shard a key should be assigned to
-///
-/// This function provides consistent hash-based sharding that ensures
-/// the same key always maps to the same shard across all nodes.
-///
-/// # Arguments
-/// * `key` - The key to hash
-/// * `num_shards` - Total number of shards available
-///
-/// # Returns
-/// A shard ID in the range [0, num_shards)
-pub fn calculate_shard_id(key: &str, num_shards: usize) -> u32 {
+/// Standalone function for shard calculation (can be used in q!() macros)
+pub fn calculate_shard_id(key: &str, shard_count: usize) -> u32 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
-    let hash = hasher.finish();
-    (hash % num_shards as u64) as u32
+    (hasher.finish() % shard_count as u64) as u32
 }
 
-/// Trait for KVS implementations that can be used in sharded systems
-///
-/// This trait allows different storage implementations (LWW, replicated, etc.)
-/// to work with the sharded routing system by providing a common interface
-/// for put and get operations.
-pub trait KVSShardable<V> {
-    /// The internal storage type (might be wrapped, like `LwwWrapper<V>`)
-    type StorageType: Clone
-        + std::fmt::Debug
-        + serde::Serialize
-        + serde::de::DeserializeOwned
-        + Send
-        + Sync
-        + 'static;
-
-    /// Put key-value pairs and return the KVS state
-    fn put<'a>(
-        put_tuples: hydro_lang::prelude::Stream<
-            (String, V),
-            hydro_lang::prelude::Cluster<'a, crate::core::KVSNode>,
-            hydro_lang::prelude::Unbounded,
-        >,
-        cluster: &hydro_lang::prelude::Cluster<'a, crate::core::KVSNode>,
-    ) -> hydro_lang::prelude::KeyedSingleton<
-        String,
-        Self::StorageType,
-        hydro_lang::prelude::Cluster<'a, crate::core::KVSNode>,
-        hydro_lang::prelude::Unbounded,
-    >
-    where
-        V: Clone
-            + std::fmt::Debug
-            + serde::Serialize
-            + serde::de::DeserializeOwned
-            + Send
-            + Sync
-            + 'static;
-
-    /// Get values for keys from the KVS state
-    fn get<'a>(
-        get_keys: hydro_lang::prelude::Stream<
-            String,
-            hydro_lang::prelude::Tick<hydro_lang::prelude::Cluster<'a, crate::core::KVSNode>>,
-            hydro_lang::prelude::Bounded,
-        >,
-        kvs_state: hydro_lang::prelude::KeyedSingleton<
-            String,
-            Self::StorageType,
-            hydro_lang::prelude::Tick<hydro_lang::prelude::Cluster<'a, crate::core::KVSNode>>,
-            hydro_lang::prelude::Bounded,
-        >,
-    ) -> ShardedGetResult<'a, V>
-    where
-        V: Clone + std::fmt::Debug;
-}
-
-// =============================================================================
-// ShardableKVS Implementations for All Storage Types
-// =============================================================================
-
-/// Implement KVSShardable trait for KVSLww
-///
-/// This allows KVSLww to work with the unified KVSServer API by providing
-/// the required put/get interface with proper type signatures.
-impl<V> KVSShardable<V> for crate::lww::KVSLww
+impl<V> ShardedKVSServer<V>
 where
     V: Clone
-        + Default
+        + Serialize
+        + for<'de> Deserialize<'de>
         + PartialEq
         + Eq
-        + std::fmt::Debug
-        + serde::Serialize
-        + serde::de::DeserializeOwned
-        + Send
-        + Sync
-        + 'static,
-{
-    type StorageType = LwwWrapper<V>;
-
-    /// Delegate to LwwKVS::put with cluster location
-    fn put<'a>(
-        put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-        _cluster: &Cluster<'a, KVSNode>,
-    ) -> KeyedSingleton<String, Self::StorageType, Cluster<'a, KVSNode>, Unbounded> {
-        crate::lww::KVSLww::put(put_tuples)
-    }
-
-    /// Delegate to LwwKVS::get with cluster location
-    fn get<'a>(
-        get_keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
-        kvs_state: KeyedSingleton<String, Self::StorageType, Tick<Cluster<'a, KVSNode>>, Bounded>,
-    ) -> ShardedGetResult<'a, V> {
-        crate::lww::KVSLww::get(get_keys, kvs_state)
-    }
-}
-
-/// Implement KVSShardable trait for KVSReplicated (same pattern as KVSLww)
-///
-/// This allows KVSReplicated to work with the unified KVSServer API
-impl<V, R> KVSShardable<V> for crate::replicated::KVSReplicated<R>
-where
-    V: Clone
         + Default
-        + PartialEq
-        + Eq
-        + Merge<V>
         + std::fmt::Debug
-        + serde::Serialize
-        + serde::de::DeserializeOwned
-        + Send
-        + Sync
         + 'static,
-    R: crate::routers::ReplicationProtocol<V> + Default,
 {
-    type StorageType = V;
-
-    /// Delegate to ReplicatedKVS::put (same pattern as LwwKVS)
-    fn put<'a>(
-        put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+    /// Run a sharded KVS cluster with hash-based key routing
+    ///
+    /// This creates a specialized sharding proxy that routes operations to specific cluster members
+    /// based on key hashing, and a cluster of independent KVS shards.
+    ///
+    /// ## Sharding Architecture
+    ///
+    /// 1. **Sharding Proxy**: Calculates shard ID for each key and unicasts to specific cluster member
+    /// 2. **Hash-based Routing**: Each key consistently maps to the same shard
+    /// 3. **Unicast Distribution**: Operations go directly to the responsible shard (no round-robin)
+    /// 4. **Independent Shards**: Each shard maintains its own KVS state independently
+    /// 5. **Result Aggregation**: Results are collected back through the proxy
+    ///
+    /// The sharding provides horizontal scalability - adding more shards increases capacity.
+    pub fn run_sharded_cluster<'a>(
+        proxy: &Process<'a, ()>,
         cluster: &Cluster<'a, KVSNode>,
-    ) -> KeyedSingleton<String, Self::StorageType, Cluster<'a, KVSNode>, Unbounded> {
-        crate::replicated::KVSReplicated::<R>::put(put_tuples, cluster)
+        client_external: &External<'a, ()>,
+        shard_count: usize,
+    ) -> (
+        ExternalBincodeSink<KVSOperation<V>>,
+        ExternalBincodeStream<(String, V)>,
+        ExternalBincodeStream<String>,
+    ) {
+        // Proxy receives operations from external clients
+        let (input_port, operations) = proxy.source_external_bincode(client_external);
+
+        // Step 1: Route operations to specific shards based on key hashing
+        let shard_operations = operations
+            .inspect(q!(|op| {
+                match op {
+                    KVSOperation::Put(key, value) => {
+                        println!("🔀 Sharding: PUT {} = {:?}", key, value)
+                    }
+                    KVSOperation::Get(key) => println!("🔀 Sharding: GET {}", key),
+                }
+            }))
+            .map(q!(move |op| {
+                let key = match &op {
+                    KVSOperation::Put(key, _) => key,
+                    KVSOperation::Get(key) => key,
+                };
+                // Inline hash calculation to avoid function call in q!()
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                std::hash::Hash::hash(key, &mut hasher);
+                let shard_id = (std::hash::Hasher::finish(&hasher) % shard_count as u64) as u32;
+                (MemberId::from_raw(shard_id), op)
+            }));
+
+        // Step 2: Route operations to specific cluster members based on shard ID
+        // Convert to keyed stream and send to specific cluster members
+        let cluster_operations = shard_operations
+            .into_keyed() // Convert (shard_id, op) to KeyedStream<u32, KVSOperation<V>>
+            .demux_bincode(cluster); // Route to specific cluster members based on key
+
+        // Step 3: Process operations in each shard independently
+        let (shard_results, shard_fails) =
+            Self::process_shard_operations(cluster_operations, cluster, shard_count);
+
+        // Step 4: Collect results back to proxy
+        let proxy_results = shard_results.send_bincode(proxy).values();
+        let proxy_fails = shard_fails.send_bincode(proxy).values();
+
+        // Step 5: Send results back to external clients
+        let get_results_port = proxy_results
+            .assume_ordering(nondet!(/** results from shards are non-deterministic */))
+            .send_bincode_external(client_external);
+        let get_fails_port = proxy_fails
+            .assume_ordering(nondet!(/** failures from shards are non-deterministic */))
+            .send_bincode_external(client_external);
+
+        (input_port, get_results_port, get_fails_port)
     }
 
-    /// Delegate to ReplicatedKVS::get (same pattern as LwwKVS)
-    fn get<'a>(
-        get_keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
-        kvs_state: KeyedSingleton<String, Self::StorageType, Tick<Cluster<'a, KVSNode>>, Bounded>,
-    ) -> ShardedGetResult<'a, V> {
-        crate::replicated::KVSReplicated::<R>::get(get_keys, kvs_state)
+    /// Process operations within each shard independently
+    ///
+    /// Each cluster member acts as a shard and only processes operations for keys that hash to its shard ID.
+    /// This provides true horizontal partitioning with no cross-shard communication.
+    fn process_shard_operations<'a>(
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        cluster: &Cluster<'a, KVSNode>,
+        _shard_count: usize,
+    ) -> (
+        Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+        Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) {
+        let ticker = cluster.tick();
+
+        // Each cluster member processes all operations it receives (proxy handles sharding)
+        let my_operations = operations;
+
+        // Use KVSCore helper to split operations and build this shard's KVS
+        let shard_kvs = KVSCore::put(my_operations.clone());
+
+        // Query this shard's local KVS for GET operations (symmetric to PUT handling)
+        KVSCore::get(
+            my_operations.batch(&ticker, nondet!(/** batch gets for efficiency */)),
+            shard_kvs.snapshot(&ticker, nondet!(/** snapshot for gets */)),
+        )
+    }
+
+    /// Create a simple sharded KVS for testing with 3 shards
+    pub fn run_simple_sharded<'a>(
+        proxy: &Process<'a, ()>,
+        cluster: &Cluster<'a, KVSNode>,
+        client_external: &External<'a, ()>,
+    ) -> (
+        ExternalBincodeSink<KVSOperation<V>>,
+        ExternalBincodeStream<(String, V)>,
+        ExternalBincodeStream<String>,
+    ) {
+        Self::run_sharded_cluster(proxy, cluster, client_external, 3)
     }
 }
 
-/// Sharded KVS implementation (follows same pattern as KVSLww and KVSReplicated)
-///
-/// This is a basic sharded storage that:
-/// - Delegates put/get operations to KVSCore (same as KVSLww)
-/// - Works with ShardedRouter for hash-based key routing
-/// - No background replication (unlike KVSReplicated)
-pub struct KVSSharded;
+/// Type alias for String-based sharded KVS server
+pub type StringShardedKVSServer = ShardedKVSServer<String>;
 
-impl KVSSharded {
-    /// Insert operations (delegates to KVSCore, same pattern as LwwKVS)
-    pub fn put<'a, V>(
-        put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> KeyedSingleton<String, V, Cluster<'a, KVSNode>, Unbounded>
-    where
-        V: Clone
-            + Default
-            + PartialEq
-            + Eq
-            + Merge<V>
-            + std::fmt::Debug
-            + serde::Serialize
-            + serde::de::DeserializeOwned
-            + Send
-            + Sync
-            + 'static,
-    {
-        // Same delegation pattern as LwwKVS and ReplicatedKVS
-        crate::core::KVSCore::put(put_tuples)
-    }
-
-    /// Query operations (delegates to KVSCore, same pattern as LwwKVS)
-    pub fn get<'a, V>(
-        keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
-        ht: KeyedSingleton<String, V, Tick<Cluster<'a, KVSNode>>, Bounded>,
-    ) -> ShardedGetResult<'a, V>
-    where
-        V: Clone + std::fmt::Debug,
-    {
-        // Same delegation pattern as LwwKVS and ReplicatedKVS
-        crate::core::KVSCore::get(keys, ht)
-    }
-}
-
-/// Implement KVSShardable trait for KVSSharded (same pattern as KVSLww)
-///
-/// This allows KVSSharded to work with the unified KVSServer API
-impl<V> KVSShardable<V> for KVSSharded
-where
-    V: Clone
-        + Default
-        + PartialEq
-        + Eq
-        + Merge<V>
-        + std::fmt::Debug
-        + serde::Serialize
-        + serde::de::DeserializeOwned
-        + Send
-        + Sync
-        + 'static,
-{
-    type StorageType = V;
-
-    /// Delegate to ShardedKVS::put (same pattern as LwwKVS)
-    fn put<'a>(
-        put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-        _cluster: &Cluster<'a, KVSNode>,
-    ) -> KeyedSingleton<String, Self::StorageType, Cluster<'a, KVSNode>, Unbounded> {
-        Self::put(put_tuples)
-    }
-
-    /// Delegate to ShardedKVS::get (same pattern as LwwKVS)
-    fn get<'a>(
-        get_keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
-        kvs_state: KeyedSingleton<String, Self::StorageType, Tick<Cluster<'a, KVSNode>>, Bounded>,
-    ) -> ShardedGetResult<'a, V> {
-        Self::get(get_keys, kvs_state)
-    }
-}
