@@ -2,15 +2,19 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod client;
 pub mod core;
-// pub mod kvs_types; // Temporarily disabled due to Hydro compilation issues with crate:: paths
+pub mod kvs_variants;
+pub mod lattice_core;
 pub mod linearizable;
-pub mod lww;
+pub mod local;
+pub mod paxos;
+pub mod paxos_with_client;
 pub mod protocol;
+pub mod proxy;
 pub mod replicated;
-pub mod routers;
-pub mod server;
 pub mod sharded;
-pub mod values;
+pub mod sharded_replicated;
+pub mod vector_clock;
+pub mod examples_support;
 
 #[cfg(test)]
 mod test_init {
