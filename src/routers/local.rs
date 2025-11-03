@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 use super::KVSRouter;
 
 /// Local routing - broadcasts to all nodes (typically just one for local development)
-/// 
+///
 /// This router is primarily used for:
 /// - Single-node development and testing
 /// - Simple broadcast scenarios where all nodes should receive all operations
-/// 
+///
 /// Note: For true single-node scenarios, the "cluster" typically contains just one node.
 pub struct LocalRouter;
 

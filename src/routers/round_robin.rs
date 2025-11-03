@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use super::KVSRouter;
 
 /// Round-robin routing - distributes operations via round-robin across all nodes
-/// 
+///
 /// This router distributes operations evenly across all nodes in the cluster:
 /// - Operations are distributed round-robin for load balancing
 /// - All nodes are capable of handling any operation
 /// - No assumptions about replication or consistency (handled by storage layer)
-/// 
+///
 /// Commonly used with:
 /// - Replicated architectures (where all nodes have the same data)
 /// - Load balancing scenarios

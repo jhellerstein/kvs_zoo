@@ -2,7 +2,7 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod client;
 pub mod core;
-pub mod kvs_types;
+// pub mod kvs_types; // Temporarily disabled due to Hydro compilation issues with crate:: paths
 pub mod linearizable;
 pub mod lww;
 pub mod protocol;

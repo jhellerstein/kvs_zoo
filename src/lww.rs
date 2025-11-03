@@ -4,12 +4,10 @@ use hydro_lang::location::{Location, NoTick};
 use hydro_lang::prelude::*;
 
 /// Last-Writer-Wins KVS implementation
-/// 
+///
 /// This storage implementation uses last-writer-wins semantics for conflict resolution.
 /// It wraps all values with `LwwWrapper` and delegates to the core KVS operations.
 pub struct KVSLww;
-
-
 
 impl KVSLww {
     /// Insert into a hashtable from PUT operations using last-writer-wins semantics
@@ -34,7 +32,7 @@ impl KVSLww {
     {
         // Wrap values with LwwWrapper for last-writer-wins semantics
         let wrapped_tuples = put_tuples.map(q!(|(key, value)| (key, LwwWrapper::new(value))));
-        
+
         // Delegate to the core KVS implementation
         crate::core::KVSCore::put(wrapped_tuples)
     }
@@ -58,5 +56,3 @@ impl KVSLww {
         }))
     }
 }
-
-

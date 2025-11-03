@@ -19,13 +19,13 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Trait for routing KVS operations to appropriate nodes
-/// 
+///
 /// This is the fundamental interface that all routers must implement.
 /// It defines how operations from external clients are distributed
 /// to the cluster nodes.
 pub trait KVSRouter<V> {
     /// Route operations from external clients to cluster nodes
-    /// 
+    ///
     /// Takes a stream of operations from a single external process and
     /// returns a stream of operations distributed across the cluster
     /// according to the router's strategy.

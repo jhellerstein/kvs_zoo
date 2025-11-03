@@ -1,6 +1,6 @@
+use super::KVSRouter;
 use crate::core::KVSNode;
 use crate::protocol::KVSOperation;
-use super::KVSRouter;
 use hydro_lang::location::MemberId;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// Sharded routing - hash-based routing to specific shards
-/// 
+///
 /// This router implements consistent hashing to distribute operations
 /// across multiple shards based on the key hash.
 pub struct ShardedRouter {
@@ -21,7 +21,7 @@ impl ShardedRouter {
     }
 
     /// Calculate shard ID for a key using consistent hashing
-    /// 
+    ///
     /// This function provides deterministic key-to-shard mapping using a hash function.
     /// All nodes will map the same key to the same shard ID.
     pub fn calculate_shard_id(key: &str, shard_count: usize) -> u32 {

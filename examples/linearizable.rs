@@ -1,11 +1,11 @@
 //! # Linearizable KVS Architecture Example
-//! 
+//!
 //! This example demonstrates a strongly consistent KVS architecture:
 //! - **Paxos consensus**: Uses Multi-Paxos for strong consistency
 //! - **Linearizability**: Strongest consistency guarantee - operations appear atomic
 //! - **Fault tolerance**: Can tolerate f failures with 2f+1 nodes
 //! - **Performance trade-off**: Consistency comes at the cost of latency
-//! 
+//!
 //! **Architecture**: Proposers + Acceptors + Replicas with Paxos protocol
 //! **Use case**: When you need strong consistency guarantees (banking, critical systems)
 

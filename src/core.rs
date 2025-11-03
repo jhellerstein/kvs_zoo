@@ -4,6 +4,11 @@ use hydro_lang::location::{Location, NoTick, Tick};
 use hydro_lang::{live_collections, prelude::*};
 use lattices::Merge;
 
+// Type aliases to reduce complexity warnings
+type KVSPutStream<V, L, B, O> = Stream<(String, V), L, B, O>;
+type KVSGetStream<L, B, O> = Stream<String, L, B, O>;
+type KVSPutGetStreams<V, L, B, O> = (KVSPutStream<V, L, B, O>, KVSGetStream<L, B, O>);
+
 /// Represents an individual KVS node in the cluster
 pub struct KVSNode {}
 
@@ -72,7 +77,7 @@ impl KVSCore {
     /// This eliminates the need for pattern matching in callers
     pub fn demux_ops<'a, V, L, B, O>(
         operations: Stream<KVSOperation<V>, L, B, O>,
-    ) -> (Stream<(String, V), L, B, O>, Stream<String, L, B, O>)
+    ) -> KVSPutGetStreams<V, L, B, O>
     where
         V: Clone,
         L: Location<'a> + Clone + 'a,

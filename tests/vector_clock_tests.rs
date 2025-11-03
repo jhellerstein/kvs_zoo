@@ -1,5 +1,5 @@
 /// Tests for Vector Clock implementation
-use kvs_zoo::vector_clock::VCWrapper;
+use kvs_zoo::values::vector_clock::VCWrapper;
 use lattices::Merge;
 
 #[test]

@@ -1,11 +1,16 @@
-use crate::core::KVSNode;
-use crate::protocol::KVSOperation;
 use super::paxos::{CorePaxos, PaxosConfig};
 use super::paxos_with_client::PaxosLike;
+use crate::core::KVSNode;
+use crate::protocol::KVSOperation;
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::location::external_process::{ExternalBincodeSink, ExternalBincodeStream};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
+
+// Type aliases to reduce complexity warnings
+type LinearizableInputSink<V> = ExternalBincodeSink<KVSOperation<V>>;
+type LinearizableOutputStream<V> = ExternalBincodeStream<(String, Option<V>)>;
+type LinearizablePorts<V> = (LinearizableInputSink<V>, LinearizableOutputStream<V>);
 
 /// A linearizable Key-Value Store implementation using Paxos consensus
 ///
@@ -79,10 +84,7 @@ where
         client_external: &External<'a, ()>,
         f: usize,
         _checkpoint_frequency: usize,
-    ) -> (
-        ExternalBincodeSink<KVSOperation<V>>,
-        ExternalBincodeStream<(String, Option<V>)>,
-    ) {
+    ) -> LinearizablePorts<V> {
         let paxos_config = PaxosConfig {
             f,
             i_am_leader_send_timeout: 5,

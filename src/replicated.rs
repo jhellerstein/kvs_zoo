@@ -3,8 +3,12 @@ use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::prelude::*;
 use lattices::Merge;
 
+// Type aliases to reduce complexity warnings
+type ReplicatedGetResult<'a, V> =
+    Stream<(String, Option<V>), Tick<Cluster<'a, KVSNode>>, Bounded, NoOrder>;
+
 /// Replicated KVS implementation with pluggable replication strategies
-/// 
+///
 /// This follows the same pattern as KVSLww:
 /// - Core put/get methods that delegate to KVSCore
 /// - Additional replication logic for distributed consistency
@@ -15,7 +19,7 @@ pub struct KVSReplicated<R> {
 
 impl<R> KVSReplicated<R> {
     /// Insert with replication using the configured replication strategy
-    /// 
+    ///
     /// This delegates to KVSCore but adds replication logic:
     /// 1. Local operations are replicated to other nodes via strategy R
     /// 2. Remote operations are received from other nodes
@@ -52,7 +56,7 @@ impl<R> KVSReplicated<R> {
     pub fn get<'a, V>(
         keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
         ht: KeyedSingleton<String, V, Tick<Cluster<'a, KVSNode>>, Bounded>,
-    ) -> Stream<(String, Option<V>), Tick<Cluster<'a, KVSNode>>, Bounded, NoOrder>
+    ) -> ReplicatedGetResult<'a, V>
     where
         V: Clone + std::fmt::Debug,
     {
@@ -65,8 +69,11 @@ impl<R> KVSReplicated<R> {
 // New KVS-prefix type aliases (preferred)
 // =============================================================================
 
-/// KVS with epidemic gossip replication (new preferred name)
-pub type KVSReplicatedEpidemic<V> = KVSReplicated<crate::routers::EpidemicGossip<V>>;
+// Note: Type aliases commented out due to Hydro compilation issues with crate:: paths
+// Users can create these types directly: KVSReplicated<EpidemicGossip<V>> or KVSReplicated<BroadcastReplication<V>>
 
-/// KVS with broadcast replication (new preferred name)
-pub type KVSReplicatedBroadcast<V> = KVSReplicated<crate::routers::BroadcastReplication<V>>;
+// /// KVS with epidemic gossip replication (new preferred name)
+// pub type KVSReplicatedEpidemic<V> = KVSReplicated<crate::routers::EpidemicGossip<V>>;
+
+// /// KVS with broadcast replication (new preferred name)
+// pub type KVSReplicatedBroadcast<V> = KVSReplicated<crate::routers::BroadcastReplication<V>>;

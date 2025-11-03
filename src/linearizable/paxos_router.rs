@@ -1,8 +1,8 @@
+use super::paxos::{Acceptor, CorePaxos, PaxosConfig, Proposer};
+use super::paxos_with_client::PaxosLike;
 use crate::core::KVSNode;
 use crate::protocol::KVSOperation;
 use crate::routers::KVSRouter;
-use super::paxos::{Acceptor, CorePaxos, PaxosConfig, Proposer};
-use super::paxos_with_client::PaxosLike;
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,15 @@ impl PaxosRouter {
 
 impl<V> KVSRouter<V> for PaxosRouter
 where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + PartialEq + Eq,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + std::fmt::Debug
+        + PartialEq
+        + Eq,
 {
     fn route_operations<'a>(
         &self,
@@ -61,7 +69,15 @@ where
 
 impl<V> PaxosAwareRouter<V> for PaxosRouter
 where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug + PartialEq + Eq,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + std::fmt::Debug
+        + PartialEq
+        + Eq,
 {
     fn route_operations_with_paxos<'a>(
         &self,

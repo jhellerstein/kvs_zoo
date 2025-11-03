@@ -1,5 +1,5 @@
 /// Tests for Causal Consistency using DomPair<VCWrapper, V>
-use kvs_zoo::vector_clock::VCWrapper;
+use kvs_zoo::values::vector_clock::VCWrapper;
 use lattices::set_union::SetUnionHashSet;
 use lattices::{DomPair, Merge};
 

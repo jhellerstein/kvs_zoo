@@ -1,5 +1,5 @@
 //! Vector clock implementation for causal consistency
-//! 
+//!
 //! Vector clocks track causality relationships in distributed systems by
 //! maintaining logical timestamps for each node. They enable detection of
 //! concurrent vs. causally ordered events.
@@ -14,10 +14,10 @@ use serde::{Deserialize, Serialize};
 /// takes the maximum counter for each node ID, preserving causal ordering.
 ///
 /// ## Causal Relationships
-/// 
-/// - **Happens-before**: VC1 < VC2 if VC1[i] ≤ VC2[i] for all i, and VC1[j] < VC2[j] for some j
+///
+/// - **Happens-before**: VC1 < VC2 if VC1\[i\] ≤ VC2\[i\] for all i, and VC1\[j\] < VC2\[j\] for some j
 /// - **Concurrent**: Neither VC1 < VC2 nor VC2 < VC1
-/// - **Identical**: VC1 = VC2 if VC1[i] = VC2[i] for all i
+/// - **Identical**: VC1 = VC2 if VC1\[i\] = VC2\[i\] for all i
 ///
 /// ## Example
 /// ```rust

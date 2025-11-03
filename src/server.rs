@@ -7,6 +7,11 @@ use hydro_lang::location::external_process::{ExternalBincodeSink, ExternalBincod
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// Type aliases to reduce complexity warnings
+type KVSInputSink<V> = ExternalBincodeSink<KVSOperation<V>>;
+type KVSOutputStream<V> = ExternalBincodeStream<(String, Option<V>), NoOrder>;
+type KVSServerPorts<V> = (KVSInputSink<V>, KVSOutputStream<V>);
+
 /// KVS server that works with any routing strategy and KVS implementation
 pub struct KVSServer<V, K, R>
 where
@@ -38,10 +43,7 @@ where
         cluster: &Cluster<'a, KVSNode>,
         client_external: &External<'a, ()>,
         router: &R,
-    ) -> (
-        ExternalBincodeSink<KVSOperation<V>>,
-        ExternalBincodeStream<(String, Option<V>), NoOrder>,
-    ) {
+    ) -> KVSServerPorts<V> {
         // Get operations from external clients
         let (input_port, operations) = proxy.source_external_bincode(client_external);
 
@@ -67,19 +69,13 @@ where
     }
 }
 
-// Type aliases moved to src/kvs_types.rs for better organization
-// Re-export the new KVS-prefix names (clean, consistent naming)
-pub use crate::kvs_types::{
-    KVSLocalLww, KVSReplicatedEpidemicGossip, KVSReplicatedBroadcast,
-    KVSShardedLww, KVSShardedReplicatedEpidemicGossip, KVSShardedReplicatedBroadcast,
-    StringKVSLocalLww, StringKVSReplicatedEpidemicGossip, StringKVSReplicatedBroadcast,
-    StringKVSShardedLww, StringKVSShardedReplicatedEpidemicGossip, StringKVSShardedReplicatedBroadcast,
-};
+// Note: Type aliases from kvs_types.rs are commented out to avoid Hydro compilation issues
+// They can be used directly by importing from kvs_zoo::kvs_types when needed
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::routing::{ReplicatedRouter, ShardedRouter};
+    use crate::routers::{RoundRobinRouter, ShardedRouter};
 
     #[tokio::test]
     async fn test_sharded_kvs() {
@@ -89,16 +85,13 @@ mod tests {
         let client_external = flow.external::<()>();
 
         // Test that the API compiles and can be called
-        let (_input_port, _output_port) = KVSServer::<
-            String,
-            crate::lww::LwwKVS,
-            ShardedRouter,
-        >::run(
-            &proxy,
-            &cluster,
-            &client_external,
-            &ShardedRouter::new(3),
-        );
+        let (_input_port, _output_port) =
+            KVSServer::<String, crate::lww::KVSLww, ShardedRouter>::run(
+                &proxy,
+                &cluster,
+                &client_external,
+                &ShardedRouter::new(3),
+            );
 
         // Finalize the flow to avoid the warning
         let _nodes = flow.finalize();
@@ -114,16 +107,14 @@ mod tests {
         let client_external = flow.external::<()>();
 
         // Test that the API compiles with replicated KVS using CausalString
-        let (_input_port, _output_port) = KVSServer::<
-            crate::examples_support::CausalString,
-            crate::replicated::EpidemicReplicatedKVS<crate::examples_support::CausalString>,
-            ReplicatedRouter,
-        >::run(
-            &proxy,
-            &cluster,
-            &client_external,
-            &ReplicatedRouter,
-        );
+        let (_input_port, _output_port) =
+            KVSServer::<
+                crate::values::CausalString,
+                crate::replicated::KVSReplicated<
+                    crate::routers::EpidemicGossip<crate::values::CausalString>,
+                >,
+                RoundRobinRouter,
+            >::run(&proxy, &cluster, &client_external, &RoundRobinRouter);
 
         // Finalize the flow to avoid the warning
         let _nodes = flow.finalize();
@@ -139,16 +130,14 @@ mod tests {
         let client_external = flow.external::<()>();
 
         // Test the combination: Sharded + Replicated using CausalString
-        let (_input_port, _output_port) = KVSServer::<
-            crate::examples_support::CausalString,
-            crate::replicated::EpidemicReplicatedKVS<crate::examples_support::CausalString>,
-            ShardedRouter,
-        >::run(
-            &proxy,
-            &cluster,
-            &client_external,
-            &ShardedRouter::new(3),
-        );
+        let (_input_port, _output_port) =
+            KVSServer::<
+                crate::values::CausalString,
+                crate::replicated::KVSReplicated<
+                    crate::routers::EpidemicGossip<crate::values::CausalString>,
+                >,
+                ShardedRouter,
+            >::run(&proxy, &cluster, &client_external, &ShardedRouter::new(3));
 
         // Finalize the flow to avoid the warning
         let _nodes = flow.finalize();

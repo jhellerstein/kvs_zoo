@@ -98,14 +98,10 @@ pub trait PaxosLike<'a>: Sized {
                 .demux_bincode(&leaders)
                 .values();
 
-                let payloads_at_proposer = {
-                    payloads_at_proposer.assume_ordering(nondet!(
-                        /// documented non-determinism in interleaving of client payloads
-                        nondet_order
-                    ))
-                };
-
-                payloads_at_proposer
+                payloads_at_proposer.assume_ordering(nondet!(
+                    /// documented non-determinism in interleaving of client payloads
+                    nondet_order
+                ))
             },
             checkpoints,
             nondet!(

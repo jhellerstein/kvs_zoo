@@ -316,7 +316,7 @@ where
 
         // Step 6: Probabilistically select new messages for re-gossip (25%)
         let re_gossip_selected = actually_new_messages.clone().filter(q!(|_op| {
-            rand::random::<u32>() % 4 == 0 // 25% probability (blind-coin removal)
+            rand::random::<u32>().is_multiple_of(4) // 25% probability (blind-coin removal)
         }));
 
         // Step 7: Interleave initial PUTs with re-gossip (infection set)
