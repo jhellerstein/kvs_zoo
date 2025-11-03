@@ -1,5 +1,4 @@
 /// Tests for KVS protocol operations (KVSOperation, KVSResponse)
-
 use kvs_zoo::protocol::{KVSOperation, KVSResponse};
 
 #[test]
