@@ -1,76 +1,52 @@
-use futures::SinkExt;
-use hydro_deploy::Deployment;
-use kvs_zoo::sharded_replicated::ShardedReplicatedKVSServer;
-use kvs_zoo::examples_support::{CausalString, generate_causal_operations, log_operation};
+//! # Sharded + Replicated KVS Architecture Example
+//! 
+//! This example demonstrates a hybrid architecture combining sharding and replication:
+//! - **Sharding**: Data is partitioned across multiple shards by key hash
+//! - **Replication**: Each shard is replicated across multiple nodes
+//! - **Best of both worlds**: Scalability from sharding + availability from replication
+//! - **Complex coordination**: Requires both routing logic and consensus within shards
+//! 
+//! **Architecture**: Hash-based routing to replicated shard clusters
+//! **Trade-offs**: High scalability and availability, but increased complexity
+//! **Use case**: Large-scale systems needing both performance and fault tolerance (databases, caches)
+
+mod driver;
+use driver::{run_kvs_demo, KVSDemo};
+use kvs_zoo::values::{CausalString, generate_causal_operations};
+use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::routers::ShardedRouter;
+
+struct ShardedReplicatedDemo;
+
+impl KVSDemo for ShardedReplicatedDemo {
+    type Value = CausalString;
+    type Storage = kvs_zoo::replicated::KVSReplicatedEpidemic<CausalString>;
+    type Router = ShardedRouter;
+
+    fn create_router<'a>(&self, _flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router {
+        ShardedRouter::new(3)
+    }
+
+    fn cluster_size(&self) -> usize {
+        3 // 3 nodes that will be sharded and replicated
+    }
+
+    fn description(&self) -> &'static str {
+        "📋 Architecture: Hash-based routing to replicated shard clusters\n\
+         🔀 Consistency: Per-shard causal, global eventual\n\
+         🎯 Use case: Large-scale systems needing both performance and fault tolerance"
+    }
+
+    fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
+        generate_causal_operations()
+    }
+
+    fn name(&self) -> &'static str {
+        "Sharded + Replicated KVS"
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Set up localhost deployment
-    let mut deployment = Deployment::new();
-    let localhost = deployment.Localhost();
-
-    // Create Hydro flow: proxy process, three shard clusters (each replicated), and external client
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process();
-    let shard0 = flow.cluster();
-    let shard1 = flow.cluster();
-    let shard2 = flow.cluster();
-    let client_external = flow.external();
-
-    // Start a sharded+replicated KVS. We'll provide three shard clusters.
-    let (client_input_port, _results_port, _fails_port) =
-        ShardedReplicatedKVSServer::<CausalString>::run_sharded_replicated_cluster(
-            &proxy,
-            &[shard0.clone(), shard1.clone(), shard2.clone()],
-            &client_external,
-        );
-
-    // Deploy to localhost
-    // - Proxy and External on localhost
-    // - Each shard cluster has 3 replicas (3 members)
-    let nodes = flow
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(&shard0, vec![localhost.clone(); 3])
-        .with_cluster(&shard1, vec![localhost.clone(); 3])
-        .with_cluster(&shard2, vec![localhost.clone(); 3])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    // Start the deployment
-    deployment.deploy().await?;
-
-    // Connect to the external client interface before starting
-    let mut client_sink = nodes.connect(client_input_port).await;
-
-    deployment.start().await?;
-
-    // Small delay to let servers start up
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    println!("Client: Starting sharded-replicated demo operations with causal values...");
-    println!("        Using DomPair<VectorClock, SetUnion<String>>");
-    println!();
-
-    // Generate and send operations
-    let operations = generate_causal_operations();
-
-    for op in operations {
-        log_operation(&op);
-        if let Err(e) = client_sink.send(op).await {
-            eprintln!("Client: Error sending operation: {}", e);
-            break;
-        }
-
-        // Small delay to observe ordering and allow processing/gossip
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    }
-
-    println!("Client: Sharded-replicated demo operations completed");
-
-    // Keep running briefly to see server output
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-    Ok(())
+    run_kvs_demo(ShardedReplicatedDemo).await
 }
-
-// Helpers are imported from kvs_zoo::examples_support

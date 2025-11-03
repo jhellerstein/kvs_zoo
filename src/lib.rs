@@ -2,19 +2,15 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod client;
 pub mod core;
-pub mod kvs_variants;
-pub mod lattice_core;
+pub mod kvs_types;
 pub mod linearizable;
-pub mod local;
-pub mod paxos;
-pub mod paxos_with_client;
+pub mod lww;
 pub mod protocol;
-pub mod proxy;
 pub mod replicated;
+pub mod routers;
+pub mod server;
 pub mod sharded;
-pub mod sharded_replicated;
-pub mod vector_clock;
-pub mod examples_support;
+pub mod values;
 
 #[cfg(test)]
 mod test_init {

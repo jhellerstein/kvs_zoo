@@ -1,70 +1,52 @@
-use futures::SinkExt;
-use hydro_deploy::Deployment;
-use kvs_zoo::sharded::ShardedKVSServer;
-use kvs_zoo::examples_support::{CausalString, generate_causal_operations, log_operation};
+//! # Sharded KVS Architecture Example
+//! 
+//! This example demonstrates a sharded (partitioned) KVS architecture:
+//! - **Horizontal partitioning**: Data is split across multiple shards by key hash
+//! - **Scalability**: Can handle more data by adding more shards
+//! - **Load distribution**: Requests are distributed across shards
+//! - **No replication**: Each key exists on exactly one shard (single point of failure)
+//! 
+//! **Architecture**: Hash-based key routing to independent shard nodes
+//! **Trade-offs**: High scalability, but availability depends on all shards being up
+//! **Use case**: Large datasets that need to be partitioned (analytics, big data)
+
+mod driver;
+use driver::{run_kvs_demo, KVSDemo};
+use kvs_zoo::values::{CausalString, generate_causal_operations};
+use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::routers::ShardedRouter;
+
+struct ShardedDemo;
+
+impl KVSDemo for ShardedDemo {
+    type Value = CausalString;
+    type Storage = kvs_zoo::lww::KVSLww;
+    type Router = ShardedRouter;
+
+    fn create_router<'a>(&self, _flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router {
+        ShardedRouter::new(3)
+    }
+
+    fn cluster_size(&self) -> usize {
+        3 // 3 shards
+    }
+
+    fn description(&self) -> &'static str {
+        "📋 Architecture: Hash-based key routing to independent shard nodes\n\
+         🔀 Consistency: Per-shard strong, global eventual\n\
+         🎯 Use case: Scalability for large datasets"
+    }
+
+    fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
+        generate_causal_operations()
+    }
+
+    fn name(&self) -> &'static str {
+        "Sharded KVS"
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-	// Set up localhost deployment
-	let mut deployment = Deployment::new();
-	let localhost = deployment.Localhost();
-
-	// Create Hydro flow with proxy process, a sharded cluster, and external client interface
-	let flow = hydro_lang::compile::builder::FlowBuilder::new();
-	let proxy = flow.process();
-	let kvs_cluster = flow.cluster();
-	let client_external = flow.external();
-
-	// Start a sharded KVS (hash-based partitioning). We'll use 3 shards (cluster members).
-	let (client_input_port, _results_port, _fails_port) =
-		ShardedKVSServer::<CausalString>::run_simple_sharded(
-			&proxy,
-			&kvs_cluster,
-			&client_external,
-		);
-
-	// Deploy to localhost: 3 shards as 3 cluster members
-	let nodes = flow
-		.with_process(&proxy, localhost.clone())
-		.with_cluster(&kvs_cluster, vec![localhost.clone(); 3])
-		.with_external(&client_external, localhost)
-		.deploy(&mut deployment);
-
-	// Start the deployment
-	deployment.deploy().await?;
-
-	// Connect to the external client interface before starting
-	let mut client_sink = nodes.connect(client_input_port).await;
-
-	deployment.start().await?;
-
-	// Small delay to let server start up
-	tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-	println!("Client: Starting sharded demo operations with causal values...");
-	println!("        Using DomPair<VectorClock, SetUnion<String>>");
-	println!();
-
-	// Generate and send operations
-	let operations = generate_causal_operations();
-
-	for op in operations {
-		log_operation(&op);
-		if let Err(e) = client_sink.send(op).await {
-			eprintln!("Client: Error sending operation: {}", e);
-			break;
-		}
-
-		// Small delay to observe ordering and allow processing
-		tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-	}
-
-	println!("Client: Sharded demo operations completed");
-
-	// Keep running briefly to see server output
-	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-	Ok(())
+    run_kvs_demo(ShardedDemo).await
 }
-
-// Helpers are imported from kvs_zoo::examples_support
