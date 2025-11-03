@@ -8,7 +8,22 @@ use super::VCWrapper;
 use lattices::{DomPair, Merge, set_union::SetUnionHashSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
+
+/// Simple hasher for ordering purposes - much cheaper than DefaultHasher
+struct SimpleHasher<'a>(&'a mut u64);
+
+impl<'a> Hasher for SimpleHasher<'a> {
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            *self.0 = self.0.wrapping_mul(31).wrapping_add(byte as u64);
+        }
+    }
+    
+    fn finish(&self) -> u64 {
+        *self.0
+    }
+}
 
 /// A causally consistent value wrapper that tracks causality with vector clocks
 ///
@@ -107,14 +122,17 @@ where
         vc.hash(state);
 
         // Hash the set by iterating in a consistent order
-        let mut items: Vec<_> = set.as_reveal_ref().iter().collect();
-        items.sort_by(|a, b| {
-            // Use a consistent ordering for hashing
-            // This is a bit of a hack but ensures deterministic hashing
-            format!("{:?}", a).cmp(&format!("{:?}", b))
-        });
+        // Use a simple hash for ordering - cheaper than Debug formatting but deterministic
+        let mut items_with_hashes: Vec<_> = set.as_reveal_ref().iter().map(|item| {
+            // Use a simple FNV-like hash for ordering (cheaper than DefaultHasher)
+            let mut simple_hash = 0u64;
+            item.hash(&mut SimpleHasher(&mut simple_hash));
+            (simple_hash, item)
+        }).collect();
+        
+        items_with_hashes.sort_by_key(|(hash_val, _)| *hash_val);
 
-        for item in items {
+        for (_, item) in items_with_hashes {
             item.hash(state);
         }
     }

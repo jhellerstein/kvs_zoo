@@ -170,7 +170,6 @@ src/
 │   ├── mod.rs           #   └── Module documentation
 │   ├── paxos.rs         #   └── Core Multi-Paxos implementation
 │   ├── paxos_with_client.rs #   └── Client integration
-│   ├── paxos_router.rs  #   └── Paxos-based router
 │   └── linearizable.rs  #   └── Linearizable KVS implementation
 └── routers/             # 🧭 All routing strategies (unified)
     ├── mod.rs           #   └── KVSRouter trait + re-exports

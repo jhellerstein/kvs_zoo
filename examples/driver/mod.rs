@@ -36,18 +36,12 @@ pub trait KVSDemo {
 
     /// Get demo operations using KVSClient (for String values)
     /// This provides a default implementation that demos can use
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Clippy false positive: used via Self::client_demo_operations() in examples
     fn client_demo_operations() -> Vec<KVSOperation<String>>
     where
         Self::Value: From<String>,
     {
         KVSClient::generate_demo_operations()
-    }
-
-    /// Log an operation using KVSClient formatting (for String values)
-    #[allow(dead_code)]
-    fn log_operation(op: &KVSOperation<String>) {
-        KVSClient::log_operation(op);
     }
 
     /// Get the demo name for logging

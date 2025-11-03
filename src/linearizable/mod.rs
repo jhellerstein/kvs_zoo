@@ -25,12 +25,11 @@
 //!
 //! - **`paxos.rs`** - Core Multi-Paxos consensus implementation
 //! - **`paxos_with_client.rs`** - Client integration for external processes
-//! - **`paxos_router.rs`** - Router using Paxos for total ordering
 //! - **`linearizable.rs`** - Linearizable KVS built on Paxos
 //!
 //! ## Use Cases
 //!
-//! - Banking and financial systems
+//! - Systems where developers favor a simple consistency model over performance
 //! - Critical infrastructure requiring strong consistency
 //! - Systems where correctness is more important than performance
 //!
@@ -50,11 +49,9 @@
 #[allow(clippy::module_inception)]
 pub mod linearizable;
 pub mod paxos;
-pub mod paxos_router;
 pub mod paxos_with_client;
 
 // Re-export main types for convenience
 pub use linearizable::StringLinearizableKVSServer;
 pub use paxos::{Acceptor, CorePaxos, PaxosConfig, Proposer};
-pub use paxos_router::PaxosRouter;
 pub use paxos_with_client::PaxosLike;

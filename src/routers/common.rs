@@ -15,9 +15,9 @@ pub struct ReplicationMessage<V> {
     pub sender_id: u32,
 }
 
-/// Replication timing mode configuration
+/// Replication timing configuration
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReplicationMode {
+pub enum BaseReplicationConfig {
     /// Synchronous replication: immediately propagate operations as they arrive
     /// - Lower latency, operations are replicated immediately
     /// - Higher network overhead due to individual message sending
@@ -26,24 +26,16 @@ pub enum ReplicationMode {
     /// Background replication: batch and periodically propagate operations
     /// - Higher latency, operations are batched and sent periodically
     /// - Lower network overhead due to batching and sampling
-    Background,
-}
-
-/// Base configuration shared by all replication protocols
-#[derive(Clone, Debug)]
-pub struct BaseReplicationConfig {
-    /// Replication timing mode (synchronous vs background)
-    pub mode: ReplicationMode,
-
-    /// How often to run replication rounds (periodic sampling interval)
-    /// Only used in Background mode
-    pub replication_interval: std::time::Duration,
+    Background {
+        /// How often to run replication rounds (periodic sampling interval)
+        replication_interval: std::time::Duration,
+    },
 }
 
 impl Default for BaseReplicationConfig {
     fn default() -> Self {
-        Self {
-            mode: ReplicationMode::Background, // Default to background for efficiency
+        // Default to background for efficiency
+        Self::Background {
             replication_interval: std::time::Duration::from_secs(1),
         }
     }
@@ -52,18 +44,29 @@ impl Default for BaseReplicationConfig {
 impl BaseReplicationConfig {
     /// Create a synchronous replication configuration
     pub fn synchronous() -> Self {
-        Self {
-            mode: ReplicationMode::Synchronous,
-            ..Default::default()
-        }
+        Self::Synchronous
     }
 
     /// Create a background replication configuration with custom interval
     pub fn background(interval: std::time::Duration) -> Self {
-        Self {
-            mode: ReplicationMode::Background,
+        Self::Background {
             replication_interval: interval,
         }
+    }
+
+    /// Get the replication interval if this is a background configuration
+    pub fn replication_interval(&self) -> Option<std::time::Duration> {
+        match self {
+            Self::Synchronous => None,
+            Self::Background {
+                replication_interval,
+            } => Some(*replication_interval),
+        }
+    }
+
+    /// Check if this is synchronous replication
+    pub fn is_synchronous(&self) -> bool {
+        matches!(self, Self::Synchronous)
     }
 }
 

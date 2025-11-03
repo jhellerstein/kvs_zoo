@@ -55,7 +55,7 @@ pub use sharded::ShardedRouter;
 
 // Re-export advanced replication types
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
-pub use common::{BaseReplicationConfig, ReplicationCommon, ReplicationMessage, ReplicationMode};
+pub use common::{BaseReplicationConfig, ReplicationCommon, ReplicationMessage};
 pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
 
 /// Trait for advanced routing protocols that handle replication
@@ -156,6 +156,8 @@ where
         hydro_lang::prelude::Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     > {
-        Self::handle_broadcast_simple(cluster, local_put_tuples)
+        local_put_tuples
+            .broadcast_bincode(cluster, nondet!(/** broadcast to all nodes */))
+            .values()
     }
 }

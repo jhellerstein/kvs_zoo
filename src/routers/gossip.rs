@@ -1,5 +1,4 @@
 use crate::core::KVSNode;
-use crate::protocol::KVSOperation;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -68,10 +67,6 @@ impl EpidemicGossipConfig {
 /// This implements rumor-mongering with probabilistic termination,
 /// where rumors spread through the network and are eventually forgotten
 /// with some probability to prevent infinite circulation.
-///
-/// Note: This is the only protocol that is truly "gossip-based" - it uses
-/// the classic epidemic gossip algorithm from Demers et al. Other protocols
-/// in this module are replication protocols but not gossip protocols.
 pub struct EpidemicGossip<V> {
     _phantom: std::marker::PhantomData<V>,
 }
@@ -98,18 +93,19 @@ where
         + Default
         + Merge<V>,
 {
-    /// Simplified gossip implementation that directly forwards PUT operations
+    /// Simplified gossip that immediately forwards PUT operations to random peers
     ///
-    /// This is a simpler version that doesn't require KVS lookups since the PUT
-    /// operations already contain both keys and values.
+    /// Unlike the full gossip implementation, this version:
+    /// - No rumor store or tombstoning
+    /// - No periodic gossip rounds
+    /// - Just immediate probabilistic forwarding of operations
     pub fn handle_gossip_simple<'a>(
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded, NoOrder> {
-        // Get cluster member IDs for gossip targets
         let cluster_members = ReplicationCommon::get_cluster_members(cluster);
 
-        // Set up cyclic dataflow: send local PUT tuples to random peers and receive gossip back
+        // Immediate probabilistic forwarding to ~50% of peers
         let gossip_sent = local_put_tuples
             .clone()
             .cross_product(
@@ -118,14 +114,12 @@ where
                     .assume_retries(nondet!(/** member list OK */)),
             )
             .filter(q!(|(_tuple, _member_id)| {
-                // Send to ~50% of peers initially
-                rand::random::<bool>()
+                rand::random::<bool>() // 50% probability
             }))
             .map(q!(|(tuple, member_id)| (member_id, tuple)))
             .into_keyed()
             .demux_bincode(cluster);
 
-        // Return received gossip operations
         gossip_sent
             .values()
             .assume_ordering(nondet!(/** gossip messages unordered */))
@@ -177,6 +171,9 @@ where
 
         // Step 3: Build rumor store tracking only keys (not values)
         // Only add keys that actually changed (where merge returned true)
+        //
+        // TODO: Memory leak - MapUnionHashMapWithTombstoneHashSet grows unbounded
+        // Still needed: compressed tombstone lattices and distributed GC via vector clocks
         let rumor_insertions = changed_keys.map(q!(|k| (
             k,
             MapUnionHashMapWithTombstoneHashSet::new(
@@ -212,9 +209,8 @@ where
         );
 
         // Step 5: Probabilistically tombstone keys (probabilistic termination per Demers)
-        // Note: In a real implementation, tombstones would be sent as separate operations
-        // to update the rumor store, but for simplicity we'll just use them for filtering
-        // Note: For now using hardcoded probability due to Hydro limitations with f64 in closures
+        // TODO: Currently not implemented - would need to send tombstone operations
+        // to update the rumor store and stop gossiping tombstoned keys
         let _keys_to_tombstone = hot_keys_sampled.clone().filter(q!(|_k| {
             rand::random::<f64>() < 0.1 // 10% tombstone probability
         }));
@@ -249,96 +245,5 @@ where
         gossip_received
             .assume_ordering(nondet!(/** gossip messages unordered */))
             .assume_retries(nondet!(/** gossip retries OK */))
-    }
-
-    #[deprecated(note = "use handle_gossip implementing rumor mongering (Demers) instead")]
-    #[allow(dead_code)]
-    pub fn handle_gossip_old<'a>(
-        cluster: &Cluster<'a, KVSNode>,
-        local_put_ops: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded, NoOrder> {
-        // Epidemic gossip protocol based on "rumor mongering" with deduplication
-        // Reference: "Epidemic algorithms for replicated database maintenance" (Demers et al.)
-        //
-        // Implementation (matching DFIR pattern):
-        // 1. Track all messages ever seen to avoid re-gossiping duplicates
-        // 2. Use anti_join (difference) to filter out already-seen messages
-        // 3. Only actually-new messages enter the infection set for gossiping
-        // 4. Probabilistic removal (25%) to limit epidemic spread
-        // 5. Periodic gossip rounds (1 second intervals)
-
-        let ticker = cluster.tick();
-
-        // Step 1: Get cluster member IDs
-        let cluster_members = ReplicationCommon::get_cluster_members(cluster);
-
-        // Step 2: Send and receive gossip from peers (this creates a cyclic dataflow)
-        let gossip_received = local_put_ops
-            .clone()
-            .cross_product(cluster_members.clone())
-            .filter(q!(|(_op, _member_id)| {
-                rand::random::<bool>() // Send to 50% random subset initially
-            }))
-            .map(q!(|(op, member_id)| (member_id, op)))
-            .into_keyed()
-            .demux_bincode(cluster)
-            .values();
-
-        // Step 3: Collect all potentially new messages (local PUTs + gossip received)
-        let maybe_new_messages = local_put_ops.clone().interleave(gossip_received.clone());
-
-        // Step 4: Batch once and share for both key-tracking and deduplication paths
-
-        // Deduplicate incoming messages using the shared batched stream
-        // Convert messages to (key, op) tuples for anti_join
-        let maybe_new_keyed = maybe_new_messages
-            .batch(
-                &ticker,
-                nondet!(/** batch new messages for key-tracking & dedup */),
-            )
-            .map(q!(|op| {
-                let key = match &op {
-                    KVSOperation::Put(k, _) => k.clone(),
-                    KVSOperation::Get(k) => k.clone(),
-                };
-                (key, op)
-            }));
-
-        // Track all known message keys (within each tick) using the keyed stream to avoid
-        // duplicating the op→key mapping
-        let all_known_keys = maybe_new_keyed.clone().map(q!(|(key, _op)| key)).unique(); // Within each tick, deduplicate keys
-
-        // Filter out messages we've already seen
-        let actually_new_messages = maybe_new_keyed
-            .anti_join(all_known_keys)
-            .map(q!(|(_key, op)| op))
-            .all_ticks(); // Back to Unbounded for further processing
-
-        // Step 6: Probabilistically select new messages for re-gossip (25%)
-        let re_gossip_selected = actually_new_messages.clone().filter(q!(|_op| {
-            rand::random::<u32>().is_multiple_of(4) // 25% probability (blind-coin removal)
-        }));
-
-        // Step 7: Interleave initial PUTs with re-gossip (infection set)
-        let infecting_messages = local_put_ops.clone().interleave(re_gossip_selected);
-
-        // Step 8: Periodic gossip rounds - sample at 1-second intervals
-        infecting_messages
-            .sample_every(
-                q!(std::time::Duration::from_secs(1)),
-                nondet!(/** gossip timer */),
-            )
-            .cross_product(cluster_members.assume_retries(nondet!(/** member list retries OK */)))
-            .filter(q!(|(_op, _member_id)| {
-                rand::random::<bool>() // Send to random subset (~50% of peers)
-            }))
-            .map(q!(|(op, member_id)| (member_id, op)))
-            .into_keyed()
-            .demux_bincode(cluster);
-
-        // Return all actually new messages (for merging into KVS)
-        actually_new_messages
-            .assume_ordering(nondet!(/** deduped messages unordered */))
-            .assume_retries(nondet!(/** gossip retries acceptable */))
     }
 }
