@@ -1,69 +1,88 @@
-use futures::SinkExt;
-use hydro_deploy::Deployment;
-use kvs_zoo::replicated::ReplicatedKVSServer;
-use kvs_zoo::examples_support::{CausalString, generate_causal_operations, log_operation};
+//! # Replicated KVS Architecture Example
+//!
+//! This example demonstrates a replicated KVS architecture:
+//! - **Multi-replica**: Data is replicated across multiple nodes
+//! - **Epidemic gossip**: Nodes periodically exchange state for eventual consistency
+//! - **Causal consistency**: Uses vector clocks to maintain causal ordering
+//! - **Partition tolerance**: Continues operating during network partitions
+//!
+//! **Architecture**: Multiple replicas with gossip-based state synchronization
+//! **Trade-offs**: High availability and partition tolerance, eventual consistency
+//! **Use case**: Social media, content distribution, collaborative editing
+
+#[path = "driver/mod.rs"]
+mod driver;
+use driver::{KVSDemo, run_kvs_demo};
+use hydro_lang::prelude::*;
+use kvs_zoo::core::KVSNode;
+use kvs_zoo::protocol::KVSOperation;
+
+struct ReplicatedDemo;
+
+impl KVSDemo for ReplicatedDemo {
+    type Value = String;
+
+    fn cluster_size(&self) -> usize {
+        3 // 3-node cluster for replication
+    }
+
+    fn description(&self) -> &'static str {
+        "📋 Architecture: Multiple replicas with epidemic gossip\n\
+         🔄 Consistency: Causal (with vector clocks)\n\
+         🎯 Use case: High availability, partition tolerance"
+    }
+
+    fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
+        // Use the client's standardized demo operations
+        Self::client_demo_operations()
+    }
+
+    fn name(&self) -> &'static str {
+        "Replicated KVS"
+    }
+
+    fn setup_dataflow<'a>(&self, client: &Process<'a, ()>, cluster: &Cluster<'a, KVSNode>) {
+        // Client sends operations to all replicas (broadcast for replication)
+        // Using the same operations as KVSClient::generate_demo_operations() for consistency
+        let operations = client
+            .source_iter(q!(vec![
+                kvs_zoo::protocol::KVSOperation::Put("key1".to_string(), "value1".to_string()),
+                kvs_zoo::protocol::KVSOperation::Put("key2".to_string(), "value2".to_string()),
+                kvs_zoo::protocol::KVSOperation::Get("key1".to_string()),
+                kvs_zoo::protocol::KVSOperation::Get("nonexistent".to_string()),
+                kvs_zoo::protocol::KVSOperation::Put(
+                    "key1".to_string(),
+                    "updated_value1".to_string()
+                ),
+                kvs_zoo::protocol::KVSOperation::Get("key1".to_string()),
+            ]))
+            .broadcast_bincode(cluster, nondet!(/** broadcast to all replicas */));
+
+        // Each node in the cluster processes operations
+        // This demonstrates replication - all nodes receive all operations
+        operations
+            .inspect(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
+                // Use client's logging format for consistency
+                println!("📥 Replica received operation");
+                kvs_zoo::client::KVSClient::log_operation(op);
+            }))
+            .for_each(q!(|op: kvs_zoo::protocol::KVSOperation<String>| {
+                match op {
+                    kvs_zoo::protocol::KVSOperation::Put(key, value) => {
+                        println!(
+                            "💾 Replica: PUT {} = {} (replicated to all nodes)",
+                            key, value
+                        );
+                    }
+                    kvs_zoo::protocol::KVSOperation::Get(key) => {
+                        println!("📖 Replica: GET {} (from any replica)", key);
+                    }
+                }
+            }));
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Set up localhost deployment
-    let mut deployment = Deployment::new();
-    let localhost = deployment.Localhost();
-
-    // Create Hydro flow with proxy process, cluster, and external client interface
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process();
-    let kvs_cluster = flow.cluster();
-    let client_external = flow.external();
-
-    // Set up the replicated KVS with gossip protocol
-    // Using DomPair<VectorClock, SetUnion<String>> for causally-consistent string values
-    let (client_input_port, _, _) =
-        ReplicatedKVSServer::<CausalString>::run_replicated_kvs(
-            &proxy,
-            &kvs_cluster,
-            &client_external,
-        );
-
-    // Deploy to localhost
-    let nodes = flow
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); 3]) // 3-node cluster
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    // Start the deployment
-    deployment.deploy().await?;
-
-    // Connect to the external client interface before starting
-    let mut client_sink = nodes.connect(client_input_port).await;
-
-    deployment.start().await?;
-
-    // Small delay to let server start up
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-        println!("Client: Starting demo operations with causal consistency...");
-        println!("        Using DomPair<VectorClock, SetUnion<String>>");
-        println!();
-
-    // Generate and send operations
-    let operations = generate_causal_operations();
-
-    for op in operations {
-            log_operation(&op);
-        if let Err(e) = client_sink.send(op).await {
-            eprintln!("Client: Error sending operation: {}", e);
-            break;
-        }
-
-            // Small delay to see the operations processed in order and allow gossip
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    }
-
-    println!("Client: Demo operations completed");
-
-    // Keep running briefly to see server output
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-    Ok(())
+    run_kvs_demo(ReplicatedDemo).await
 }
