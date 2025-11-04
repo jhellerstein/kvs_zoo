@@ -125,40 +125,49 @@ where
             nondet!(/** operation ordering nondeterminism */),
         );
 
-        // Send sequenced operations to replicas
+        // Send sequenced operations to replicas, preserving slot numbers for sequential application
         let replica_operations = sequenced_operations
             .inspect(q!(|(slot, op)| {
                 if let Some(op) = op {
                     println!("  Replica applying slot {}: {:?}", slot, op);
                 }
             }))
-            .filter_map(q!(|(_slot, op)| op))
             .broadcast_bincode(replicas, nondet!(/** broadcast to replicas */))
             .values();
 
-        // Each replica applies operations to its local KVS using KVSCore
+        // Each replica applies operations sequentially by slot number
         let replica_tick = replicas.tick();
 
-        // Demux operations once at the caller level
-        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(replica_operations.clone());
+        // Process operations in slot order: extract operations and apply them sequentially
+        let ordered_operations = replica_operations
+            .map(q!(|(slot, op)| (slot, op)))
+            .assume_ordering::<TotalOrder>(nondet!(/** slot order from paxos */));
 
-        // Put operations into the KVS
+        // Filter to only committed operations (Some values)
+        let committed_ops = ordered_operations
+            .filter_map(q!(|(slot, op)| op.map(|o| (slot, o))));
+
+        // Demux operations while preserving slot order
+        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(
+            committed_ops.map(q!(|(_slot, op)| op))
+        );
+
+        // Apply puts sequentially in slot order
         let replica_kvs = crate::lww::KVSLww::put(put_tuples);
 
         // Handle GET operations with linearizable reads
-        // The assume_ordering is crucial for linearizability - it ensures reads see
-        // all preceding writes in the total order established by Paxos
+        // Reads are also ordered by Paxos (they go through consensus like writes).
+        // This ensures all replicas apply reads in the same order, providing linearizability.
         let replica_results = crate::lww::KVSLww::get(
             get_keys
-                .batch(&replica_tick, nondet!(/** batch gets */))
-                .assume_ordering::<TotalOrder>(nondet!(/** total order from paxos */)),
+                .batch(&replica_tick, nondet!(/** batch gets */)),
             replica_kvs.snapshot(&replica_tick, nondet!(/** snapshot for gets */)),
         );
 
         // Collect results back to proxy and send to client
         let proxy_results = replica_results.all_ticks().send_bincode(proxy).values();
         let get_results_port = proxy_results
-            .assume_ordering::<TotalOrder>(nondet!(/** maintain total order for results */))
+            .assume_ordering::<TotalOrder>(nondet!(/** preserve total order from paxos */))
             .send_bincode_external(client_external);
 
         // Complete the checkpoint channel (unused for now, but required by PaxosLike trait)
