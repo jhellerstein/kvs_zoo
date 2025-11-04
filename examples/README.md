@@ -43,38 +43,9 @@ Complex architectures that combine multiple distributed systems concepts:
 
 ### Unified Driver API
 
-Most examples use the unified `KVSDemo` trait and `run_kvs_demo_impl!` macro:
+Most examples implement the `KVSDemo` trait and use the `run_kvs_demo_impl!` macro. See `local.rs` for a complete example. The macro handles deployment, client-server communication, and operation execution.
 
-```rust
-use futures::{SinkExt, StreamExt};
-use hydro_lang::prelude::*;
-use kvs_zoo::driver::KVSDemo;
-use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::routers::KVSRouter;
-use kvs_zoo::run_kvs_demo_impl;
-
-#[derive(Default)]
-struct MyDemo;
-
-impl KVSDemo for MyDemo {
-    type Value = String;
-    type Storage = MyKVS;
-    type Router = MyRouter;
-
-    fn create_router<'a>(&self, flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router { ... }
-    fn cluster_size(&self) -> usize { ... }
-    fn description(&self) -> &'static str { ... }
-    fn operations(&self) -> Vec<KVSOperation<Self::Value>> { ... }
-    fn name(&self) -> &'static str { ... }
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    run_kvs_demo_impl!(MyDemo)
-}
-```
-
-The macro handles deployment setup, client-server communication, and operation execution. **Note:** The linearizable (Paxos) example uses a specialized driver due to its multi-cluster requirements.
+**Note:** `linearizable.rs` uses direct flow construction due to multi-cluster lifetime constraints (proposers, acceptors, replicas must share the same lifetime).
 
 ## Running Examples
 
@@ -101,18 +72,8 @@ cargo run --example sharded_replicated
 | Sharded+Replicated | Coordination-free     | Eventually consistent (causal) | Guaranteed  | High        | High       |
 | Linearizable       | Coordination-required | Strong (linearizable)          | N/A         | Low         | Medium     |
 
-## Key Architectural Concepts Demonstrated
+## Key Concepts
 
-1. **CALM Theorem**: Coordination-free systems (replicated, sharded) can achieve eventual consistency without coordination, while coordination-required systems (linearizable) provide stronger guarantees at the cost of availability and performance
-
-2. **Coordination vs. Coordination-free**: Systems that avoid coordination can scale linearly and remain available during partitions, while coordination-based systems (Paxos) provide stronger consistency at the cost of latency, scalability and availability
-
-3. **Eventual Consistency**: Coordination-free systems use lattice-based merge operations (LWW, causal) that guarantee convergence without requiring agreement protocols
-
-4. **Composability**: The `KVSServer<V, Storage, Router>` API shows how complex architectures can be built by composing simple, well-defined components
-
-5. **Routing Strategies**: How different routing strategies (broadcast, round-robin, hash-based) affect coordination requirements and scalability
-
-6. **Storage Strategies**: How different local storage strategies (LWW, causal) provide different consistency guarantees while remaining coordination-free
-
-7. **Unified API Design**: How the `KVSServer<V, Storage, Router>` API enables clean composition of any architecture through type parameters rather than separate functions
+- **CALM Theorem**: Coordination-free systems achieve eventual consistency; coordination-required systems provide stronger guarantees at the cost of availability
+- **Composability**: The `KVSServer<V, Storage, Router>` API composes value types, storage strategies, and routing patterns
+- **Lattice semantics**: Coordination-free systems use merge operations (LWW, causal) that guarantee convergence without consensus
