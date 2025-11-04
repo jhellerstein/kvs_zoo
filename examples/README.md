@@ -43,22 +43,38 @@ Complex architectures that combine multiple distributed systems concepts:
 
 ### Unified Driver API
 
-Most examples use the unified `KVSDemo` trait and `run_kvs_demo()` driver:
+Most examples use the unified `KVSDemo` trait and `run_kvs_demo_impl!` macro:
 
 ```rust
+use futures::{SinkExt, StreamExt};
+use hydro_lang::prelude::*;
+use kvs_zoo::driver::KVSDemo;
+use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::routers::KVSRouter;
+use kvs_zoo::run_kvs_demo_impl;
+
+#[derive(Default)]
+struct MyDemo;
+
 impl KVSDemo for MyDemo {
     type Value = String;
     type Storage = MyKVS;
     type Router = MyRouter;
 
-    fn create_router<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Router { ... }
+    fn create_router<'a>(&self, flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router { ... }
     fn cluster_size(&self) -> usize { ... }
     fn description(&self) -> &'static str { ... }
-    // ... other methods
+    fn operations(&self) -> Vec<KVSOperation<Self::Value>> { ... }
+    fn name(&self) -> &'static str { ... }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_kvs_demo_impl!(MyDemo)
 }
 ```
 
-**Note:** The linearizable (Paxos) example uses a specialized driver due to its multi-cluster requirements, but follows the same conceptual pattern.
+The macro handles deployment setup, client-server communication, and operation execution. **Note:** The linearizable (Paxos) example uses a specialized driver due to its multi-cluster requirements.
 
 ## Running Examples
 

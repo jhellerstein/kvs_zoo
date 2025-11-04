@@ -9,17 +9,21 @@
 //! **Architecture**: Process-to-cluster communication (even for single node)
 //! **Use case**: Development, testing, or scenarios where simplicity > availability
 
-#[path = "driver/mod.rs"]
-mod driver;
-use driver::{KVSDemo, run_kvs_demo};
+use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
-use kvs_zoo::core::KVSNode;
+use kvs_zoo::driver::KVSDemo;
+use kvs_zoo::lww::KVSLww;
 use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::routers::{KVSRouter, LocalRouter};
+use kvs_zoo::run_kvs_demo_impl;
 
+#[derive(Default)]
 struct LocalDemo;
 
 impl KVSDemo for LocalDemo {
     type Value = String;
+    type Storage = KVSLww;
+    type Router = LocalRouter;
 
     fn cluster_size(&self) -> usize {
         1 // Single node
@@ -32,52 +36,29 @@ impl KVSDemo for LocalDemo {
     }
 
     fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
-        // Use the client's standardized demo operations
-        Self::client_demo_operations()
+        vec![
+            KVSOperation::Put("key1".to_string(), "value1".to_string()),
+            KVSOperation::Put("key2".to_string(), "value2".to_string()),
+            KVSOperation::Get("key1".to_string()),
+            KVSOperation::Get("nonexistent".to_string()),
+            KVSOperation::Put("key1".to_string(), "updated_value1".to_string()),
+            KVSOperation::Get("key1".to_string()),
+        ]
     }
 
     fn name(&self) -> &'static str {
         "Local KVS"
     }
 
-    fn setup_dataflow<'a>(&self, client: &Process<'a, ()>, cluster: &Cluster<'a, KVSNode>) {
-        // Client sends operations to the single-node cluster
-        // Using the same operations as KVSClient::generate_demo_operations() for consistency
-        let operations = client
-            .source_iter(q!(vec![
-                kvs_zoo::protocol::KVSOperation::Put("key1".to_string(), "value1".to_string()),
-                kvs_zoo::protocol::KVSOperation::Put("key2".to_string(), "value2".to_string()),
-                kvs_zoo::protocol::KVSOperation::Get("key1".to_string()),
-                kvs_zoo::protocol::KVSOperation::Get("nonexistent".to_string()),
-                kvs_zoo::protocol::KVSOperation::Put(
-                    "key1".to_string(),
-                    "updated_value1".to_string()
-                ),
-                kvs_zoo::protocol::KVSOperation::Get("key1".to_string()),
-            ]))
-            .round_robin_bincode(cluster, nondet!(/** round robin to cluster members */));
-
-        // Single node processes all operations with client-style logging
-        operations
-            .inspect(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
-                // Use client's logging format for consistency
-                println!("📥 Server received operation");
-                kvs_zoo::client::KVSClient::log_operation(op);
-            }))
-            .for_each(q!(|op: kvs_zoo::protocol::KVSOperation<String>| {
-                match op {
-                    kvs_zoo::protocol::KVSOperation::Put(key, value) => {
-                        println!("💾 Local KVS: PUT {} = {}", key, value);
-                    }
-                    kvs_zoo::protocol::KVSOperation::Get(key) => {
-                        println!("📖 Local KVS: GET {} (lookup would happen here)", key);
-                    }
-                }
-            }));
+    fn create_router<'a>(
+        &self,
+        _flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    ) -> Self::Router {
+        LocalRouter
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    run_kvs_demo(LocalDemo).await
+    run_kvs_demo_impl!(LocalDemo)
 }
