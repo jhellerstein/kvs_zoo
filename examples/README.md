@@ -12,7 +12,7 @@ Simple, single-concern architecture that forms the building block:
 
   - Architecture: One process, no networking
   - Consistency: Strong (deterministic)
-  - Use case: Development, testing, simple applications
+  - Use case: Hello, world! style example for development and testing
 
 ### Distributed Architectures
 
@@ -22,7 +22,7 @@ Complex architectures that combine multiple distributed systems concepts:
 
   - Architecture: Multiple replicas with epidemic gossip
   - Consistency: Causal (with vector clocks)
-  - Use case: High availability, partition tolerance
+  - Use case: Low latency, high availability, scalability with request volume
 
 - **`sharded.rs`** - Hash-based horizontal partitioning
 
@@ -33,7 +33,7 @@ Complex architectures that combine multiple distributed systems concepts:
 - **`sharded_replicated.rs`** - Combined sharding + replication
 
   - Architecture: Hash routing to replicated shard clusters
-  - Consistency: Per-shard causal, global eventual
+  - Consistency: Eventual (but this could be configured differently)
   - Use case: Large-scale systems needing both performance and fault tolerance
 
 - **`linearizable.rs`** - Paxos-based strongly consistent KVS

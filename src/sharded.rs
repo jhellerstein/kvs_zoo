@@ -94,6 +94,43 @@ pub trait KVSShardable<V> {
 // ShardableKVS Implementations for All Storage Types
 // =============================================================================
 
+/// Implement KVSShardable trait for KVSCore
+///
+/// This allows KVSCore to work with the unified KVSServer API by providing
+/// the required put/get interface with proper type signatures.
+impl<V> KVSShardable<V> for crate::core::KVSCore
+where
+    V: Clone
+        + Default
+        + PartialEq
+        + Eq
+        + lattices::Merge<V>
+        + std::fmt::Debug
+        + serde::Serialize
+        + serde::de::DeserializeOwned
+        + Send
+        + Sync
+        + 'static,
+{
+    type StorageType = V;
+
+    /// Delegate to KVSCore::put with cluster location
+    fn put<'a>(
+        put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+        _cluster: &Cluster<'a, KVSNode>,
+    ) -> KeyedSingleton<String, Self::StorageType, Cluster<'a, KVSNode>, Unbounded> {
+        crate::core::KVSCore::put(put_tuples)
+    }
+
+    /// Delegate to KVSCore::get with cluster location
+    fn get<'a>(
+        get_keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
+        kvs_state: KeyedSingleton<String, Self::StorageType, Tick<Cluster<'a, KVSNode>>, Bounded>,
+    ) -> ShardedGetResult<'a, V> {
+        crate::core::KVSCore::get(get_keys, kvs_state)
+    }
+}
+
 /// Implement KVSShardable trait for KVSLww
 ///
 /// This allows KVSLww to work with the unified KVSServer API by providing
@@ -113,7 +150,7 @@ where
 {
     type StorageType = LwwWrapper<V>;
 
-    /// Delegate to LwwKVS::put with cluster location
+    /// Delegate to KVSLww::put (cluster parameter is not used)
     fn put<'a>(
         put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
         _cluster: &Cluster<'a, KVSNode>,
@@ -121,7 +158,7 @@ where
         crate::lww::KVSLww::put(put_tuples)
     }
 
-    /// Delegate to LwwKVS::get with cluster location
+    /// Delegate to KVSLww::get with cluster location
     fn get<'a>(
         get_keys: Stream<String, Tick<Cluster<'a, KVSNode>>, Bounded>,
         kvs_state: KeyedSingleton<String, Self::StorageType, Tick<Cluster<'a, KVSNode>>, Bounded>,

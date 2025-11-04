@@ -1,127 +1,85 @@
 //! # Sharded + Replicated KVS Architecture Example
 //!
-//! This example demonstrates a hybrid architecture combining sharding and replication:
-//! - **Sharding**: Data is partitioned across multiple shards by key hash
-//! - **Replication**: Each shard is replicated across multiple nodes
-//! - **Best of both worlds**: Scalability from sharding + availability from replication
-//! - **Complex coordination**: Requires both routing logic and consensus within shards
+//! This example demonstrates a sharded and replicated KVS architecture:
+//! - **Horizontal partitioning**: Data is split across multiple shards by key hash
+//! - **Per-shard replication**: Each shard is replicated for fault tolerance
+//! - **Scalability**: Can handle more data by adding more shards
+//! - **High availability**: Can tolerate both shard and replica failures
 //!
-//! **Architecture**: Hash-based routing to replicated shard clusters
-//! **Trade-offs**: High scalability and availability, but increased complexity
-//! **Use case**: Large-scale systems needing both performance and fault tolerance (databases, caches)
+//! **Architecture**: Hash-based key routing with per-shard replication
+//! **Trade-offs**: High scalability and availability, but complex consistency model
+//! **Use case**: Web-scale applications requiring both scalability and fault tolerance
 
-use hydro_deploy::Deployment;
+use futures::{SinkExt, StreamExt};
+use hydro_lang::location::Location;
 use hydro_lang::prelude::*;
-use kvs_zoo::core::KVSNode;
+use kvs_zoo::driver::KVSDemo;
+use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::replicated::KVSReplicated;
+use kvs_zoo::routers::{BroadcastReplication, KVSRouter, ShardedRouter};
+use kvs_zoo::values::CausalString;
+use kvs_zoo::run_kvs_demo_impl;
 
-/// Sharded + Replicated KVS with both partitioning and replication
-pub fn sharded_replicated_kvs<'a>(
-    client: &Process<'a, ()>,
-    shard1_cluster: &Cluster<'a, KVSNode>,
-    shard2_cluster: &Cluster<'a, KVSNode>,
-) {
-    // Client sends operations
-    let operations = client.source_iter(q!(vec![
-        kvs_zoo::protocol::KVSOperation::Put("user_alice".to_string(), "Alice_Data".to_string()), // Shard 1
-        kvs_zoo::protocol::KVSOperation::Put("user_bob".to_string(), "Bob_Data".to_string()), // Shard 2
-        kvs_zoo::protocol::KVSOperation::Get("user_alice".to_string()),
-        kvs_zoo::protocol::KVSOperation::Get("user_bob".to_string()),
-        kvs_zoo::protocol::KVSOperation::Put("user_alice".to_string(), "Alice_Updated".to_string()),
-    ]));
+/// Type alias for sharded + replicated KVS with broadcast replication
+type ShardedReplicatedKVS = KVSReplicated<BroadcastReplication<CausalString>>;
 
-    // Route to shard 1 (keys containing "alice") and broadcast within shard
-    let shard1_ops = operations
-        .clone()
-        .filter(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
-            let key = match op {
-                kvs_zoo::protocol::KVSOperation::Put(k, _) => k,
-                kvs_zoo::protocol::KVSOperation::Get(k) => k,
-            };
-            key.contains("alice")
-        }))
-        .broadcast_bincode(
-            shard1_cluster,
-            nondet!(/** broadcast to all replicas in shard 1 */),
-        ); // Broadcast to all replicas in shard 1
+struct ShardedReplicatedDemo;
 
-    // Route to shard 2 (keys containing "bob") and broadcast within shard
-    let shard2_ops = operations
-        .filter(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
-            let key = match op {
-                kvs_zoo::protocol::KVSOperation::Put(k, _) => k,
-                kvs_zoo::protocol::KVSOperation::Get(k) => k,
-            };
-            key.contains("bob")
-        }))
-        .broadcast_bincode(
-            shard2_cluster,
-            nondet!(/** broadcast to all replicas in shard 2 */),
-        ); // Broadcast to all replicas in shard 2
+impl Default for ShardedReplicatedDemo {
+    fn default() -> Self {
+        ShardedReplicatedDemo
+    }
+}
 
-    // Shard 1 cluster processes its operations (replicated across all nodes in cluster)
-    shard1_ops
-        .inspect(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
-            println!("📥 Shard1-Cluster received: {:?}", op);
-        }))
-        .for_each(q!(|op: kvs_zoo::protocol::KVSOperation<String>| {
-            match op {
-                kvs_zoo::protocol::KVSOperation::Put(key, value) => {
-                    println!(
-                        "💾 Shard1-Cluster: PUT {} = {} (replicated within shard)",
-                        key, value
-                    );
-                }
-                kvs_zoo::protocol::KVSOperation::Get(key) => {
-                    println!("📖 Shard1-Cluster: GET {} (from any replica in shard)", key);
-                }
-            }
-        }));
+impl KVSDemo for ShardedReplicatedDemo {
+    type Value = CausalString;
+    type Storage = ShardedReplicatedKVS;
+    type Router = ShardedRouter;
 
-    // Shard 2 cluster processes its operations (replicated across all nodes in cluster)
-    shard2_ops
-        .inspect(q!(|op: &kvs_zoo::protocol::KVSOperation<String>| {
-            println!("📥 Shard2-Cluster received: {:?}", op);
-        }))
-        .for_each(q!(|op: kvs_zoo::protocol::KVSOperation<String>| {
-            match op {
-                kvs_zoo::protocol::KVSOperation::Put(key, value) => {
-                    println!(
-                        "💾 Shard2-Cluster: PUT {} = {} (replicated within shard)",
-                        key, value
-                    );
-                }
-                kvs_zoo::protocol::KVSOperation::Get(key) => {
-                    println!("📖 Shard2-Cluster: GET {} (from any replica in shard)", key);
-                }
-            }
-        }));
+    fn create_router<'a>(&self, _flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router {
+        ShardedRouter::new(3) // 3 shards, each replicated
+    }
+
+    fn cluster_size(&self) -> usize {
+        9 // 3 shards × 3 replicas per shard
+    }
+
+    fn description(&self) -> &'static str {
+        "📋 Architecture: Hash-based sharding with per-shard replication\n\
+         🔀 Consistency: Per-shard causal, global eventual\n\
+         🛡️ Fault tolerance: Can survive shard and replica failures\n\
+         🎯 Use case: Web-scale applications with scalability and availability"
+    }
+
+    fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
+        vec![
+            KVSOperation::Put("key1".to_string(), {
+                let mut vc = kvs_zoo::values::VCWrapper::new();
+                vc.bump("client".to_string());
+                CausalString::new(vc, "value1".to_string())
+            }),
+            KVSOperation::Put("key2".to_string(), {
+                let mut vc = kvs_zoo::values::VCWrapper::new();
+                vc.bump("client".to_string());
+                CausalString::new(vc, "value2".to_string())
+            }),
+            KVSOperation::Get("key1".to_string()),
+            KVSOperation::Get("nonexistent".to_string()),
+            KVSOperation::Put("key1".to_string(), {
+                let mut vc = kvs_zoo::values::VCWrapper::new();
+                vc.bump("client".to_string());
+                CausalString::new(vc, "updated_value1".to_string())
+            }),
+            KVSOperation::Get("key1".to_string()),
+        ]
+    }
+
+    fn name(&self) -> &'static str {
+        "Sharded + Replicated KVS"
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Running Sharded + Replicated KVS Demo");
-    println!("📋 Architecture: Hash-based routing to replicated shard clusters");
-    println!("🔀 Consistency: Per-shard causal, global eventual");
-    println!("🎯 Use case: Large-scale systems needing both performance and fault tolerance");
-    println!();
-
-    let mut deployment = Deployment::new();
-
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let client = flow.process();
-    let shard1_cluster = flow.cluster::<KVSNode>();
-    let shard2_cluster = flow.cluster::<KVSNode>();
-
-    sharded_replicated_kvs(&client, &shard1_cluster, &shard2_cluster);
-
-    let _nodes = flow
-        .with_process(&client, deployment.Localhost())
-        .with_cluster(&shard1_cluster, vec![deployment.Localhost(); 2]) // 2 replicas per shard
-        .with_cluster(&shard2_cluster, vec![deployment.Localhost(); 2]) // 2 replicas per shard
-        .deploy(&mut deployment);
-
-    println!("🚀 Starting deployment (press Ctrl+C to stop)...");
-    deployment.run_ctrl_c().await.unwrap();
-
-    Ok(())
+    run_kvs_demo_impl!(ShardedReplicatedDemo)
 }

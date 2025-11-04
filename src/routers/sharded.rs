@@ -1,7 +1,7 @@
 use super::KVSRouter;
 use crate::core::KVSNode;
 use crate::protocol::KVSOperation;
-use hydro_lang::location::MemberId;
+
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -55,9 +55,11 @@ impl<V: std::fmt::Debug> KVSRouter<V> for ShardedRouter {
                     KVSOperation::Put(key, _) => key,
                     KVSOperation::Get(key) => key,
                 };
-                // Use the same hash calculation as the utility function
-                let shard_id = Self::calculate_shard_id(key, shard_count);
-                (MemberId::from_raw(shard_id), op)
+                // Calculate shard ID using consistent hashing
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                std::hash::Hash::hash(key, &mut hasher);
+                let shard_id = (std::hash::Hasher::finish(&hasher) % shard_count as u64) as u32;
+                (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }));
 
         ops_to_be_sharded.into_keyed().demux_bincode(cluster)
