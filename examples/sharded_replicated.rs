@@ -81,10 +81,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🚀 Running {} Demo", demo.name());
     println!("{}", demo.description());
+    
+    // Simple configuration example
+    let config = kvs_zoo::config::ShardedReplicatedConfig {
+        shard_count: 2,
+        replicas_per_shard: 3,
+    };
+    
+    println!("📋 Using configuration: {} shards × {} replicas = {} total nodes", 
+             config.shard_count, config.replicas_per_shard, config.total_nodes());
     println!();
     println!("🎯 COMPOSABLE SERVER ARCHITECTURE:");
     println!("   ShardedKVSServer<ReplicatedKVSServer<CausalString>>");
-    println!("   = 3 shards × 3 replicas = 9 total nodes");
     println!("   = True nested server composability!");
     println!();
 
@@ -113,10 +121,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_process(&proxy, localhost.clone())
         .with_external(&client_external, localhost.clone());
 
-    // Add each shard deployment (each shard gets 3 replicas)
+    // Add each shard deployment with configured replicas
     for (i, shard_deployment) in shard_deployments.iter().enumerate() {
-        println!("🔧 Deploying shard {} with 3 replicas", i);
-        flow_builder = flow_builder.with_cluster(shard_deployment, vec![localhost.clone(); 3]);
+        println!("🔧 Deploying shard {} with {} replicas", i, config.replicas_per_shard);
+        flow_builder = flow_builder.with_cluster(shard_deployment, vec![localhost.clone(); config.replicas_per_shard]);
     }
 
     let nodes = flow_builder.deploy(&mut deployment);

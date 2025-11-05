@@ -68,6 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🚀 Running {} Demo", demo.name());
     println!("{}", demo.description());
+    
+    // Simple configuration example
+    let config = kvs_zoo::config::ReplicatedConfig { cluster_size: 3 };
+    println!("📋 Using configuration: {} replicas", config.cluster_size);
     println!();
 
     // Set up localhost deployment
@@ -90,10 +94,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external,
     );
 
-    // Deploy with replicas
+    // Deploy with configured number of replicas
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); demo.cluster_size()])
+        .with_cluster(&kvs_cluster, vec![localhost.clone(); config.cluster_size])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
