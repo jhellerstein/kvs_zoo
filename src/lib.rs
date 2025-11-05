@@ -1,6 +1,7 @@
 stageleft::stageleft_no_entry_crate!();
 
 pub mod client;
+pub mod composable;
 pub mod core;
 pub mod driver;
 pub mod kvs_types;
