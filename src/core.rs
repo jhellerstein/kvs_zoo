@@ -13,7 +13,7 @@ type KVSPutGetStreams<V, L, B, O> = (KVSPutStream<V, L, B, O>, KVSGetStream<L, B
 pub struct KVSNode {}
 
 /// General KVS core operations using lattice merge semantics
-/// This is the main KVS implementation that works with any type implementing Merge
+/// This is the main KVS implementation that works with any value type implementing Merge
 pub struct KVSCore;
 
 impl KVSCore {
@@ -47,29 +47,17 @@ impl KVSCore {
         V: Clone + std::fmt::Debug,
         L: Location<'a> + 'a + Clone,
     {
-        // Convert keys to (key, ()) tuples for get_many_if_present
-        let key_batch = keys.map(q!(|k| (k, ())));
+        // Convert keys to KeyedSingleton for get_from()
+        // Hydro should offer a more efficient "outer join" than get_from()!
+        let key_batch = keys
+            .map(q!(|k| (k.clone(), k)))
+            .into_keyed()
+            .reduce(q!(|acc, x| *acc = x));
 
-        let matches = ht
-            .clone()
-            .get_many_if_present(key_batch.clone().into_keyed())
+        key_batch
+            .get_from(ht)
             .entries()
-            .map(q!(|(k, (v, ()))| {
-                println!("KVS: Found match for GET {} => {:?}", k, v);
-                (k, Some(v))
-            }));
-
-        let fails = key_batch
-            .anti_join(ht.keys())
-            .map(q!(|(k, ())| {
-                println!("KVS: No match for GET {}", k);
-                (k, None)
-            }))
-            .assume_ordering::<NoOrder>(
-                nondet!(/** need to match matches, this downgrade is safe */),
-            );
-
-        matches.chain(fails)
+            .map(q!(|(key, (_original_key, value))| (key, value)))
     }
 
     /// Split operations into separate PUT and GET streams

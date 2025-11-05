@@ -1,8 +1,4 @@
 //! Sharded KVS support and implementations
-//!
-//! This module provides the `ShardableKVS` trait that allows different storage
-//! implementations to work with sharded routing systems, plus implementations
-//! of this trait for all storage types.
 
 use crate::core::KVSNode;
 use crate::values::LwwWrapper;
@@ -16,17 +12,7 @@ use std::hash::{Hash, Hasher};
 type ShardedGetResult<'a, V> =
     Stream<(String, Option<V>), Tick<Cluster<'a, KVSNode>>, Bounded, NoOrder>;
 
-/// Calculate which shard a key should be assigned to
-///
-/// This function provides consistent hash-based sharding that ensures
-/// the same key always maps to the same shard across all nodes.
-///
-/// # Arguments
-/// * `key` - The key to hash
-/// * `num_shards` - Total number of shards available
-///
-/// # Returns
-/// A shard ID in the range [0, num_shards)
+/// Calculate which shard a key should be assigned to using consistent hashing
 pub fn calculate_shard_id(key: &str, num_shards: usize) -> u32 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
@@ -35,10 +21,6 @@ pub fn calculate_shard_id(key: &str, num_shards: usize) -> u32 {
 }
 
 /// Trait for KVS implementations that can be used in sharded systems
-///
-/// This trait allows different storage implementations (LWW, replicated, etc.)
-/// to work with the sharded routing system by providing a common interface
-/// for put and get operations.
 pub trait KVSShardable<V> {
     /// The internal storage type (might be wrapped, like `LwwWrapper<V>`)
     type StorageType: Clone

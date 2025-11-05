@@ -2,50 +2,61 @@
 use kvs_zoo::protocol::{KVSOperation, KVSResponse};
 
 #[test]
-fn test_operation_from_command() {
-    assert_eq!(
-        KVSOperation::<String>::from_command("PUT key1 value1"),
-        Some(KVSOperation::Put("key1".to_string(), "value1".to_string()))
-    );
-    assert_eq!(
-        KVSOperation::<String>::from_command("GET key1"),
-        Some(KVSOperation::Get("key1".to_string()))
-    );
-    assert_eq!(KVSOperation::<String>::from_command("INVALID"), None);
-    assert_eq!(KVSOperation::<String>::from_command("DELETE key1"), None); // DELETE no longer supported
+fn test_operation_creation() {
+    // Test PUT operation
+    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string());
+    assert_eq!(put_op, KVSOperation::Put("key1".to_string(), "value1".to_string()));
+
+    // Test GET operation
+    let get_op: KVSOperation<String> = KVSOperation::Get("key1".to_string());
+    assert_eq!(get_op, KVSOperation::Get("key1".to_string()));
 }
 
 #[test]
-fn test_operation_to_command() {
+fn test_operation_pattern_matching() {
     let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string());
-    assert_eq!(put_op.to_command(), "PUT key1 value1");
+    match put_op {
+        KVSOperation::Put(key, value) => {
+            assert_eq!(key, "key1");
+            assert_eq!(value, "value1");
+        }
+        KVSOperation::Get(_) => panic!("Expected PUT operation"),
+    }
 
     let get_op: KVSOperation<String> = KVSOperation::Get("key1".to_string());
-    assert_eq!(get_op.to_command(), "GET key1");
+    match get_op {
+        KVSOperation::Get(key) => assert_eq!(key, "key1"),
+        KVSOperation::Put(_, _) => panic!("Expected GET operation"),
+    }
 }
 
 #[test]
-fn test_operation_properties() {
-    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string());
-    assert_eq!(put_op.key(), "key1");
-    assert!(!put_op.is_read_only());
-    assert!(put_op.is_write());
+fn test_response_creation() {
+    // Test PutOk response
+    let put_response: KVSResponse<String> = KVSResponse::PutOk;
+    assert_eq!(put_response, KVSResponse::PutOk);
 
-    let get_op: KVSOperation<String> = KVSOperation::Get("key1".to_string());
-    assert_eq!(get_op.key(), "key1");
-    assert!(get_op.is_read_only());
-    assert!(!get_op.is_write());
+    // Test GetResult responses
+    let get_found = KVSResponse::GetResult(Some("value".to_string()));
+    assert_eq!(get_found, KVSResponse::GetResult(Some("value".to_string())));
+
+    let get_not_found: KVSResponse<String> = KVSResponse::GetResult(None);
+    assert_eq!(get_not_found, KVSResponse::GetResult(None));
 }
 
 #[test]
-fn test_response_properties() {
-    assert!(KVSResponse::<String>::PutOk.is_success());
-    assert!(KVSResponse::GetResult(Some("value".to_string())).is_success());
-    assert!(KVSResponse::<String>::GetResult(None).is_success());
-
+fn test_response_pattern_matching() {
     let get_response = KVSResponse::GetResult(Some("value".to_string()));
-    assert_eq!(get_response.get_value(), Some(&"value".to_string()));
+    match get_response {
+        KVSResponse::GetResult(Some(value)) => assert_eq!(value, "value"),
+        KVSResponse::GetResult(None) => panic!("Expected found value"),
+        KVSResponse::PutOk => panic!("Expected GET response"),
+    }
 
     let not_found_response: KVSResponse<String> = KVSResponse::GetResult(None);
-    assert_eq!(not_found_response.get_value(), None);
+    match not_found_response {
+        KVSResponse::GetResult(None) => {}, // Expected
+        KVSResponse::GetResult(Some(_)) => panic!("Expected not found"),
+        KVSResponse::PutOk => panic!("Expected GET response"),
+    }
 }

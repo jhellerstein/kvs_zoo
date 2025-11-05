@@ -60,8 +60,8 @@ pub trait KVSDemo {
     /// Log an operation (can be overridden for custom logging)
     fn log_operation(&self, op: &KVSOperation<Self::Value>) {
         match op {
-            KVSOperation::Put(key, _) => println!("Client: PUT {}", key),
-            KVSOperation::Get(key) => println!("Client: GET {}", key),
+            KVSOperation::Put(key, _) => println!("✏️ Client: PUT {}", key),
+            KVSOperation::Get(key) => println!("🔎 Client: GET {}", key),
         }
     }
 }
@@ -71,7 +71,7 @@ pub trait KVSDemo {
 /// This trait supports architectures that use multiple separate clusters,
 /// such as sharded systems where each shard is its own cluster with
 /// internal replication.
-pub trait MultiClusterKVSDemo {
+pub trait ShardedReplicatedKVSDemo {
     /// The value type used in this demo
     type Value: Clone
         + Serialize
@@ -88,7 +88,7 @@ pub trait MultiClusterKVSDemo {
     type Storage: KVSShardable<Self::Value>;
 
     /// The multi-cluster router
-    type Router: MultiClusterRouter<Self::Value>;
+    type Router: ShardedClusterRouter<Self::Value>;
 
     /// Create the router instance
     fn create_router<'a>(
@@ -121,7 +121,7 @@ pub trait MultiClusterKVSDemo {
 }
 
 /// Trait for routers that work with multiple clusters
-pub trait MultiClusterRouter<V> {
+pub trait ShardedClusterRouter<V> {
     /// Route operations to multiple shard clusters
     fn route_to_shards<'a>(
         &self,
@@ -130,12 +130,4 @@ pub trait MultiClusterRouter<V> {
     ) -> Vec<Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static + std::fmt::Debug;
-}
-
-/// Placeholder macro - examples now use composable services directly
-#[macro_export]
-macro_rules! run_kvs_demo_impl {
-    ($demo_type:ty) => {
-        compile_error!("Use composable services directly instead of this macro. See examples/local.rs for the new pattern.")
-    };
 }

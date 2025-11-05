@@ -7,6 +7,9 @@ use hydro_lang::prelude::*;
 ///
 /// This storage implementation uses last-writer-wins semantics for conflict resolution.
 /// It wraps all values with `LwwWrapper` and delegates to the core KVS operations.
+/// 
+/// User beware: Lww is a poor choice for replicated KVSs, since it is 
+/// non-commutative and hence non-deterministic across replicas.
 pub struct KVSLww;
 
 impl KVSLww {

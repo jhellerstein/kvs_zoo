@@ -1,29 +1,14 @@
-//! Convenient type aliases for common KVS configurations
+//! Type aliases for common KVS configurations
 //!
-//! This module provides pre-configured type aliases that combine different
-//! storage implementations, routing strategies, and value types for common
-//! distributed KVS architectures.
-//!
-//! ## Architecture Categories
-//!
-//! - **Local**: Single-node configurations for development/testing
-//! - **Replicated**: Multi-replica configurations with replication protocols
-//! - **Sharded**: Hash-partitioned configurations for scalability
-//! - **Sharded + Replicated**: True sharded architecture with shard-aware replication
-//!
-//! ## Sharded + Replicated Architecture
-//!
-//! The sharded+replicated types use a compositional approach:
-//! - **Router**: `ShardedRoundRobin` - routes operations to shard primaries based on key hash
-//! - **Storage**: `KVSReplicated<ShardAwareBroadcastReplication>` - replicates only within shard boundaries
-//! - **Result**: 3 shards × 3 replicas = 9 total nodes with true scalability and fault tolerance
-//!
-//! ## Usage (New KVS-prefix naming)
+//! Pre-configured combinations of storage, routing, and value types:
+//! - **Local**: Single-node (development/testing)
+//! - **Replicated**: Multi-replica with replication protocols  
+//! - **Sharded**: Hash-partitioned for scalability
+//! - **Sharded + Replicated**: Partitioned with per-shard replication
 //!
 //! ```rust
 //! use kvs_zoo::kvs_types::{StringKVSLocalLww, StringKVSReplicatedEpidemicGossip};
 //!
-//! // Use pre-configured types with consistent KVS-prefix naming
 //! type LocalKVS = StringKVSLocalLww;
 //! type ReplicatedKVS = StringKVSReplicatedEpidemicGossip;
 //! ```
@@ -31,68 +16,41 @@
 use crate::server::{LocalKVSServer, ReplicatedKVSServer, ShardedKVSServer};
 
 // =============================================================================
-// Local Configurations (Single-node) - NEW KVS-PREFIX NAMING
+// Local Configurations (Single-node)
 // =============================================================================
 
 /// Local KVS with Last-Writer-Wins semantics
-///
-/// **Architecture**: Single node with LWW conflict resolution
-/// **Use case**: Development, testing, simple applications
-/// **Consistency**: Strong (single node)
-/// **Availability**: Low (single point of failure)
 pub type KVSLocalLww<V> = LocalKVSServer<V>;
 
 // =============================================================================
-// Replicated Configurations (Multi-replica) - NEW KVS-PREFIX NAMING
+// Replicated Configurations (Multi-replica)
 // =============================================================================
 
 /// Replicated KVS with epidemic gossip protocol
-///
-/// **Architecture**: Multiple replicas with gossip-based synchronization
-/// **Use case**: High availability, partition tolerance
-/// **Consistency**: Causal (with vector clocks)
-/// **Availability**: High (fault tolerant)
 pub type KVSReplicatedEpidemicGossip<V> = ReplicatedKVSServer<V>;
 
-/// Replicated KVS with reliable broadcast protocol
-///
-/// **Architecture**: Multiple replicas with broadcast synchronization
-/// **Use case**: Strong consistency requirements with replication
-/// **Consistency**: Strong (reliable broadcast)
-/// **Availability**: High (fault tolerant)
+/// Replicated KVS with reliable broadcast protocol  
 pub type KVSReplicatedBroadcast<V> = ReplicatedKVSServer<V>;
 
 // =============================================================================
-// Sharded Configurations (Partitioned) - NEW KVS-PREFIX NAMING
+// Sharded Configurations (Partitioned)
 // =============================================================================
 
 /// Sharded KVS with Last-Writer-Wins semantics
-///
-/// **Architecture**: Hash-based key partitioning across nodes
-/// **Use case**: Horizontal scalability for large datasets
-/// **Consistency**: Per-shard strong, global eventual
-/// **Availability**: Medium (shard failures affect subset of keys)
 pub type KVSShardedLww<V> = ShardedKVSServer<LocalKVSServer<V>>;
 
 // =============================================================================
-// Sharded + Replicated Configurations (Scalability + Availability) - NEW KVS-PREFIX NAMING
+// Sharded + Replicated Configurations
 // =============================================================================
 
-/// Sharded + Replicated KVS with shard-aware broadcast replication
-///
-/// **Architecture**: Hash partitioning with shard-boundary-aware replication
-/// **Use case**: Web-scale applications requiring both scalability and availability
-/// **Consistency**: Per-shard strong, cross-shard eventual
-/// **Availability**: High (fault tolerance within each shard)
-/// **Routing**: ShardedRoundRobin - routes to shard primaries
-/// **Replication**: ShardAwareBroadcastReplication - replicates only within shard boundaries
+/// Sharded + Replicated KVS with shard-aware replication
 pub type KVSShardedReplicated<V> = ShardedKVSServer<ReplicatedKVSServer<V>>;
 
 // =============================================================================
 // String-based Convenience Aliases
 // =============================================================================
 
-/// String-based local KVS (most common case)
+/// String-based local KVS
 pub type StringKVSLocalLww = KVSLocalLww<String>;
 
 /// String-based replicated KVS with epidemic gossip
@@ -108,7 +66,7 @@ pub type StringKVSShardedLww = KVSShardedLww<String>;
 pub type StringKVSShardedReplicated = KVSShardedReplicated<String>;
 
 // =============================================================================
-// Value-Specific Aliases (Using values module) - NEW KVS-PREFIX NAMING
+// Value-Specific Aliases
 // =============================================================================
 
 /// Local KVS with LWW wrapper values

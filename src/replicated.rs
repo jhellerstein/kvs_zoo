@@ -64,16 +64,3 @@ impl<R> KVSReplicated<R> {
         crate::core::KVSCore::get(keys, ht)
     }
 }
-
-// =============================================================================
-// New KVS-prefix type aliases (preferred)
-// =============================================================================
-
-// Note: Type aliases commented out due to Hydro compilation issues with crate:: paths
-// Users can create these types directly: KVSReplicated<EpidemicGossip<V>> or KVSReplicated<BroadcastReplication<V>>
-
-// /// KVS with epidemic gossip replication (new preferred name)
-pub type KVSReplicatedEpidemic<V> = KVSReplicated<crate::routers::EpidemicGossip<V>>;
-
-// /// KVS with broadcast replication (new preferred name)
-pub type KVSReplicatedBroadcast<V> = KVSReplicated<crate::routers::BroadcastReplication<V>>;
