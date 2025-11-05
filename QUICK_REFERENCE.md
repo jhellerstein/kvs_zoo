@@ -9,8 +9,7 @@ cargo run --example replicated         # Multi-replica + gossip
 cargo run --example sharded            # Hash partitioning
 cargo run --example sharded_replicated # Sharding + replication
 
-# Advanced architecture (Paxos consensus)
-cargo run --example linearizable       # Linearizable consistency
+
 
 # Development
 cargo check --examples                 # Check all compile
@@ -128,26 +127,7 @@ impl KVSDemo for WebScaleDemo {
 }
 ```
 
-## 🔒 Advanced: Linearizable KVS
 
-The linearizable example uses a **different architecture** (not the unified API) because consensus algorithms require fundamentally different abstractions:
-
-### Paxos-based Linearizable KVS
-```rust
-// Located in src/linearizable/ module
-// Uses Multi-Paxos consensus for total ordering
-// Architecture: Proxy → Proposers → Acceptors → Replicas
-// Provides linearizability (strongest consistency)
-
-// Run with:
-cargo run --example linearizable
-
-// Key differences from unified API:
-// - Multi-cluster architecture (4 separate clusters)
-// - External client integration
-// - Consensus protocol vs. simple replication
-// - Higher latency but strongest consistency guarantees
-```
 
 ## 🎯 Key Files
 
@@ -166,11 +146,7 @@ src/
 │   ├── causal.rs        #   └── CausalWrapper - causal consistency
 │   ├── vector_clock.rs  #   └── VCWrapper - causality tracking
 │   └── utils.rs         #   └── Utility functions for examples
-├── linearizable/        # 🔒 Advanced: Paxos-based linearizable KVS
-│   ├── mod.rs           #   └── Module documentation
-│   ├── paxos.rs         #   └── Core Multi-Paxos implementation
-│   ├── paxos_with_client.rs #   └── Client integration
-│   └── linearizable.rs  #   └── Linearizable KVS implementation
+
 └── routers/             # 🧭 All routing strategies (unified)
     ├── mod.rs           #   └── KVSRouter trait + re-exports
     ├── local.rs         #   └── LocalRouter - broadcast to all
@@ -185,7 +161,7 @@ examples/
 ├── replicated.rs        # Multi-replica example
 ├── sharded.rs           # Sharded example
 ├── sharded_replicated.rs # Combined example
-└── linearizable.rs      # 🔒 Advanced: Paxos consensus example
+
 ```
 
 ## 🏷️ Pre-configured Types

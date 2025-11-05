@@ -4,7 +4,6 @@ pub mod client;
 pub mod core;
 pub mod driver;
 pub mod kvs_types;
-pub mod linearizable;
 pub mod lww;
 pub mod protocol;
 pub mod replicated;

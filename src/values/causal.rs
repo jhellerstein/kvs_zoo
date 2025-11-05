@@ -19,7 +19,7 @@ impl<'a> Hasher for SimpleHasher<'a> {
             *self.0 = self.0.wrapping_mul(31).wrapping_add(byte as u64);
         }
     }
-    
+
     fn finish(&self) -> u64 {
         *self.0
     }
@@ -123,13 +123,17 @@ where
 
         // Hash the set by iterating in a consistent order
         // Use a simple hash for ordering - cheaper than Debug formatting but deterministic
-        let mut items_with_hashes: Vec<_> = set.as_reveal_ref().iter().map(|item| {
-            // Use a simple FNV-like hash for ordering (cheaper than DefaultHasher)
-            let mut simple_hash = 0u64;
-            item.hash(&mut SimpleHasher(&mut simple_hash));
-            (simple_hash, item)
-        }).collect();
-        
+        let mut items_with_hashes: Vec<_> = set
+            .as_reveal_ref()
+            .iter()
+            .map(|item| {
+                // Use a simple FNV-like hash for ordering (cheaper than DefaultHasher)
+                let mut simple_hash = 0u64;
+                item.hash(&mut SimpleHasher(&mut simple_hash));
+                (simple_hash, item)
+            })
+            .collect();
+
         items_with_hashes.sort_by_key(|(hash_val, _)| *hash_val);
 
         for (_, item) in items_with_hashes {

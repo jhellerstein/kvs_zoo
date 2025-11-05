@@ -17,8 +17,8 @@ use kvs_zoo::driver::KVSDemo;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::replicated::KVSReplicated;
 use kvs_zoo::routers::{BroadcastReplication, KVSRouter, ShardedRouter};
-use kvs_zoo::values::CausalString;
 use kvs_zoo::run_kvs_demo_impl;
+use kvs_zoo::values::CausalString;
 
 /// Type alias for sharded + replicated KVS with broadcast replication
 type ShardedReplicatedKVS = KVSReplicated<BroadcastReplication<CausalString>>;
@@ -36,7 +36,10 @@ impl KVSDemo for ShardedReplicatedDemo {
     type Storage = ShardedReplicatedKVS;
     type Router = ShardedRouter;
 
-    fn create_router<'a>(&self, _flow: &hydro_lang::compile::builder::FlowBuilder<'a>) -> Self::Router {
+    fn create_router<'a>(
+        &self,
+        _flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    ) -> Self::Router {
         ShardedRouter::new(3) // 3 shards, each replicated
     }
 

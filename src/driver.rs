@@ -74,11 +74,34 @@ pub trait KVSDemo {
 /// - tokio
 ///
 /// Usage:
-/// ```rust
-/// use kvs_zoo::driver::{KVSDemo, run_kvs_demo_impl};
+/// ```rust,ignore
+/// // Example usage in an example file:
+/// use kvs_zoo::{run_kvs_demo_impl, driver::KVSDemo};
+/// use kvs_zoo::protocol::KVSOperation;
+/// use kvs_zoo::routers::LocalRouter;
+/// use hydro_lang::prelude::*;
+/// use futures::{SinkExt, StreamExt};
 ///
+/// #[derive(Default)]
 /// struct MyDemo;
-/// impl KVSDemo for MyDemo { /* ... */ }
+///
+/// impl KVSDemo for MyDemo {
+///     type Value = String;
+///     type Storage = kvs_zoo::lww::KVSLww;
+///     type Router = LocalRouter;
+///     
+///     fn create_router<'a>(&self, _flow: &FlowBuilder<'a>) -> Self::Router {
+///         LocalRouter
+///     }
+///     
+///     fn cluster_size(&self) -> usize { 1 }
+///     fn name(&self) -> &'static str { "MyDemo" }
+///     fn description(&self) -> &'static str { "Example demo" }
+///     
+///     fn operations(&self) -> Vec<KVSOperation<Self::Value>> {
+///         vec![KVSOperation::Put("key".to_string(), "value".to_string())]
+///     }
+/// }
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {

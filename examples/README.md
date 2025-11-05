@@ -36,30 +36,24 @@ Complex architectures that combine multiple distributed systems concepts:
   - Consistency: Eventual (but this could be configured differently)
   - Use case: Large-scale systems needing both performance and fault tolerance
 
-- **`linearizable.rs`** - Paxos-based strongly consistent KVS
-  - Architecture: Proposers + Acceptors + Replicas
-  - Consistency: Linearizable (strongest guarantee)
-  - Use case: Critical systems requiring strong consistency
+
 
 ### Unified Driver API
 
-Most examples implement the `KVSDemo` trait and use the `run_kvs_demo_impl!` macro. See `local.rs` for a complete example. The macro handles deployment, client-server communication, and operation execution.
+Examples implement the `KVSDemo` trait and use the `run_kvs_demo_impl!` macro to avoid repetition. The macro handles deployment, client-server communication, and operation execution. It is a macro rather than a function because it needs to be compiled in the deployment context of `examples`, not `src`.
 
-**Note:** `linearizable.rs` uses direct flow construction due to multi-cluster lifetime constraints (proposers, acceptors, replicas must share the same lifetime).
+
 
 ## Running Examples
 
 ```bash
 # Basic architectures
 cargo run --example local
-cargo run --example linearizable
 
 # Distributed architectures
 cargo run --example replicated
 cargo run --example sharded
 cargo run --example sharded_replicated
-
-
 ```
 
 ## Architecture Decision Matrix
@@ -70,10 +64,9 @@ cargo run --example sharded_replicated
 | Replicated         | Coordination-free     | Eventually consistent (causal) | Guaranteed  | Medium      | Medium     |
 | Sharded            | Coordination-free     | Per-shard strong               | N/A         | High        | Medium     |
 | Sharded+Replicated | Coordination-free     | Eventually consistent (causal) | Guaranteed  | High        | High       |
-| Linearizable       | Coordination-required | Strong (linearizable)          | N/A         | Low         | Medium     |
 
 ## Key Concepts
 
 - **CALM Theorem**: Coordination-free systems achieve eventual consistency; coordination-required systems provide stronger guarantees at the cost of availability
 - **Composability**: The `KVSServer<V, Storage, Router>` API composes value types, storage strategies, and routing patterns
-- **Lattice semantics**: Coordination-free systems use merge operations (LWW, causal) that guarantee convergence without consensus
+- **Lattice semantics**: Coordination-free systems use merge operations (e.g. vector clock merge) that guarantee convergence without consensus

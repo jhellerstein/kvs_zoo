@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// LWW is a non-deterministic Merge implementation in distributed systems!
 /// The "last" writer depends on message ordering, which is not guaranteed
-/// in asynchronous networks. Use with caution in production systems.
+/// to be the same across replicas in asynchronous networks. Use with caution
+/// in production systems.
 ///
 /// ## Usage
 ///
