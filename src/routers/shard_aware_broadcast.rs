@@ -64,20 +64,19 @@ where
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded, NoOrder> {
         // Shard-aware filtering: only accept operations that belong to my shard
-        let filtered_tuples = local_put_tuples
-            .filter(q!(move |(key, _value)| {
-                // Only process if this operation belongs to my shard
-                let my_node_id = CLUSTER_SELF_ID.raw_id;
-                let my_shard_id = my_node_id / 3; // 3 replicas per shard
-                
-                // Calculate which shard this key should go to
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                std::hash::Hash::hash(key, &mut hasher);
-                let key_shard_id = (std::hash::Hasher::finish(&hasher) % 3) as u32; // 3 shards
-                
-                my_shard_id == key_shard_id
-            }));
-        
+        let filtered_tuples = local_put_tuples.filter(q!(move |(key, _value)| {
+            // Only process if this operation belongs to my shard
+            let my_node_id = CLUSTER_SELF_ID.raw_id;
+            let my_shard_id = my_node_id / 3; // 3 replicas per shard
+
+            // Calculate which shard this key should go to
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(key, &mut hasher);
+            let key_shard_id = (std::hash::Hasher::finish(&hasher) % 3) as u32; // 3 shards
+
+            my_shard_id == key_shard_id
+        }));
+
         // Broadcast within the shard
         filtered_tuples
             .broadcast_bincode(cluster, nondet!(/** broadcast to all nodes */))

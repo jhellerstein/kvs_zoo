@@ -40,12 +40,10 @@
 //!
 //! ```rust
 //! use kvs_zoo::values::{LwwWrapper, CausalWrapper};
-//! use kvs_zoo::server::KVSServer;
-//! use kvs_zoo::lww::KVSLww;
-//! use kvs_zoo::routers::LocalRouter;
+//! use kvs_zoo::server::LocalKVSServer;
 //!
 //! // Use with any storage type
-//! type LwwKVS = KVSServer<LwwWrapper<String>, KVSLww, LocalRouter>;
+//! type LwwKVS = LocalKVSServer<LwwWrapper<String>>;
 //! // Note: For more complex examples, see the individual module documentation
 //! ```
 

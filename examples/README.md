@@ -1,46 +1,51 @@
 # KVS Zoo Examples
 
-This directory contains examples demonstrating different KVS architectures and the composable API design.
+This directory contains examples demonstrating different KVS server architectures using the composable server framework.
 
-## Examples by Architecture
+## Server Architecture Examples
 
-### Basic Architectures
+All examples use the **composable server architecture** from `kvs_zoo::server`, showcasing how different server types can be composed to create sophisticated distributed systems.
 
-Simple, single-concern architecture that forms the building block:
+### Core Server Types
 
-- **`local.rs`** - Single-process KVS with no distribution
+- **`local.rs`** - LocalKVSServer (Single Node)
+  - **Architecture**: Single process, no networking
+  - **Nodes**: 1
+  - **Consistency**: Strong (deterministic)
+  - **Use case**: Development, testing, simple applications
 
-  - Architecture: One process, no networking
-  - Consistency: Strong (deterministic)
-  - Use case: Hello, world! style example for development and testing
+- **`replicated.rs`** - ReplicatedKVSServer (Replicated Cluster)
+  - **Architecture**: Multiple replicas with epidemic gossip
+  - **Nodes**: 3 replicas
+  - **Consistency**: Causal (with vector clocks)
+  - **Use case**: High availability, fault tolerance
 
-### Distributed Architectures
+- **`sharded.rs`** - ShardedKVSServer<LocalKVSServer> (Sharded)
+  - **Architecture**: Hash-based key partitioning
+  - **Nodes**: 3 shards (3 total nodes)
+  - **Consistency**: Per-shard strong, global eventual
+  - **Use case**: Horizontal scalability for large datasets
 
-Complex architectures that combine multiple distributed systems concepts:
+- **`sharded_replicated.rs`** - ShardedKVSServer<ReplicatedKVSServer> (**The Holy Grail!**)
+  - **Architecture**: Sharded + replicated (nested composition)
+  - **Nodes**: 3 shards × 3 replicas = 9 total nodes
+  - **Consistency**: Per-shard causal, cross-shard eventual
+  - **Use case**: Web-scale applications requiring both scalability and fault tolerance
 
-- **`replicated.rs`** - Multi-replica with gossip synchronization
+### Composable Server Framework
 
-  - Architecture: Multiple replicas with epidemic gossip
-  - Consistency: Causal (with vector clocks)
-  - Use case: Low latency, high availability, scalability with request volume
+All examples demonstrate the power of the `KVSServer<V>` trait:
 
-- **`sharded.rs`** - Hash-based horizontal partitioning
+```rust
+pub trait KVSServer<V> {
+    type Deployment<'a>;
+    fn create_deployment<'a>(flow: &FlowBuilder<'a>) -> Self::Deployment<'a>;
+    fn run<'a>(...) -> ServerPorts<V>;
+    fn size() -> usize;
+}
+```
 
-  - Architecture: Hash routing to independent shards
-  - Consistency: Per-shard strong, global eventual
-  - Use case: Scalability for large datasets
-
-- **`sharded_replicated.rs`** - Combined sharding + replication
-
-  - Architecture: Hash routing to replicated shard clusters
-  - Consistency: Eventual (but this could be configured differently)
-  - Use case: Large-scale systems needing both performance and fault tolerance
-
-
-
-### Unified Driver API
-
-Examples implement the `KVSDemo` trait and use the `run_kvs_demo_impl!` macro to avoid repetition. The macro handles deployment, client-server communication, and operation execution. It is a macro rather than a function because it needs to be compiled in the deployment context of `examples`, not `src`.
+This enables **true composability** where any server can be used as a building block for more complex architectures.
 
 
 
@@ -56,17 +61,23 @@ cargo run --example sharded
 cargo run --example sharded_replicated
 ```
 
-## Architecture Decision Matrix
+## Architecture Comparison
 
-| Example            | Coordination          | Consistency Model              | Convergence | Scalability | Complexity |
-| ------------------ | --------------------- | ------------------------------ | ----------- | ----------- | ---------- |
-| Local              | None                  | Strong                         | N/A         | Low         | Low        |
-| Replicated         | Coordination-free     | Eventually consistent (causal) | Guaranteed  | Medium      | Medium     |
-| Sharded            | Coordination-free     | Per-shard strong               | N/A         | High        | Medium     |
-| Sharded+Replicated | Coordination-free     | Eventually consistent (causal) | Guaranteed  | High        | High       |
+| Example              | Server Type                                    | Nodes | Consistency Model    | Scalability | Fault Tolerance |
+|---------------------|-----------------------------------------------|-------|---------------------|-------------|-----------------|
+| `local.rs`          | `LocalKVSServer<String>`                      | 1     | Strong              | Low         | None            |
+| `replicated.rs`     | `ReplicatedKVSServer<CausalString>`           | 3     | Causal              | Medium      | High            |
+| `sharded.rs`        | `ShardedKVSServer<LocalKVSServer<String>>`    | 3     | Per-shard strong    | High        | Low             |
+| `sharded_replicated.rs` | `ShardedKVSServer<ReplicatedKVSServer<CausalString>>` | 9 | Per-shard causal | Very High   | Very High       |
 
-## Key Concepts
+## Key Benefits
 
-- **CALM Theorem**: Coordination-free systems achieve eventual consistency; coordination-required systems provide stronger guarantees at the cost of availability
-- **Composability**: The `KVSServer<V, Storage, Router>` API composes value types, storage strategies, and routing patterns
-- **Lattice semantics**: Coordination-free systems use merge operations (e.g. vector clock merge) that guarantee convergence without consensus
+- **🔧 Composability**: Servers can be nested and combined arbitrarily
+- **📈 Scalability**: From 1 node to 9+ nodes with the same patterns
+- **🛡️ Fault Tolerance**: Replication provides resilience to node failures
+- **⚡ Performance**: Sharding distributes load across multiple nodes
+- **🎯 Flexibility**: Mix and match consistency models and architectures
+
+## Integration Tests
+
+All examples are validated by comprehensive integration tests in `tests/composable_integration.rs` that verify correctness of operations and consistency guarantees.

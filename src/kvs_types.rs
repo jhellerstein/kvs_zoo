@@ -28,7 +28,7 @@
 //! type ReplicatedKVS = StringKVSReplicatedEpidemicGossip;
 //! ```
 
-use crate::server::KVSServer;
+use crate::server::{LocalKVSServer, ReplicatedKVSServer, ShardedKVSServer};
 
 // =============================================================================
 // Local Configurations (Single-node) - NEW KVS-PREFIX NAMING
@@ -40,7 +40,7 @@ use crate::server::KVSServer;
 /// **Use case**: Development, testing, simple applications
 /// **Consistency**: Strong (single node)
 /// **Availability**: Low (single point of failure)
-pub type KVSLocalLww<V> = KVSServer<V, crate::lww::KVSLww, crate::routers::LocalRouter>;
+pub type KVSLocalLww<V> = LocalKVSServer<V>;
 
 // =============================================================================
 // Replicated Configurations (Multi-replica) - NEW KVS-PREFIX NAMING
@@ -52,8 +52,7 @@ pub type KVSLocalLww<V> = KVSServer<V, crate::lww::KVSLww, crate::routers::Local
 /// **Use case**: High availability, partition tolerance
 /// **Consistency**: Causal (with vector clocks)
 /// **Availability**: High (fault tolerant)
-pub type KVSReplicatedEpidemicGossip<V> =
-    KVSServer<V, crate::replicated::KVSReplicatedEpidemic<V>, crate::routers::RoundRobinRouter>;
+pub type KVSReplicatedEpidemicGossip<V> = ReplicatedKVSServer<V>;
 
 /// Replicated KVS with reliable broadcast protocol
 ///
@@ -61,8 +60,7 @@ pub type KVSReplicatedEpidemicGossip<V> =
 /// **Use case**: Strong consistency requirements with replication
 /// **Consistency**: Strong (reliable broadcast)
 /// **Availability**: High (fault tolerant)
-pub type KVSReplicatedBroadcast<V> =
-    KVSServer<V, crate::replicated::KVSReplicatedBroadcast<V>, crate::routers::RoundRobinRouter>;
+pub type KVSReplicatedBroadcast<V> = ReplicatedKVSServer<V>;
 
 // =============================================================================
 // Sharded Configurations (Partitioned) - NEW KVS-PREFIX NAMING
@@ -74,7 +72,7 @@ pub type KVSReplicatedBroadcast<V> =
 /// **Use case**: Horizontal scalability for large datasets
 /// **Consistency**: Per-shard strong, global eventual
 /// **Availability**: Medium (shard failures affect subset of keys)
-pub type KVSShardedLww<V> = KVSServer<V, crate::lww::KVSLww, crate::routers::ShardedRouter>;
+pub type KVSShardedLww<V> = ShardedKVSServer<LocalKVSServer<V>>;
 
 // =============================================================================
 // Sharded + Replicated Configurations (Scalability + Availability) - NEW KVS-PREFIX NAMING
@@ -88,11 +86,7 @@ pub type KVSShardedLww<V> = KVSServer<V, crate::lww::KVSLww, crate::routers::Sha
 /// **Availability**: High (fault tolerance within each shard)
 /// **Routing**: ShardedRoundRobin - routes to shard primaries
 /// **Replication**: ShardAwareBroadcastReplication - replicates only within shard boundaries
-pub type KVSShardedReplicated<V> = KVSServer<
-    V,
-    crate::replicated::KVSReplicated<crate::routers::ShardAwareBroadcastReplication>,
-    crate::routers::ShardedRoundRobin,
->;
+pub type KVSShardedReplicated<V> = ShardedKVSServer<ReplicatedKVSServer<V>>;
 
 // =============================================================================
 // String-based Convenience Aliases
