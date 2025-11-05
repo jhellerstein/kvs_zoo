@@ -260,7 +260,7 @@ This project is designed for educational purposes as part of a distributed syste
 - [Anna: A KVS for Any Scale](https://arxiv.org/abs/1809.00089)
 - [Conflict-free Replicated Data Types (CRDTs)](https://crdt.tech/)
 - [Vector Clocks](https://en.wikipedia.org/wiki/Vector_clock)
-- [Demers Gossip Protocol](https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/XEROX.pdf)
+- [Demers Gossip Protocol](https://www.cs.cornell.edu/people/egs/cornellonly/syslunch/spring05/andre.pdf)
 
 ## 📄 License
 
