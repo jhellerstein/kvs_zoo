@@ -381,8 +381,6 @@ where
 // Type aliases removed due to generic parameter complexity
 // Use the concrete types directly: LocalKVSService<V>, ReplicatedKVSService<V>, etc.
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
