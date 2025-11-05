@@ -58,19 +58,7 @@ Combines sharding and replication for both scalability and fault tolerance.
   - Gossip within each shard for consistency
   - Partitioning across shards for capacity
 
-### 5. **Linearizable KVS** (`linearizable.rs`) 🆕
 
-Strongest consistency guarantee using Paxos consensus for total ordering.
-
-- **Example**: `examples/linearizable.rs`
-- **Concepts**: Consensus algorithms, linearizability, fault tolerance
-- **Features**:
-  - Paxos consensus for total ordering of all operations
-  - Multi-Paxos with leader election and log replication
-  - Linearizability: all operations appear atomic in real-time order
-  - Fault tolerance with configurable quorum (f failures tolerated with 2f+1 nodes)
-  - Four-layer architecture: Proxy → Proposers → Acceptors → Replicas
-  - Uses `KVSCore` (last-writer-wins) since total ordering eliminates need for lattices
 
 ## 🧪 Core Components
 
@@ -78,7 +66,7 @@ Strongest consistency guarantee using Paxos consensus for total ordering.
 
 - **`lattice_core.rs`**: Coordination-free KVS using lattice merge operations
 - **`vector_clock.rs`**: Vector clocks for causal ordering
-- **Causal Values**: `DomPair<VectorClock, SetUnion<T>>` for causally-consistent multi-values
+- **Causal Values**: `DomPair<VCWrapper, SetUnion<T>>` for causally-consistent multi-values
 
 ### Supporting Infrastructure
 
@@ -126,11 +114,10 @@ cargo run --example sharded
 # Sharded + Replicated (3 shard clusters, each with 3 replicas)
 cargo run --example sharded_replicated
 
-# Linearizable KVS with Paxos consensus (1 proxy, 3 proposers, 3 acceptors, 3 replicas)
-cargo run --example linearizable
+
 ```
 
-Most examples use **causal consistency** with vector-clock-timestamped values that merge via set union. The linearizable KVS provides the **strongest consistency** (linearizability) via Paxos consensus.
+Most examples use **causal consistency** with vector-clock-timestamped values that merge via set union.
 
 ## 📖 Example Walkthrough
 
@@ -201,36 +188,18 @@ operations
     .demux_bincode(cluster)
 ```
 
-### 4. **Paxos Consensus** 🆕
 
-Total ordering via Multi-Paxos with leader election:
-
-```rust
-// Paxos sequences operations through consensus
-let paxos = CorePaxos::new(proposers, acceptors, config);
-let sequenced = paxos.with_client(proposers, operations, checkpoints, ...);
-
-// Replicas apply operations in total order
-let replica_ops = sequenced
-    .filter_map(|(slot, op)| op)  // Extract committed operations
-    .broadcast_bincode(replicas, ...);
-
-// KVSCore provides last-writer-wins semantics
-// (lattices unnecessary since Paxos provides total order)
-let replica_kvs = KVSCore::put(replica_ops);
-```
 
 ## 📊 Consistency Spectrum
 
 The KVS Zoo demonstrates the spectrum of consistency models:
 
-| Variant | Consistency | Coordination | Latency | Fault Tolerance |
-|---------|------------|--------------|---------|-----------------|
-| Local | N/A | None | Lowest | None |
-| Replicated | Eventual | Gossip | Low | High |
-| Sharded | Per-Key | Hash routing | Low | Medium |
-| Sharded+Replicated | Causal | Gossip+Hash | Medium | High |
-| **Linearizable** | **Linearizable** | **Paxos Consensus** | **Higher** | **Configurable** |
+| Variant            | Consistency      | Coordination        | Latency    | Fault Tolerance  |
+| ------------------ | ---------------- | ------------------- | ---------- | ---------------- |
+| Local              | N/A              | None                | Lowest     | None             |
+| Replicated         | Eventual         | Gossip              | Low        | High             |
+| Sharded            | Per-Key          | Hash routing        | Low        | Medium           |
+| Sharded+Replicated | Causal           | Gossip+Hash         | Medium     | High             |
 
 ## 🧪 Testing
 

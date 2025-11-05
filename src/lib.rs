@@ -1,20 +1,20 @@
 stageleft::stageleft_no_entry_crate!();
 
 pub mod client;
+pub mod config;
 pub mod core;
-pub mod kvs_variants;
-pub mod lattice_core;
-pub mod linearizable;
-pub mod local;
-pub mod paxos;
-pub mod paxos_with_client;
+pub mod driver;
+pub mod kvs_types;
+pub mod lww;
 pub mod protocol;
-pub mod proxy;
 pub mod replicated;
+pub mod routers;
+pub mod server;
 pub mod sharded;
-pub mod sharded_replicated;
-pub mod vector_clock;
-pub mod examples_support;
+pub mod values;
+
+// The run_kvs_demo macro is exported via #[macro_export] in driver.rs
+// and is available as kvs_zoo::run_kvs_demo! in examples
 
 #[cfg(test)]
 mod test_init {
