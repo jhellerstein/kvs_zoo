@@ -42,21 +42,25 @@ pub trait KVSRouter<V> {
 pub mod local;
 pub mod round_robin;
 pub mod sharded;
+pub mod sharded_replicated;
 
 // Advanced replication protocols
 pub mod broadcast;
 pub mod common;
 pub mod gossip;
+pub mod shard_aware_broadcast;
 
 // Re-export all router types for convenience
 pub use local::LocalRouter;
 pub use round_robin::RoundRobinRouter;
 pub use sharded::ShardedRouter;
+pub use sharded_replicated::ShardedRoundRobin;
 
 // Re-export advanced replication types
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
 pub use common::{BaseReplicationConfig, ReplicationCommon, ReplicationMessage};
 pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
+pub use shard_aware_broadcast::ShardAwareBroadcastReplication;
 
 /// Trait for advanced routing protocols that handle replication
 ///
