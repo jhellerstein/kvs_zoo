@@ -63,6 +63,68 @@ impl<V, R> LinearizableKVSServer<V, R> {
             _phantom: std::marker::PhantomData,
         }
     }
+    
+    /// Sequence responses back into slot order to maintain linearizability
+    /// 
+    /// This function takes slot-indexed responses that may arrive out of order
+    /// and returns them in the correct sequential order, buffering any responses
+    /// that arrive early until the gaps are filled.
+    /// 
+    /// Based on the pattern from hydro/hydro_test/src/cluster/kv_replica/sequence_payloads.rs
+    fn sequence_responses<'a>(
+        deployment: &Cluster<'a, KVSNode>,
+        slotted_responses: Stream<(usize, String), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        let tick = deployment.tick();
+        
+        // Create cycles for buffering out-of-order responses
+        let (buffered_responses_complete, buffered_responses) = 
+            tick.cycle::<Stream<(usize, String), Tick<Cluster<'a, KVSNode>>, Bounded>>();
+        
+        // Batch incoming responses and combine with buffered ones
+        let sorted_responses = slotted_responses
+            .batch(&tick, nondet!(/** batch for sequencing */))
+            .chain(buffered_responses)
+            .sort();
+        
+        // Track the next expected slot number
+        let (next_slot_complete, next_slot) = 
+            tick.cycle_with_initial(tick.singleton(q!(0usize)));
+        
+        // Find the highest contiguous slot we can process
+        let next_slot_after_processing = sorted_responses
+            .clone()
+            .cross_singleton(next_slot.clone())
+            .fold(
+                q!(|| 0usize),
+                q!(|new_next_slot, ((slot, _response), next_slot)| {
+                    if slot == std::cmp::max(*new_next_slot, next_slot) {
+                        *new_next_slot = slot + 1;
+                    }
+                }),
+            );
+        
+        // Split responses into processable and buffered
+        let processable_responses = sorted_responses
+            .clone()
+            .cross_singleton(next_slot_after_processing.clone())
+            .filter(q!(|((slot, _response), highest_slot)| *slot < *highest_slot))
+            .map(q!(|((slot, response), _)| (slot, response)));
+        
+        let new_buffered_responses = sorted_responses
+            .cross_singleton(next_slot_after_processing.clone())
+            .filter(q!(|((slot, _response), highest_slot)| *slot > *highest_slot))
+            .map(q!(|((slot, response), _)| (slot, response)));
+        
+        // Complete the cycles
+        buffered_responses_complete.complete_next_tick(new_buffered_responses);
+        next_slot_complete.complete_next_tick(next_slot_after_processing);
+        
+        // Return just the response strings in slot order
+        processable_responses
+            .map(q!(|(_slot, response)| response))
+            .all_ticks()
+    }
 
     /// Create a linearizable KVS server with custom Paxos configuration
     pub fn with_paxos_config(cluster_size: usize, paxos_config: PaxosConfig) -> Self {
@@ -145,18 +207,36 @@ where
 
         // Process operations sequentially to maintain linearizability
         // This is the key difference: we don't split PUTs and GETs
-        // For now, use a simple map-based approach to avoid generic closure issues
-        let sequential_responses = ordered_operations
-            .map(q!(|op| {
-                match op {
-                    KVSOperation::Put(key, _value) => {
-                        format!("PUT {} = OK [LINEARIZABLE]", key)
-                    }
-                    KVSOperation::Get(key) => {
-                        format!("GET {} = PLACEHOLDER [LINEARIZABLE]", key)
-                    }
-                }
-            }));
+        
+        // First, we need to add slot numbers to the operations for proper sequencing
+        let slotted_operations = ordered_operations
+            .enumerate()
+            .map(q!(|(slot, op)| (slot, op)));
+        
+        // Process each slotted operation sequentially
+        let slotted_responses = slotted_operations
+            .scan(
+                q!(|| std::collections::HashMap::new()),
+                q!(|state, (slot, op)| {
+                    let response = match op {
+                        KVSOperation::Put(key, value) => {
+                            state.insert(key.clone(), value);
+                            format!("PUT {} = OK [LINEARIZABLE]", key)
+                        }
+                        KVSOperation::Get(key) => {
+                            match state.get(&key) {
+                                Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
+                                None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
+                            }
+                        }
+                    };
+                    Some((slot, response))
+                })
+            );
+        
+        // Now we need to sequence the responses back into order
+        // This handles the case where responses arrive out of order due to network/processing delays
+        let sequential_responses = Self::sequence_responses(deployment, slotted_responses);
 
         // Send results back through proxy to external
         let proxy_responses = sequential_responses

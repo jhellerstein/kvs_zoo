@@ -211,7 +211,6 @@ pub fn create_paxos_clusters<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::KVSOperation;
 
     #[test]
     fn test_paxos_interceptor_creation() {

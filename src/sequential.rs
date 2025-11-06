@@ -57,9 +57,10 @@ impl KVSSequential {
             + 'static,
     {
         // Use scan to maintain state and emit responses for each operation
+        // Use Default::default() to avoid generic type issues in Hydro closures
         operations
             .scan(
-                q!(|| std::collections::HashMap::<String, V>::new()),
+                q!(|| std::collections::HashMap::new()),
                 q!(|state, op| {
                     let response = match op {
                         KVSOperation::Put(key, value) => {
@@ -78,72 +79,7 @@ impl KVSSequential {
             )
     }
 
-    /// Process operations with explicit state management
-    ///
-    /// This version provides more control over state management and can be
-    /// extended for more complex linearizable operations.
-    pub fn process_with_state<'a, V>(
-        operations: Stream<KVSOperation<V>, Cluster<'a, crate::core::KVSNode>, Unbounded>,
-    ) -> Stream<(String, std::collections::HashMap<String, V>), Cluster<'a, crate::core::KVSNode>, Unbounded>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-    {
-        operations
-            .scan(
-                q!(|| std::collections::HashMap::<String, V>::new()),
-                q!(|state, op| {
-                    let response = match &op {
-                        KVSOperation::Put(key, value) => {
-                            state.insert(key.clone(), value.clone());
-                            format!("PUT {} = OK [SEQUENTIAL]", key)
-                        }
-                        KVSOperation::Get(key) => {
-                            match state.get(key) {
-                                Some(value) => format!("GET {} = {:?} [SEQUENTIAL]", key, value),
-                                None => format!("GET {} = NOT FOUND [SEQUENTIAL]", key),
-                            }
-                        }
-                    };
-                    Some((response, state.clone())) // Always emit the response and state
-                })
-            )
-    }
 
-    /// Process operations with batching for efficiency
-    ///
-    /// This version is a simplified approach that just uses the basic
-    /// sequential processing for now.
-    #[allow(dead_code)]
-    pub fn process_with_batching<'a, V>(
-        operations: Stream<KVSOperation<V>, Cluster<'a, crate::core::KVSNode>, Unbounded>,
-        _tick: &Tick<Cluster<'a, crate::core::KVSNode>>,
-    ) -> Stream<String, Cluster<'a, crate::core::KVSNode>, Unbounded>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-    {
-        // For now, just use the basic sequential processing
-        Self::process_sequential(operations)
-    }
 }
 
 #[cfg(test)]

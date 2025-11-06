@@ -10,6 +10,7 @@ pub mod protocol;
 pub mod replicated;
 pub mod replication;
 pub mod sequential;
+pub mod sequential_concrete;
 pub mod server;
 pub mod sharded;
 pub mod values;
