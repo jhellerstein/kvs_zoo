@@ -5,7 +5,10 @@ use kvs_zoo::protocol::{KVSOperation, KVSResponse};
 fn test_operation_creation() {
     // Test PUT operation
     let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string());
-    assert_eq!(put_op, KVSOperation::Put("key1".to_string(), "value1".to_string()));
+    assert_eq!(
+        put_op,
+        KVSOperation::Put("key1".to_string(), "value1".to_string())
+    );
 
     // Test GET operation
     let get_op: KVSOperation<String> = KVSOperation::Get("key1".to_string());
@@ -55,7 +58,7 @@ fn test_response_pattern_matching() {
 
     let not_found_response: KVSResponse<String> = KVSResponse::GetResult(None);
     match not_found_response {
-        KVSResponse::GetResult(None) => {}, // Expected
+        KVSResponse::GetResult(None) => {} // Expected
         KVSResponse::GetResult(Some(_)) => panic!("Expected not found"),
         KVSResponse::PutOk => panic!("Expected GET response"),
     }

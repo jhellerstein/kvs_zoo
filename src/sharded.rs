@@ -165,7 +165,7 @@ where
         + Send
         + Sync
         + 'static,
-    R: crate::routers::ReplicationProtocol<V> + Default,
+    R: crate::replication::ReplicationStrategy<V> + Default,
 {
     type StorageType = V;
 

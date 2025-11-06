@@ -2,7 +2,7 @@
 
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
-The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model, progressing from simple local stores to sophisticated sharded and replicated architectures with causal consistency.
+The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a **composable architecture** that separates operation interception from data replication, progressing from simple local stores to sophisticated sharded and replicated architectures with causal consistency.
 
 ## 📚 Background
 

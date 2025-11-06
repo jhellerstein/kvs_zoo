@@ -2,18 +2,15 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod config;
 pub mod core;
-pub mod driver;
 pub mod kvs_types;
 pub mod lww;
+pub mod interception;
 pub mod protocol;
 pub mod replicated;
-pub mod routers;
+pub mod replication;
 pub mod server;
 pub mod sharded;
 pub mod values;
-
-// The run_kvs_demo macro is exported via #[macro_export] in driver.rs
-// and is available as kvs_zoo::run_kvs_demo! in examples
 
 #[cfg(test)]
 mod test_init {

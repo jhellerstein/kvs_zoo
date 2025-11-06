@@ -40,10 +40,11 @@ impl<R> KVSReplicated<R> {
             + Send
             + Sync
             + 'static,
-        R: crate::routers::ReplicationProtocol<V> + Default,
+        R: crate::replication::ReplicationStrategy<V> + Default,
     {
         // Use replication strategy to get remote operations
-        let remote_put_tuples = R::handle_replication(cluster, local_put_tuples.clone());
+        let replication_strategy = R::default();
+        let remote_put_tuples = replication_strategy.replicate_data(cluster, local_put_tuples.clone());
 
         // Combine local and remote operations
         let all_put_tuples = local_put_tuples.interleave(remote_put_tuples);

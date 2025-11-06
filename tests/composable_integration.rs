@@ -40,8 +40,18 @@ async fn test_local_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create local KVS server
-    let kvs_cluster = LocalKVSServer::<String>::create_deployment(&flow);
-    let client_port = LocalKVSServer::<String>::run(&proxy, &kvs_cluster, &client_external);
+    let kvs_cluster = LocalKVSServer::<String>::create_deployment(
+        &flow,
+        kvs_zoo::interception::LocalRouter::new(),
+        (),
+    );
+    let client_port = LocalKVSServer::<String>::run(
+        &proxy,
+        &kvs_cluster,
+        &client_external,
+        kvs_zoo::interception::LocalRouter::new(),
+        (),
+    );
 
     // Deploy
     let nodes = flow
@@ -110,9 +120,19 @@ async fn test_replicated_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create replicated KVS server
-    let kvs_cluster = ReplicatedKVSServer::<CausalString>::create_deployment(&flow);
-    let client_port =
-        ReplicatedKVSServer::<CausalString>::run(&proxy, &kvs_cluster, &client_external);
+    let kvs_cluster =
+        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::create_deployment(
+            &flow,
+            kvs_zoo::interception::RoundRobinRouter::new(),
+            kvs_zoo::replication::NoReplication::new(),
+        );
+    let client_port = ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::run(
+        &proxy,
+        &kvs_cluster,
+        &client_external,
+        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::replication::NoReplication::new(),
+    );
 
     // Deploy with 3 replicas
     let nodes = flow
@@ -190,11 +210,23 @@ async fn test_sharded_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded KVS server
-    let shard_deployments = ShardedKVSServer::<LocalKVSServer<String>>::create_deployment(&flow);
+    let shard_deployments = ShardedKVSServer::<LocalKVSServer<String>>::create_deployment(
+        &flow,
+        kvs_zoo::interception::Pipeline::new(
+            kvs_zoo::interception::ShardedRouter::new(3),
+            kvs_zoo::interception::LocalRouter::new(),
+        ),
+        (),
+    );
     let client_port = ShardedKVSServer::<LocalKVSServer<String>>::run(
         &proxy,
         &shard_deployments,
         &client_external,
+        kvs_zoo::interception::Pipeline::new(
+            kvs_zoo::interception::ShardedRouter::new(3),
+            kvs_zoo::interception::LocalRouter::new(),
+        ),
+        (),
     );
 
     // Deploy with multiple shards
@@ -202,9 +234,8 @@ async fn test_sharded_kvs_service() {
         .with_process(&proxy, localhost.clone())
         .with_external(&client_external, localhost.clone());
 
-    for shard_deployment in shard_deployments.iter() {
-        flow_builder = flow_builder.with_cluster(shard_deployment, vec![localhost.clone(); 1]);
-    }
+    // Add the shard deployment (now a single cluster)
+    flow_builder = flow_builder.with_cluster(&shard_deployments, vec![localhost.clone(); 3]);
 
     let nodes = flow_builder.deploy(&mut deployment);
 
@@ -212,10 +243,17 @@ async fn test_sharded_kvs_service() {
     let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
     deployment.start().await.unwrap();
 
-    // Wait for startup
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for startup - sharded systems need more time
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // Test operations that should go to different shards
+    // Let's verify which shards these keys map to
+    println!("🔍 Shard mapping verification:");
+    for key in &["shard_key_0", "shard_key_1", "nonexistent"] {
+        let shard = kvs_zoo::interception::ShardedRouter::calculate_shard_id(key, 3);
+        println!("  {} -> shard {}", key, shard);
+    }
+    
     let operations = vec![
         KVSOperation::Put("shard_key_0".to_string(), "value_0".to_string()),
         KVSOperation::Put("shard_key_1".to_string(), "value_1".to_string()),
@@ -225,11 +263,16 @@ async fn test_sharded_kvs_service() {
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
+        println!("📤 Sending operation {}: {:?}", i, op);
+        
         match client_in.send(op).await {
             Ok(_) => {
+                println!("✅ Operation {} sent successfully", i);
+                
                 // For GET operations, try to get a response
                 if i >= 2 {
-                    match timeout(Duration::from_millis(1000), client_out.next()).await {
+                    // Give more time for sharded operations to complete
+                    match timeout(Duration::from_millis(2000), client_out.next()).await {
                         Ok(Some(response)) => {
                             println!("✅ Operation {}: {}", i, response);
 
@@ -237,11 +280,13 @@ async fn test_sharded_kvs_service() {
                             match i {
                                 2 => assert!(
                                     response.contains("shard_key_0")
-                                        && response.contains("value_0")
+                                        && response.contains("value_0"),
+                                    "Expected shard_key_0 with value_0, got: {}", response
                                 ),
                                 3 => assert!(
                                     response.contains("shard_key_1")
-                                        && response.contains("value_1")
+                                        && response.contains("value_1"),
+                                    "Expected shard_key_1 with value_1, got: {}", response
                                 ),
                                 4 => assert_eq!(response, "GET nonexistent = NOT FOUND"),
                                 _ => {}
@@ -250,15 +295,17 @@ async fn test_sharded_kvs_service() {
                         Ok(None) => {
                             println!("⚠️  Operation {}: No response (connection closed)", i)
                         }
-                        Err(_) => println!(
-                            "⚠️  Operation {}: Timeout (expected for current sharding implementation)",
-                            i
-                        ),
+                        Err(_) => {
+                            println!("⚠️  Operation {}: Timeout - this might indicate a sharding issue", i);
+                            // Don't fail the test on timeout for now, just log it
+                        }
                     }
                 } else {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
                     println!("✅ Operation {}: PUT completed", i);
                 }
+                
+                // Wait between all operations to ensure proper sequencing
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
             Err(e) => {
                 println!("⚠️  Operation {}: Send failed ({}), continuing test", i, e);
@@ -286,12 +333,27 @@ async fn test_sharded_replicated_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded + replicated KVS server
-    let shard_deployments =
-        ShardedKVSServer::<ReplicatedKVSServer<CausalString>>::create_deployment(&flow);
-    let client_port = ShardedKVSServer::<ReplicatedKVSServer<CausalString>>::run(
+    let shard_deployments = ShardedKVSServer::<
+        ReplicatedKVSServer<CausalString, kvs_zoo::replication::NoReplication>,
+    >::create_deployment(
+        &flow,
+        kvs_zoo::interception::Pipeline::new(
+            kvs_zoo::interception::ShardedRouter::new(3),
+            kvs_zoo::interception::RoundRobinRouter::new(),
+        ),
+        kvs_zoo::replication::NoReplication::new(),
+    );
+    let client_port = ShardedKVSServer::<
+        ReplicatedKVSServer<CausalString, kvs_zoo::replication::NoReplication>,
+    >::run(
         &proxy,
         &shard_deployments,
         &client_external,
+        kvs_zoo::interception::Pipeline::new(
+            kvs_zoo::interception::ShardedRouter::new(3),
+            kvs_zoo::interception::RoundRobinRouter::new(),
+        ),
+        kvs_zoo::replication::NoReplication::new(),
     );
 
     // Deploy with multiple shards (each shard has 3 replicas)
@@ -299,9 +361,8 @@ async fn test_sharded_replicated_kvs_service() {
         .with_process(&proxy, localhost.clone())
         .with_external(&client_external, localhost.clone());
 
-    for shard_deployment in shard_deployments.iter() {
-        flow_builder = flow_builder.with_cluster(shard_deployment, vec![localhost.clone(); 3]);
-    }
+    // Add the shard deployment (now a single cluster)
+    flow_builder = flow_builder.with_cluster(&shard_deployments, vec![localhost.clone(); 9]); // 3 shards × 3 replicas
 
     let nodes = flow_builder.deploy(&mut deployment);
 

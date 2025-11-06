@@ -34,7 +34,7 @@ All examples use the **composable server architecture** from `kvs_zoo::server`, 
 
 ### Composable Server Framework
 
-All examples demonstrate the power of the `KVSServer<V>` trait:
+All examples demonstrate the use of the `KVSServer<V>` trait:
 
 ```rust
 pub trait KVSServer<V> {
@@ -45,7 +45,7 @@ pub trait KVSServer<V> {
 }
 ```
 
-This enables **true composability** where any server can be used as a building block for more complex architectures.
+This enables architectural composability, where any server can be used as a building block for more complex architectures.
 
 
 
