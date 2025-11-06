@@ -4,6 +4,7 @@
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer, ShardedKVSServer};
+use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::values::CausalWrapper;
 
 #[tokio::main]
@@ -36,11 +37,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   ✅ create_educational_kvs::<CausalWrapper<String>>()");
     println!("   📖 Type inference reduces repetition while preserving function signature clarity");
     
+    // Pattern 4: Linearizable KVS with Paxos consensus
+    println!("📋 Pattern 4: Linearizable KVS (Paxos consensus for strongest consistency)");
+    type LinearizableComposition = LinearizableKVSServer<
+        CausalWrapper<String>,
+        kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>
+    >;
+    println!("   ✅ LinearizableKVSServer<CausalWrapper<String>, BroadcastReplication<CausalWrapper<String>>>");
+    println!("   📖 Paxos consensus provides linearizability - strongest consistency model");
+    
     println!();
     println!("🎓 Educational Value Analysis:");
     println!("   • Pattern 1: Best for understanding composition structure");
     println!("   • Pattern 2: Good balance of clarity and conciseness");  
     println!("   • Pattern 3: Most concise, but hides some structure");
+    println!("   • Pattern 4: Demonstrates consensus-based linearizability");
     println!("   • All patterns maintain type safety and zero-cost abstractions");
     println!("   • Value type repetition is a Rust limitation, not architecture flaw");
 

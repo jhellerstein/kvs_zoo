@@ -31,9 +31,11 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub mod routing;
+pub mod paxos;
 
 // Re-export routing interceptors for convenience
 pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
+pub use paxos::{PaxosInterceptor, PaxosConfig};
 
 /// Core trait for operation interceptors
 ///

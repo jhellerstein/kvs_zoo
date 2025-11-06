@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 // Type aliases for server ports
 type ServerBidiPort<V> =
     ExternalBincodeBidi<KVSOperation<V>, String, hydro_lang::location::external_process::Many>;
-type ServerPorts<V> = ServerBidiPort<V>;
+pub type ServerPorts<V> = ServerBidiPort<V>;
 
 /// Abstraction over KVS servers that can be either single nodes or clusters
 ///
