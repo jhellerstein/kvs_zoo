@@ -13,7 +13,7 @@
 //! - **Real-time**: Non-overlapping operations respect wall-clock time
 //!
 //! This is a gold standard for distributed systems but comes with higher latency
-//! and risks of unavailability due to the need for a consensus cluster in the 
+//! and risks of unavailability due to the need for a consensus cluster in the
 //! path of each operation.
 
 use futures::{SinkExt, StreamExt};
@@ -147,21 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
-    println!();
-    println!("✅ Linearizable KVS demo completed!");
-    println!("🎯 Key benefits demonstrated:");
-    println!("   • Total ordering: All operations have a global sequence");
-    println!("   • Atomicity: Each operation appears instantaneous");
-    println!("   • Consistency: All replicas see the same order");
-    println!("   • Fault tolerance: System continues with node failures");
-    println!();
-    println!("💡 Use linearizable KVS when you need:");
-    println!("   • Strongest consistency guarantees");
-    println!("   • Coordination between distributed components");
-    println!("   • Atomic transactions across keys");
-    println!("   • Can tolerate higher latency for consistency");
-
-    // Keep running briefly to see any remaining output
+    println!("✅ Demo completed");
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     Ok(())

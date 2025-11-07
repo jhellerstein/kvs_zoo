@@ -1,3 +1,5 @@
+// Paxos implementation copied from the Hydro repo,
+// https://github.com/hydro-project/hydro/blob/main/hydro_test/src/cluster/paxos.rs
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;

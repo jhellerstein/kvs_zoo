@@ -132,6 +132,8 @@ where
         self.handle_replication(cluster, local_data)
     }
 
+    // Ordered logs with "slots" (positions) need to be replicated for ordered "replay".
+    // See logbased.rs.
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,

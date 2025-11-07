@@ -127,14 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    println!("✅ Gossip replication demo completed");
-    println!();
-    println!("🎓 Replication Strategy Notes:");
-    println!("   • This example uses EpidemicGossip for eventual consistency");
-    println!("   • Alternative: synchronous BroadcastReplication for lower-latency replication");
-    println!("   • Both strategies work with the same RoundRobinRouter pipeline");
-    println!("   • The composable architecture separates routing from replication concerns");
-
+    println!("✅ Demo completed");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())

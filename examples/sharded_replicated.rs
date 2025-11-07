@@ -138,15 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     }
 
-    println!("✅ Advanced composition demo completed");
-    println!();
-    println!("🎓 Architecture benefits:");
-    println!("   • Scalability: Sharding distributes data across nodes");
-    println!("   • Availability: Replication provides fault tolerance");
-    println!("   • Consistency: Broadcast replication ensures strong consistency per shard");
-    println!("   • Composability: Type-safe server and pipeline composition");
-    println!("   • Zero-cost: All composition resolved at compile time");
-
+    println!("✅ Demo completed");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())

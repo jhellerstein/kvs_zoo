@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
-    println!("✅ Sharded local demo completed");
+    println!("✅ Demo 1 completed");
     println!();
 
     // Example 2: Sharded + Replicated (ShardedRouter.then(RoundRobinRouter))
@@ -159,17 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
-    println!("✅ Sharded replicated demo completed");
-    println!();
-
-    println!("🎓 Composition patterns:");
-    println!("   • ShardedKVSServer<LocalKVSServer> → Pipeline<ShardedRouter, LocalRouter>");
-    println!(
-        "   • ShardedKVSServer<ReplicatedKVSServer> → Pipeline<ShardedRouter, RoundRobinRouter>"
-    );
-    println!("   • Type system enforces matching structures at compile time");
-    println!("   • Zero-cost: all composition resolved at compile time");
-
+    println!("✅ Demo 2 completed");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())
