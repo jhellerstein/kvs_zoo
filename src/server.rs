@@ -21,8 +21,8 @@
 
 use crate::core::KVSNode;
 use crate::interception::OpIntercept;
-use crate::protocol::KVSOperation;
 use crate::maintain::ReplicationStrategy;
+use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -260,7 +260,7 @@ where
         let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
 
         // Use the provided replication strategy for data synchronization
-    let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
+        let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
 
         // Combine local and replicated data
         let all_put_tuples = put_tuples.interleave(replicated_data);
@@ -387,7 +387,7 @@ where
         let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
 
         // Use replication strategy for data synchronization
-    let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
+        let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
         let all_put_tuples = put_tuples.interleave(replicated_data);
 
         // Execute operations using LWW storage (works with any V type)
@@ -604,8 +604,7 @@ mod tests {
             <ReplicatedServer as KVSServer<crate::values::CausalString>>::ReplicationStrategy;
 
         let _replicated_pipeline: ReplicatedPipeline = crate::interception::RoundRobinRouter::new();
-        let _replicated_replication: ReplicatedReplication =
-            crate::maintain::NoReplication::new();
+        let _replicated_replication: ReplicatedReplication = crate::maintain::NoReplication::new();
 
         // ShardedKVSServer should use Pipeline<ShardedRouter, Inner::OpPipeline>
         type ShardedLocalServer = ShardedKVSServer<LocalKVSServer<String>>;

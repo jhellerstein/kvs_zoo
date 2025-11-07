@@ -15,7 +15,10 @@ async fn test_architectural_characteristics() {
 
     // Test node counts for different architectures
     assert_eq!(
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), (),),
+        LocalKVSServer::<LwwWrapper<String>>::size(
+            kvs_zoo::interception::SingleNodeRouter::new(),
+            (),
+        ),
         1,
         "Local KVS should use 1 node"
     );
@@ -241,7 +244,10 @@ fn test_example_architectural_patterns() {
 
     // Local KVS: Single node, simple
     assert_eq!(
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), (),),
+        LocalKVSServer::<LwwWrapper<String>>::size(
+            kvs_zoo::interception::SingleNodeRouter::new(),
+            (),
+        ),
         1,
         "Local should be single node"
     );
@@ -285,8 +291,10 @@ fn test_example_architectural_patterns() {
     );
 
     // Verify scaling relationship
-    let local_nodes =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ());
+    let local_nodes = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    );
     let replicated_nodes =
         ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
@@ -335,8 +343,10 @@ fn test_performance_characteristics() {
     // In practice, these would be measured with actual deployments
 
     // Local: Lowest latency (1 node, no network)
-    let local_latency_factor =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ());
+    let local_latency_factor = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    );
 
     // Replicated: Higher latency (broadcast to 3 nodes)
     let replicated_latency_factor =
@@ -388,9 +398,10 @@ fn test_fault_tolerance_characteristics() {
     println!("🧪 Testing Fault Tolerance Characteristics");
 
     // Local: No fault tolerance (1 node)
-    let local_fault_tolerance =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ())
-            - 1; // Can lose 0 nodes
+    let local_fault_tolerance = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    ) - 1; // Can lose 0 nodes
 
     // Replicated: High fault tolerance (can lose 2 of 3 nodes)
     let replicated_fault_tolerance =

@@ -37,7 +37,7 @@ pub mod routing;
 // Re-export routing interceptors for convenience
 pub use paxos::PaxosInterceptor;
 pub use paxos_core::PaxosConfig;
-pub use routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
+pub use routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 
 /// Core trait for operation interceptors
 ///
@@ -145,7 +145,7 @@ impl<V> OpIntercept<V> for IdentityIntercept {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
+    use crate::interception::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 
     #[test]
     fn test_identity_intercept_creation() {
@@ -199,8 +199,10 @@ mod tests {
 
         // Test deeply nested composition
         let inner = Pipeline::new(SingleNodeRouter::new(), RoundRobinRouter::new());
-        let _nested_pipeline: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> =
-            Pipeline::new(inner, ShardedRouter::new(5));
+        let _nested_pipeline: Pipeline<
+            Pipeline<SingleNodeRouter, RoundRobinRouter>,
+            ShardedRouter,
+        > = Pipeline::new(inner, ShardedRouter::new(5));
     }
 
     #[test]
@@ -226,7 +228,8 @@ mod tests {
         // Test chaining using Pipeline::new (equivalent to .then() but without type inference issues)
         let _chained = Pipeline::new(IdentityIntercept::new(), IdentityIntercept::new());
         let _local_then_identity = Pipeline::new(SingleNodeRouter::new(), IdentityIntercept::new());
-        let _round_robin_then_local = Pipeline::new(RoundRobinRouter::new(), SingleNodeRouter::new());
+        let _round_robin_then_local =
+            Pipeline::new(RoundRobinRouter::new(), SingleNodeRouter::new());
 
         // Test multi-level chaining
         let step1 = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
@@ -289,7 +292,10 @@ mod tests {
         _has_then_method(SingleNodeRouter::new());
         _has_then_method(RoundRobinRouter::new());
         _has_then_method(ShardedRouter::new(3));
-        _has_then_method(Pipeline::new(SingleNodeRouter::new(), IdentityIntercept::new()));
+        _has_then_method(Pipeline::new(
+            SingleNodeRouter::new(),
+            IdentityIntercept::new(),
+        ));
     }
 
     #[test]
@@ -332,8 +338,10 @@ mod tests {
         let bc: Pipeline<RoundRobinRouter, IdentityIntercept> = Pipeline::new(b, c);
         let right_assoc: Pipeline<SingleNodeRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
             Pipeline::new(a, bc);
-        let _right_typed: Pipeline<SingleNodeRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
-            right_assoc;
+        let _right_typed: Pipeline<
+            SingleNodeRouter,
+            Pipeline<RoundRobinRouter, IdentityIntercept>,
+        > = right_assoc;
 
         // Verify that the types are different (this is a compile-time check)
         // The fact that both assignments above compile proves the associativity works correctly

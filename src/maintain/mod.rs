@@ -70,7 +70,7 @@ pub trait ReplicationStrategy<V> {
     /// Replicate slotted data across the cluster (ordered by slot)
     ///
     /// Takes a stream of slot-indexed data updates and returns a stream of
-    /// maintained data received from other nodes, maintaining slot ordering.
+    /// replicated data received from other nodes, maintaining slot ordering.
     /// This is used by consensus protocols like Paxos to ensure operations
     /// are applied in the same order across all replicas.
     ///
@@ -86,9 +86,9 @@ pub trait ReplicationStrategy<V> {
         // Default: strip slots, replicate unordered (loses ordering guarantees)
         // Note: This doesn't preserve slots properly - use LogBased wrapper for proper ordering
         let unslotted = local_slotted_data.map(q!(|(_slot, key, value)| (key, value)));
-        let maintained = self.replicate_data(cluster, unslotted);
+        let replicated = self.replicate_data(cluster, unslotted);
         // Re-add dummy slot 0 (ordering is lost)
-        maintained.map(q!(|(key, value)| (0usize, key, value)))
+        replicated.map(q!(|(key, value)| (0usize, key, value)))
     }
 }
 

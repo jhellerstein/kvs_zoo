@@ -48,8 +48,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
 use crate::interception::{PaxosConfig, PaxosInterceptor};
-use crate::protocol::KVSOperation;
 use crate::maintain::ReplicationStrategy;
+use crate::protocol::KVSOperation;
 use crate::server::KVSServer;
 
 /// Linearizable KVS server using Paxos consensus for total ordering

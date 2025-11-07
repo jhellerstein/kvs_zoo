@@ -8,8 +8,8 @@
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::interception::PaxosInterceptor;
 use kvs_zoo::linearizable::LinearizableKVSServer;
-use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::maintain::LogBased;
+use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
 

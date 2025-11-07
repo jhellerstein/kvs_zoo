@@ -4,10 +4,8 @@
 //! and their integration with the KVS servers.
 
 use futures::{SinkExt, StreamExt};
+use kvs_zoo::maintain::{BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy};
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::maintain::{
-    BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy,
-};
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer};
 use kvs_zoo::values::CausalString;
 use std::collections::HashSet;

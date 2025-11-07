@@ -51,9 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // LogBased wrapper ensures operations are applied in slot order across all replicas
     type LinearizableKVS = LinearizableKVSServer<
         LwwWrapper<String>,
-        kvs_zoo::maintain::LogBased<
-            kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>,
-        >,
+        kvs_zoo::maintain::LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let op_pipeline = kvs_zoo::interception::PaxosInterceptor::with_config(paxos_config);

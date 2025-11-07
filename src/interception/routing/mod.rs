@@ -35,9 +35,9 @@ pub mod sharded;
 pub mod single_node;
 
 // Re-export routing interceptor types for convenience
-pub use single_node::SingleNodeRouter;
 pub use round_robin::RoundRobinRouter;
 pub use sharded::ShardedRouter;
+pub use single_node::SingleNodeRouter;
 
 #[cfg(test)]
 mod tests {
@@ -74,8 +74,10 @@ mod tests {
             Pipeline::new(sharded, round_robin);
 
         // Test three-level composition
-        let complex_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, SingleNodeRouter> =
-            Pipeline::new(sharded_round_robin, local);
+        let complex_pipeline: Pipeline<
+            Pipeline<ShardedRouter, RoundRobinRouter>,
+            SingleNodeRouter,
+        > = Pipeline::new(sharded_round_robin, local);
 
         // Verify the type structure is correct (this compiles = correct types)
         let _typed_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, SingleNodeRouter> =
@@ -123,8 +125,10 @@ mod tests {
             Pipeline::new(sharded.clone(), round_robin.clone());
         let _order2: Pipeline<RoundRobinRouter, ShardedRouter> =
             Pipeline::new(round_robin.clone(), sharded.clone());
-        let _order3: Pipeline<SingleNodeRouter, ShardedRouter> = Pipeline::new(local.clone(), sharded);
-        let _order4: Pipeline<RoundRobinRouter, SingleNodeRouter> = Pipeline::new(round_robin, local);
+        let _order3: Pipeline<SingleNodeRouter, ShardedRouter> =
+            Pipeline::new(local.clone(), sharded);
+        let _order4: Pipeline<RoundRobinRouter, SingleNodeRouter> =
+            Pipeline::new(round_robin, local);
 
         // All should compile, demonstrating flexible ordering
     }
