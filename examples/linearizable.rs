@@ -1,6 +1,6 @@
 //! Linearizable KVS example using Paxos consensus
 //!
-//! This example demonstrates the strongest consistency model available:
+//! This example demonstrates the strongest consistency model in our zoo:
 //! - **Linearizability**: All operations appear to execute atomically in real-time order
 //! - **Paxos consensus**: Ensures total ordering of all operations across replicas
 //! - **Fault tolerance**: Can tolerate f failures with 2f+1 nodes
@@ -12,8 +12,9 @@
 //! - **Total order**: All operations have a global ordering
 //! - **Real-time**: Non-overlapping operations respect wall-clock time
 //!
-//! This is the gold standard for distributed systems but comes with higher latency
-//! due to the consensus overhead.
+//! This is a gold standard for distributed systems but comes with higher latency
+//! and risks of unavailability due to the need for a consensus cluster in the 
+//! path of each operation.
 
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::interception::PaxosConfig;
@@ -26,7 +27,7 @@ use kvs_zoo::values::LwwWrapper;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Linearizable KVS Demo");
     println!("📋 Paxos consensus for total ordering and linearizability");
-    println!("🔒 Strongest consistency guarantees available");
+    println!("🔒 Strong consistency guarantees");
     println!();
 
     // Set up deployment
