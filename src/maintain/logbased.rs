@@ -28,7 +28,7 @@
 //! - Maintains total order across all replicas
 
 use crate::core::KVSNode;
-use crate::replication::ReplicationStrategy;
+use crate::maintain::ReplicationStrategy;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +43,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ## Example
 /// ```rust
-/// use kvs_zoo::replication::{LogBased, BroadcastReplication};
+/// use kvs_zoo::maintain::{LogBased, BroadcastReplication};
 /// use kvs_zoo::values::CausalString;
 ///
 /// // Wrap broadcast replication with log-based ordering
@@ -135,7 +135,7 @@ impl<R> LogBased<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::replication::{BroadcastReplication, EpidemicGossip, NoReplication};
+    use crate::maintain::{BroadcastReplication, EpidemicGossip, NoReplication};
 
     #[test]
     fn test_logbased_creation() {

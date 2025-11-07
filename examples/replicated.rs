@@ -32,8 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // We could have chosen Broadcast replication instead, which can run synchronously
     // or in the background.
     // Use small_cluster config for faster gossip (500ms interval instead of 1s)
-    let gossip_replication = kvs_zoo::replication::EpidemicGossip::with_config(
-        kvs_zoo::replication::EpidemicGossipConfig::small_cluster(),
+    let gossip_replication = kvs_zoo::maintain::EpidemicGossip::with_config(
+        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
     );
 
     let kvs_cluster = ReplicatedKVSServer::<CausalString, _>::create_deployment(

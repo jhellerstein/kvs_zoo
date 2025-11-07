@@ -15,14 +15,17 @@ async fn test_architectural_characteristics() {
 
     // Test node counts for different architectures
     assert_eq!(
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), (),),
+        LocalKVSServer::<LwwWrapper<String>>::size(
+            kvs_zoo::interception::SingleNodeRouter::new(),
+            (),
+        ),
         1,
         "Local KVS should use 1 node"
     );
     assert_eq!(
-        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::size(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         ),
         3,
         "Replicated KVS should use 3 nodes"
@@ -40,13 +43,13 @@ async fn test_architectural_characteristics() {
     );
     assert_eq!(
         ShardedKVSServer::<
-            ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::replication::NoReplication>,
+            ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::maintain::NoReplication>,
         >::size(
             kvs_zoo::interception::Pipeline::new(
                 kvs_zoo::interception::ShardedRouter::new(3),
                 kvs_zoo::interception::RoundRobinRouter::new(),
             ),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         ),
         9,
         "Sharded+Replicated KVS should use 9 nodes"
@@ -178,7 +181,7 @@ fn test_server_composability() {
     assert_eq!(
         ReplicatedServer::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new()
+            kvs_zoo::maintain::NoReplication::new()
         ),
         3
     );
@@ -198,7 +201,7 @@ fn test_server_composability() {
                 kvs_zoo::interception::ShardedRouter::new(3),
                 kvs_zoo::interception::RoundRobinRouter::new()
             ),
-            kvs_zoo::replication::NoReplication::new()
+            kvs_zoo::maintain::NoReplication::new()
         ),
         9
     ); // 3 shards × 3 replicas each
@@ -241,16 +244,19 @@ fn test_example_architectural_patterns() {
 
     // Local KVS: Single node, simple
     assert_eq!(
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), (),),
+        LocalKVSServer::<LwwWrapper<String>>::size(
+            kvs_zoo::interception::SingleNodeRouter::new(),
+            (),
+        ),
         1,
         "Local should be single node"
     );
 
     // Replicated KVS: Multiple nodes for fault tolerance
     assert_eq!(
-        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::size(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         ),
         3,
         "Replicated should have multiple nodes"
@@ -272,25 +278,27 @@ fn test_example_architectural_patterns() {
     // Sharded + Replicated: Maximum nodes for both scalability and fault tolerance
     assert_eq!(
         ShardedKVSServer::<
-            ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::replication::NoReplication>,
+            ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::maintain::NoReplication>,
         >::size(
             kvs_zoo::interception::Pipeline::new(
                 kvs_zoo::interception::ShardedRouter::new(3),
                 kvs_zoo::interception::RoundRobinRouter::new(),
             ),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         ),
         9,
         "Sharded+Replicated should have most nodes"
     );
 
     // Verify scaling relationship
-    let local_nodes =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ());
+    let local_nodes = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    );
     let replicated_nodes =
-        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::size(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         );
     let sharded_nodes = ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::size(
         kvs_zoo::interception::Pipeline::new(
@@ -300,13 +308,13 @@ fn test_example_architectural_patterns() {
         (),
     );
     let sharded_replicated_nodes = ShardedKVSServer::<
-        ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::replication::NoReplication>,
+        ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::maintain::NoReplication>,
     >::size(
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
             kvs_zoo::interception::RoundRobinRouter::new(),
         ),
-        kvs_zoo::replication::NoReplication::new(),
+        kvs_zoo::maintain::NoReplication::new(),
     );
 
     assert!(
@@ -335,14 +343,16 @@ fn test_performance_characteristics() {
     // In practice, these would be measured with actual deployments
 
     // Local: Lowest latency (1 node, no network)
-    let local_latency_factor =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ());
+    let local_latency_factor = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    );
 
     // Replicated: Higher latency (broadcast to 3 nodes)
     let replicated_latency_factor =
-        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::size(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         );
 
     // Sharded: Scalable throughput (3 independent nodes)
@@ -356,13 +366,13 @@ fn test_performance_characteristics() {
 
     // Sharded + Replicated: Balanced (9 nodes total)
     let balanced_factor = ShardedKVSServer::<
-        ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::replication::NoReplication>,
+        ReplicatedKVSServer<LwwWrapper<String>, kvs_zoo::maintain::NoReplication>,
     >::size(
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
             kvs_zoo::interception::RoundRobinRouter::new(),
         ),
-        kvs_zoo::replication::NoReplication::new(),
+        kvs_zoo::maintain::NoReplication::new(),
     );
 
     // Validate expected relationships
@@ -388,15 +398,16 @@ fn test_fault_tolerance_characteristics() {
     println!("🧪 Testing Fault Tolerance Characteristics");
 
     // Local: No fault tolerance (1 node)
-    let local_fault_tolerance =
-        LocalKVSServer::<LwwWrapper<String>>::size(kvs_zoo::interception::SingleNodeRouter::new(), ())
-            - 1; // Can lose 0 nodes
+    let local_fault_tolerance = LocalKVSServer::<LwwWrapper<String>>::size(
+        kvs_zoo::interception::SingleNodeRouter::new(),
+        (),
+    ) - 1; // Can lose 0 nodes
 
     // Replicated: High fault tolerance (can lose 2 of 3 nodes)
     let replicated_fault_tolerance =
-        ReplicatedKVSServer::<CausalString, kvs_zoo::replication::NoReplication>::size(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::size(
             kvs_zoo::interception::RoundRobinRouter::new(),
-            kvs_zoo::replication::NoReplication::new(),
+            kvs_zoo::maintain::NoReplication::new(),
         ) - 1; // Can lose 2 nodes
 
     // Sharded: Low fault tolerance (losing any shard loses data)

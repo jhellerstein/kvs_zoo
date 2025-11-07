@@ -40,7 +40,7 @@ impl<R> KVSReplicated<R> {
             + Send
             + Sync
             + 'static,
-        R: crate::replication::ReplicationStrategy<V> + Default,
+        R: crate::maintain::ReplicationStrategy<V> + Default,
     {
         // Use replication strategy to get remote operations
         let replication_strategy = R::default();

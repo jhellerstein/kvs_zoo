@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Full composition: ShardedKVSServer<ReplicatedKVSServer> (educational structure preserved)
     type FullComposition = ShardedKVSServer<
-        ReplicatedKVSServer<CausalString, kvs_zoo::replication::BroadcastReplication<CausalString>>,
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::BroadcastReplication<CausalString>>,
     >;
 
     // Symmetric pipeline composition: ShardedRouter.then(RoundRobinRouter)
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Use broadcast replication for strong consistency within shards
-    let replication = kvs_zoo::replication::BroadcastReplication::default();
+    let replication = kvs_zoo::maintain::BroadcastReplication::default();
 
     println!("📋 Configuration:");
     println!("   • 3 shards (hash-based partitioning)");

@@ -48,8 +48,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
 use crate::interception::{PaxosConfig, PaxosInterceptor};
+use crate::maintain::ReplicationStrategy;
 use crate::protocol::KVSOperation;
-use crate::replication::ReplicationStrategy;
 use crate::server::KVSServer;
 
 /// Linearizable KVS server using Paxos consensus for total ordering
@@ -65,12 +65,12 @@ use crate::server::KVSServer;
 /// ## Example
 /// ```rust
 /// use kvs_zoo::linearizable::LinearizableKVSServer;
-/// use kvs_zoo::replication::BroadcastReplication;
+/// use kvs_zoo::maintain::BroadcastReplication;
 /// use kvs_zoo::values::CausalString;
 ///
 /// type LinearizableKVS = LinearizableKVSServer<CausalString, BroadcastReplication<CausalString>>;
 /// ```
-pub struct LinearizableKVSServer<V, R = crate::replication::NoReplication> {
+pub struct LinearizableKVSServer<V, R = crate::maintain::NoReplication> {
     _phantom: std::marker::PhantomData<(V, R)>,
 }
 
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn test_linearizable_kvs_creation() {
         let _kvs =
-            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
+            LinearizableKVSServer::<LwwWrapper<String>, crate::maintain::NoReplication>::new(3);
 
         let custom_config = PaxosConfig {
             f: 2,
@@ -278,12 +278,12 @@ mod tests {
         };
         let _kvs_custom = LinearizableKVSServer::<
             LwwWrapper<String>,
-            crate::replication::NoReplication,
+            crate::maintain::NoReplication,
         >::with_paxos_config(5, custom_config);
 
         let _kvs_fault_tolerant = LinearizableKVSServer::<
             LwwWrapper<String>,
-            crate::replication::NoReplication,
+            crate::maintain::NoReplication,
         >::with_fault_tolerance(5, 2);
     }
 
@@ -308,17 +308,17 @@ mod tests {
         }
 
         let kvs =
-            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
+            LinearizableKVSServer::<LwwWrapper<String>, crate::maintain::NoReplication>::new(3);
         _test_kvs_server(kvs);
     }
 
     #[test]
     fn test_linearizable_kvs_size() {
         let op_pipeline = PaxosInterceptor::new();
-        let replication = crate::replication::NoReplication::new();
+        let replication = crate::maintain::NoReplication::new();
 
         let size =
-            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::size(
+            LinearizableKVSServer::<LwwWrapper<String>, crate::maintain::NoReplication>::size(
                 op_pipeline,
                 replication,
             );
@@ -329,11 +329,11 @@ mod tests {
     fn test_linearizable_kvs_deployment_creation() {
         let flow = hydro_lang::compile::builder::FlowBuilder::new();
         let op_pipeline = PaxosInterceptor::new();
-        let replication = crate::replication::NoReplication::new();
+        let replication = crate::maintain::NoReplication::new();
 
         let _deployment = LinearizableKVSServer::<
             LwwWrapper<String>,
-            crate::replication::NoReplication,
+            crate::maintain::NoReplication,
         >::create_deployment(&flow, op_pipeline, replication);
 
         // Finalize the flow to avoid panic

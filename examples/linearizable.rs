@@ -51,14 +51,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // LogBased wrapper ensures operations are applied in slot order across all replicas
     type LinearizableKVS = LinearizableKVSServer<
         LwwWrapper<String>,
-        kvs_zoo::replication::LogBased<
-            kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>,
-        >,
+        kvs_zoo::maintain::LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let op_pipeline = kvs_zoo::interception::PaxosInterceptor::with_config(paxos_config);
     let replication =
-        kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
+        kvs_zoo::maintain::LogBased::new(kvs_zoo::maintain::BroadcastReplication::new());
 
     // Create deployment (returns KVS cluster + Paxos clusters)
     let (kvs_cluster, proposers, acceptors) =
@@ -78,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Deploy to localhost (3 nodes for Paxos consensus)
     let cluster_size = LinearizableKVS::size(
         kvs_zoo::interception::PaxosInterceptor::new(),
-        kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new()),
+        kvs_zoo::maintain::LogBased::new(kvs_zoo::maintain::BroadcastReplication::new()),
     );
 
     // Deploy all three clusters!

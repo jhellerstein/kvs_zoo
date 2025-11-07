@@ -21,7 +21,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::replication::{ReplicationStrategy, NoReplication, EpidemicGossip, BroadcastReplication};
+//! use kvs_zoo::maintain::{ReplicationStrategy, NoReplication, EpidemicGossip, BroadcastReplication};
 //!
 //! // Single-node system (no replication needed)
 //! let replication = NoReplication::new();
@@ -56,8 +56,8 @@ pub use logbased::LogBased;
 pub trait ReplicationStrategy<V> {
     /// Replicate data across the cluster (unordered)
     ///
-    /// Takes a stream of local data updates and returns a stream of replicated
-    /// data received from other nodes. The strategy determines how data is
+    /// Takes a stream of local data updates and returns a stream of data
+    /// replicated by other nodes. The strategy determines how data is
     /// synchronized (gossip, broadcast, etc.).
     fn replicate_data<'a>(
         &self,
