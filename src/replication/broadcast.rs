@@ -131,6 +131,18 @@ where
         // This preserves the existing behavior while adapting to the new trait
         self.handle_replication(cluster, local_data)
     }
+
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        // Broadcast slotted operations to all nodes
+        local_slotted_data
+            .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
+            .values()
+            .assume_ordering(nondet!(/** broadcast messages unordered */))
+    }
 }
 
 impl<V> BroadcastReplication<V>

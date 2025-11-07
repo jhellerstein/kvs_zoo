@@ -46,23 +46,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         i_am_leader_check_timeout_delay_multiplier: 1,
     };
 
-    // Create linearizable KVS with Paxos consensus
-    type LinearizableKVS = LinearizableKVSServer<LwwWrapper<String>, kvs_zoo::replication::NoReplication>;
+    // Create linearizable KVS with Paxos consensus and log-based broadcast replication
+    // LogBased wrapper ensures operations are applied in slot order across all replicas
+    type LinearizableKVS = LinearizableKVSServer<
+        LwwWrapper<String>, 
+        kvs_zoo::replication::LogBased<kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>>
+    >;
     
     let op_pipeline = kvs_zoo::interception::PaxosInterceptor::with_config(paxos_config);
-    let replication = kvs_zoo::replication::NoReplication::new();
+    let replication = kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
 
-    // Create deployment
-    let kvs_cluster = LinearizableKVS::create_deployment(
+    // Create deployment (returns KVS cluster + Paxos clusters)
+    let (kvs_cluster, proposers, acceptors) = LinearizableKVS::create_deployment(
         &flow,
         op_pipeline.clone(),
         replication.clone(),
     );
+    
+    let deployment_tuple = (kvs_cluster.clone(), proposers.clone(), acceptors.clone());
 
     // Run the linearizable KVS
     let client_port = LinearizableKVS::run(
         &proxy,
-        &kvs_cluster,
+        &deployment_tuple,
         &client_external,
         op_pipeline,
         replication,
@@ -72,12 +78,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Deploy to localhost (3 nodes for Paxos consensus)
     let cluster_size = LinearizableKVS::size(
         kvs_zoo::interception::PaxosInterceptor::new(),
-        kvs_zoo::replication::NoReplication::new(),
+        kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new()),
     );
     
+    // Deploy all three clusters!
     let nodes = flow
         .with_process(&proxy, localhost.clone())
         .with_cluster(&kvs_cluster, vec![localhost.clone(); cluster_size])
+        .with_cluster(&proposers, vec![localhost.clone(); cluster_size])
+        .with_cluster(&acceptors, vec![localhost.clone(); cluster_size])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 

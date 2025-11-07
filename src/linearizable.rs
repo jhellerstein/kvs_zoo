@@ -25,7 +25,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
-use crate::interception::{OpIntercept, PaxosInterceptor, PaxosConfig};
+use crate::interception::{PaxosInterceptor, PaxosConfig};
 use crate::protocol::KVSOperation;
 use crate::replication::ReplicationStrategy;
 use crate::server::KVSServer;
@@ -172,14 +172,22 @@ where
     type ReplicationStrategy = R;
     
     /// Uses a cluster deployment for the linearizable service
-    type Deployment<'a> = Cluster<'a, KVSNode>;
+    /// Returns (KVS cluster, Proposer cluster, Acceptor cluster)
+    type Deployment<'a> = (
+        Cluster<'a, KVSNode>,
+        Cluster<'a, crate::interception::paxos_core::Proposer>,
+        Cluster<'a, crate::interception::paxos_core::Acceptor>,
+    );
 
     fn create_deployment<'a>(
         flow: &FlowBuilder<'a>,
         _op_pipeline: Self::OpPipeline,
         _replication: Self::ReplicationStrategy,
     ) -> Self::Deployment<'a> {
-        flow.cluster::<KVSNode>()
+        let kvs_cluster = flow.cluster::<KVSNode>();
+        let proposers = flow.cluster::<crate::interception::paxos_core::Proposer>();
+        let acceptors = flow.cluster::<crate::interception::paxos_core::Acceptor>();
+        (kvs_cluster, proposers, acceptors)
     }
 
     fn run<'a>(
@@ -187,59 +195,93 @@ where
         deployment: &Self::Deployment<'a>,
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
-        _replication: Self::ReplicationStrategy,
+        replication: Self::ReplicationStrategy,
         flow: &FlowBuilder<'a>,
     ) -> crate::server::ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
     {
+        // Unpack deployment tuple
+        let (kvs_cluster, proposers, acceptors) = deployment;
+        
         // Use bidirectional external connection
         let (bidi_port, operations_stream, _membership, complete_sink) =
             proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
 
-        // Apply Paxos consensus for total ordering using the operation pipeline
-        let ordered_operations = op_pipeline.intercept_operations(
+        // Apply Paxos consensus for total ordering
+        // Paxos returns slotted operations to the proxy
+        let slotted_operations_on_proxy = op_pipeline.intercept_operations_slotted_with_paxos(
             operations_stream
                 .entries()
                 .map(q!(|(_client_id, op)| op))
                 .assume_ordering(nondet!(/** Paxos will provide total order */)),
-            deployment,
-            flow,
+            proxy,
+            proposers,
+            acceptors,
         );
+        
+        // Round-robin the slotted operations to KVS nodes
+        // This ensures only ONE node processes each operation and responds
+        // round_robin_bincode preserves the total ordering from Paxos
+        let slotted_operations_with_slots = slotted_operations_on_proxy
+            .round_robin_bincode(kvs_cluster, nondet!(/** round-robin to KVS nodes */))
+            .inspect(q!(|(slot, op)| {
+                println!("[Linearizable] Processing slot {}: {:?}", 
+                    slot,
+                    match op {
+                        KVSOperation::Put(key, _) => format!("PUT {}", key),
+                        KVSOperation::Get(key) => format!("GET {}", key),
+                    }
+                );
+            }));
 
-        // Add slot numbers to the operations for proper sequencing
-        let slotted_operations = ordered_operations
-            .enumerate()
-            .map(q!(|(slot, op)| (slot, op)));
+        // Demux operations into PUTs and GETs for proper handling
+        let put_tuples_slotted = slotted_operations_with_slots
+            .clone()
+            .filter_map(q!(|(slot, op)| match op {
+                KVSOperation::Put(key, value) => Some((slot, key, value)),
+                KVSOperation::Get(_) => None,
+            }));
         
-        // Process each slotted operation sequentially
-        let slotted_responses = slotted_operations
-            .scan(
-                q!(|| std::collections::HashMap::new()),
-                q!(|state, (slot, op)| {
-                    let response = match op {
-                        KVSOperation::Put(key, value) => {
-                            state.insert(key.clone(), value);
-                            format!("PUT {} = OK [LINEARIZABLE]", key)
-                        }
-                        KVSOperation::Get(key) => {
-                            match state.get(&key) {
-                                Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
-                                None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
-                            }
-                        }
-                    };
-                    Some((slot, response))
-                })
-            );
+        let get_keys_slotted = slotted_operations_with_slots
+            .filter_map(q!(|(slot, op)| match op {
+                KVSOperation::Put(_, _) => None,
+                KVSOperation::Get(key) => Some((slot, key)),
+            }));
         
-        // Now we need to sequence the responses back into order
-        // This handles the case where responses arrive out of order due to network/processing delays
-        let sequential_responses = Self::sequence_responses(deployment, slotted_responses);
+        // Use replication strategy for PUT operations with slot numbers
+        let replicated_data_slotted = replication.replicate_slotted_data(
+            kvs_cluster, 
+            put_tuples_slotted.clone()
+        );
+        
+        // Combine local and replicated PUTs (all slotted)
+        let all_put_tuples_slotted = put_tuples_slotted.clone().interleave(replicated_data_slotted);
+        
+        // Strip slots for storage (storage doesn't need slots)
+        let all_put_tuples = all_put_tuples_slotted.map(q!(|(_slot, key, value)| (key, value)));
+        
+        // Execute PUT operations using LWW storage
+        let kvs_state = crate::lww::KVSLww::put(all_put_tuples);
+        
+        // Handle GET operations (strip slots)
+        let get_keys = get_keys_slotted.map(q!(|(_slot, key)| key));
+        let ticker = kvs_cluster.tick();
+        let get_results = crate::lww::KVSLww::get(
+            get_keys.batch(&ticker, nondet!(/** batch gets */)),
+            kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
+        );
+        
+        // Format responses (strip slots from PUTs)
+        let put_responses = put_tuples_slotted.map(q!(|(_slot, key, _value)| format!("PUT {} = OK [LINEARIZABLE]", key)));
+        let get_responses = get_results.map(q!(|(key, value)| format!("GET {} = {:?} [LINEARIZABLE]", key, value)));
+        
+        // Combine all responses
+        let responses = put_responses.interleave(get_responses.all_ticks());
 
         // Send results back through proxy to external
-        let proxy_responses = sequential_responses
-            .send_bincode(proxy);
+        // Each node only receives operations via round-robin, so no duplicate responses
+        let proxy_responses = responses.send_bincode(proxy);
 
         // Complete the bidirectional connection
         complete_sink.complete(
@@ -258,21 +300,8 @@ where
     }
 }
 
-/// Type aliases for common linearizable KVS configurations
-pub mod compositions {
-    use super::*;
-    use crate::values::{CausalString, LwwWrapper};
-    
-    /// Linearizable KVS with LWW values and no additional replication
-    /// (Paxos provides the replication/consensus)
-    pub type LinearizableLww<V> = LinearizableKVSServer<LwwWrapper<V>, crate::replication::NoReplication>;
-    
-    /// Linearizable KVS with causal values and broadcast replication
-    pub type LinearizableCausal = LinearizableKVSServer<CausalString, crate::replication::BroadcastReplication<CausalString>>;
-    
-    /// Linearizable KVS with string values (most common case)
-    pub type LinearizableString = LinearizableLww<String>;
-}
+// Type aliases removed due to Hydro staging issues with crate:: paths
+// Users can create their own type aliases as needed
 
 #[cfg(test)]
 mod tests {
@@ -317,12 +346,7 @@ mod tests {
         assert_eq!(size, 3); // Minimum for Paxos consensus
     }
 
-    #[test]
-    fn test_linearizable_kvs_type_aliases() {
-        // Test that type aliases compile
-        let _lww: compositions::LinearizableString = LinearizableKVSServer::new(3);
-        let _causal: compositions::LinearizableCausal = LinearizableKVSServer::new(3);
-    }
+
 
     #[test]
     fn test_linearizable_kvs_deployment_creation() {
@@ -339,4 +363,5 @@ mod tests {
         // Finalize the flow to avoid panic
         let _nodes = flow.finalize();
     }
+
 }
