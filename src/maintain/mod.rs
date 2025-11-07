@@ -74,7 +74,7 @@ pub trait ReplicationStrategy<V> {
     /// This is used by consensus protocols like Paxos to ensure operations
     /// are applied in the same order across all replicas.
     ///
-    /// Default implementation simply strips slots and uses unordered maintenance.
+    /// Default implementation simply strips slots and uses unordered replication.
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
