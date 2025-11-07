@@ -1,8 +1,6 @@
 //! Local Router Operation Interceptor
 //!
-//! The LocalRouter broadcasts all operations to all nodes in the cluster,
-//! making it suitable for single-node systems or fully replicated systems
-//! where every node should process every operation.
+//! The LocalRouter is intended for usage over a single node.
 
 use crate::core::KVSNode;
 use crate::interception::OpIntercept;
@@ -10,8 +8,6 @@ use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// Router that broadcasts operations to all nodes
-///
 /// LocalRouter is the simplest routing strategy, sending every operation
 /// to every node in the cluster. This is appropriate for:
 /// - Single-node deployments (where the cluster contains just one node)
@@ -53,6 +49,7 @@ impl<V> OpIntercept<V> for LocalRouter {
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
+        _flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

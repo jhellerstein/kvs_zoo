@@ -166,7 +166,7 @@ where
     R: ReplicationStrategy<V>,
 {
     /// Uses Paxos interceptor for total ordering
-    type OpPipeline = PaxosInterceptor;
+    type OpPipeline = PaxosInterceptor<V>;
     
     /// Delegates replication to the specified strategy
     type ReplicationStrategy = R;
@@ -187,7 +187,8 @@ where
         deployment: &Self::Deployment<'a>,
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
-        replication: Self::ReplicationStrategy,
+        _replication: Self::ReplicationStrategy,
+        flow: &FlowBuilder<'a>,
     ) -> crate::server::ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
@@ -196,19 +197,17 @@ where
         let (bidi_port, operations_stream, _membership, complete_sink) =
             proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
 
-        // Apply Paxos consensus for total ordering
+        // Apply Paxos consensus for total ordering using the operation pipeline
         let ordered_operations = op_pipeline.intercept_operations(
             operations_stream
                 .entries()
                 .map(q!(|(_client_id, op)| op))
-                .assume_ordering(nondet!(/** Paxos provides total order */)),
+                .assume_ordering(nondet!(/** Paxos will provide total order */)),
             deployment,
+            flow,
         );
 
-        // Process operations sequentially to maintain linearizability
-        // This is the key difference: we don't split PUTs and GETs
-        
-        // First, we need to add slot numbers to the operations for proper sequencing
+        // Add slot numbers to the operations for proper sequencing
         let slotted_operations = ordered_operations
             .enumerate()
             .map(q!(|(slot, op)| (slot, op)));

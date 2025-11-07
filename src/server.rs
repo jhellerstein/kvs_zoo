@@ -75,6 +75,7 @@ where
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
         replication: Self::ReplicationStrategy,
+        flow: &FlowBuilder<'a>,
     ) -> ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync;
@@ -134,6 +135,7 @@ where
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
         _replication: Self::ReplicationStrategy,
+        flow: &FlowBuilder<'a>,
     ) -> ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
@@ -149,6 +151,7 @@ where
                 .map(q!(|(_client_id, op)| op))
                 .assume_ordering(nondet!(/** Todo: WHY? */)),
             deployment,
+            flow,
         );
 
         // Demux operations into puts and gets
@@ -241,6 +244,7 @@ where
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
         replication: Self::ReplicationStrategy,
+        flow: &FlowBuilder<'a>,
     ) -> ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
@@ -256,6 +260,7 @@ where
                 .map(q!(|(_client_id, op)| op))
                 .assume_ordering(nondet!(/** Todo: WHY? */)),
             deployment,
+            flow,
         );
 
         // Demux operations into puts and gets
@@ -368,6 +373,7 @@ where
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
         replication: Self::ReplicationStrategy,
+        flow: &FlowBuilder<'a>,
     ) -> ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
@@ -383,7 +389,7 @@ where
             .assume_ordering(nondet!(/** Todo: WHY? */));
 
         // Apply the complete pipeline (sharded + inner routing)
-        let routed_operations = op_pipeline.intercept_operations(operations, deployment);
+        let routed_operations = op_pipeline.intercept_operations(operations, deployment, flow);
 
         // Demux operations into puts and gets
         let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);

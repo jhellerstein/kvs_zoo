@@ -32,10 +32,12 @@ use serde::{Deserialize, Serialize};
 
 pub mod routing;
 pub mod paxos;
+pub mod paxos_core;
 
 // Re-export routing interceptors for convenience
 pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
-pub use paxos::{PaxosInterceptor, PaxosConfig};
+pub use paxos::PaxosInterceptor;
+pub use paxos_core::PaxosConfig;
 
 /// Core trait for operation interceptors
 ///
@@ -47,10 +49,14 @@ pub trait OpIntercept<V> {
     ///
     /// Takes operations from an external process and returns operations
     /// distributed across the cluster according to the interceptor's logic.
+    /// 
+    /// The flow builder is provided to allow interceptors to create their own
+    /// clusters (e.g., for consensus protocols like Paxos).
     fn intercept_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
+        flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
@@ -83,13 +89,14 @@ where
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
+        flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // Apply the first interceptor (e.g., ShardedRouter)
         // This routes operations to specific cluster members
-        self.first.intercept_operations(operations, cluster)
+        self.first.intercept_operations(operations, cluster, flow)
         
         // Note: For the current architecture, the second interceptor (LocalRouter)
         // is not needed when operations are already routed by the first interceptor.
@@ -131,6 +138,7 @@ impl<V> OpIntercept<V> for IdentityIntercept {
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
+        _flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

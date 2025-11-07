@@ -22,9 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Example 1: Gossip replication (suitable for large clusters)
-    println!("📋 Example 1: Gossip Replication");
+    println!("📋 Example: Gossip Replication");
+
+    // The intercept's job for KVSReplicated is just to load-balance requests across the cluster.
+    // We use RoundRobinRouter to achieve that.
     let op_pipeline = kvs_zoo::interception::RoundRobinRouter::new();
+    // The ReplicatedKVSServer needs to be set up with a replication protocol.
+    // As an example, we'll use async background Gossip replication (suitable for large clusters)
+    // We could have chosen Broadcast replication instead, which can run synchronously
+    // or in the background.
     // Use small_cluster config for faster gossip (500ms interval instead of 1s)
     let gossip_replication = kvs_zoo::replication::EpidemicGossip::with_config(
         kvs_zoo::replication::EpidemicGossipConfig::small_cluster()
@@ -42,6 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external,
         op_pipeline,
         gossip_replication,
+        &flow,
     );
 
     // Deploy to localhost cluster
@@ -117,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
     println!("🎓 Replication Strategy Notes:");
     println!("   • This example uses EpidemicGossip for eventual consistency");
-    println!("   • Alternative: BroadcastReplication for stronger consistency");
+    println!("   • Alternative: synchronous BroadcastReplication for lower-latency replication");
     println!("   • Both strategies work with the same RoundRobinRouter pipeline");
     println!("   • The composable architecture separates routing from replication concerns");
 

@@ -25,7 +25,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy1 = flow1.process::<()>();
     let client_external1 = flow1.external::<()>();
 
-    // Symmetric composition: server structure matches pipeline structure
+    // A sharded KVS is just a set of independent local KVSs, with a 
+    // ShardedRouter interceptor to route operations to the appropriate shard,
+    // where they are handled locally.
+    // There is no replication in this example, it's simply sharded.
     type ShardedLocal = ShardedKVSServer<LocalKVSServer<String>>;
     let pipeline1 = kvs_zoo::interception::Pipeline::new(
         kvs_zoo::interception::ShardedRouter::new(3),
@@ -40,6 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external1,
         pipeline1,
         replication1,
+        &flow1,
     );
 
     let nodes1 = flow1
@@ -106,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external2,
         pipeline2,
         replication2,
+        &flow2,
     );
 
     let nodes2 = flow2

@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external,
         pipeline,
         replication,
+        &flow,
     );
 
     let nodes = flow
