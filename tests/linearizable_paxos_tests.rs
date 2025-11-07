@@ -51,7 +51,6 @@ async fn test_paxos_provides_global_ordering() {
         &client_external,
         op_pipeline,
         replication,
-        &flow,
     );
 
     let cluster_size = 3;
@@ -158,7 +157,6 @@ async fn test_linearizable_reads_see_writes() {
         &client_external,
         op_pipeline,
         replication,
-        &flow,
     );
 
     let cluster_size = 3;
@@ -249,7 +247,6 @@ async fn test_concurrent_operations_are_linearized() {
         &client_external,
         op_pipeline,
         replication,
-        &flow,
     );
 
     let cluster_size = 3;

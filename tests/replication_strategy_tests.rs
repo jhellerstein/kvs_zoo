@@ -114,7 +114,6 @@ async fn test_replicated_kvs_with_no_replication() {
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
         NoReplication::new(),
-        &flow,
     );
 
     // Deploy with 2 replicas
@@ -187,7 +186,6 @@ async fn test_replicated_kvs_with_epidemic_gossip() {
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
         EpidemicGossip::with_config(kvs_zoo::replication::EpidemicGossipConfig::small_cluster()),
-        &flow,
     );
 
     // Deploy with 3 replicas for gossip
@@ -270,7 +268,6 @@ async fn test_replicated_kvs_with_broadcast_replication() {
         BroadcastReplication::with_config(
             kvs_zoo::replication::BroadcastReplicationConfig::low_latency(),
         ),
-        &flow,
     );
 
     // Deploy with 3 replicas for broadcast

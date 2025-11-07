@@ -52,7 +52,6 @@ impl<V> OpIntercept<V> for RoundRobinRouter {
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-        _flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

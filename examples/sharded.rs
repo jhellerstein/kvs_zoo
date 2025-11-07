@@ -43,7 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external1,
         pipeline1,
         replication1,
-        &flow1,
     );
 
     let nodes1 = flow1
@@ -112,7 +111,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external2,
         pipeline2,
         replication2,
-        &flow2,
     );
 
     let nodes2 = flow2

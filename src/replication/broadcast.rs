@@ -312,9 +312,11 @@ mod tests {
     #[test]
     fn test_broadcast_replication_config_builder_pattern() {
         // Test that configs can be built and modified
-        let mut config = BroadcastReplicationConfig::default();
-        config.enable_batching = true;
-        config.max_batch_size = 200;
+        let config = BroadcastReplicationConfig {
+            enable_batching: true,
+            max_batch_size: 200,
+            ..Default::default()
+        };
 
         let _broadcast = BroadcastReplication::<String>::with_config(config);
     }

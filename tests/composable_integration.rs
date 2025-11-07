@@ -51,7 +51,6 @@ async fn test_local_kvs_service() {
         &client_external,
         kvs_zoo::interception::LocalRouter::new(),
         (),
-        &flow,
     );
 
     // Deploy
@@ -133,7 +132,6 @@ async fn test_replicated_kvs_service() {
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
         kvs_zoo::replication::NoReplication::new(),
-        &flow,
     );
 
     // Deploy with 3 replicas
@@ -229,7 +227,6 @@ async fn test_sharded_kvs_service() {
             kvs_zoo::interception::LocalRouter::new(),
         ),
         (),
-        &flow,
     );
 
     // Deploy with multiple shards
@@ -362,7 +359,6 @@ async fn test_sharded_replicated_kvs_service() {
             kvs_zoo::interception::RoundRobinRouter::new(),
         ),
         kvs_zoo::replication::NoReplication::new(),
-        &flow,
     );
 
     // Deploy with multiple shards (each shard has 3 replicas)

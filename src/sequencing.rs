@@ -2,20 +2,17 @@
 //!
 //! This module provides reusable sequencing logic that can handle out-of-order
 //! delivery of slot-indexed items, ensuring they are processed in the correct order.
+//! Based on https://github.com/hydro-project/hydro/blob/main/hydro_test/src/cluster/kv_replica/sequence_payloads.rs
 
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
 
-/// Sequence slotted operations to ensure they are applied in order
-///
 /// This implements gap-filling logic:
 /// - Track the next expected slot number
 /// - Buffer operations that arrive early (gaps in sequence)
 /// - Apply operations only when all prior slots are filled
-///
-/// Based on the pattern from hydro/hydro_test/src/cluster/kv_replica/sequence_payloads.rs
 ///
 /// Note: We use a Vec-based approach instead of sort() since we can't require V: Ord
 pub fn sequence_slotted_operations<'a, V>(

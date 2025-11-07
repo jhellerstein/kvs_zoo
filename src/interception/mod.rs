@@ -49,14 +49,10 @@ pub trait OpIntercept<V> {
     ///
     /// Takes operations from an external process and returns operations
     /// distributed across the cluster according to the interceptor's logic.
-    ///
-    /// The flow builder is provided to allow interceptors to create their own
-    /// clusters (e.g., for consensus protocols like Paxos).
     fn intercept_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-        flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
@@ -80,7 +76,7 @@ impl<A, B> Pipeline<A, B> {
     }
 }
 
-impl<V, A, B> OpIntercept<V> for Pipeline<A, B>
+impl<A, B, V> OpIntercept<V> for Pipeline<A, B>
 where
     A: OpIntercept<V>,
     B: OpIntercept<V>,
@@ -89,14 +85,13 @@ where
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-        flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // Apply the first interceptor (e.g., ShardedRouter)
         // This routes operations to specific cluster members
-        self.first.intercept_operations(operations, cluster, flow)
+        self.first.intercept_operations(operations, cluster)
 
         // Note: For the current architecture, the second interceptor (LocalRouter)
         // is not needed when operations are already routed by the first interceptor.
@@ -138,7 +133,6 @@ impl<V> OpIntercept<V> for IdentityIntercept {
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-        _flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

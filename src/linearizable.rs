@@ -49,87 +49,20 @@ use crate::server::KVSServer;
 /// type LinearizableKVS = LinearizableKVSServer<CausalString, BroadcastReplication<CausalString>>;
 /// ```
 pub struct LinearizableKVSServer<V, R = crate::replication::NoReplication> {
-    cluster_size: usize,
-    paxos_config: PaxosConfig,
     _phantom: std::marker::PhantomData<(V, R)>,
 }
 
 impl<V, R> LinearizableKVSServer<V, R> {
     /// Create a new linearizable KVS server with default Paxos configuration
-    pub fn new(cluster_size: usize) -> Self {
+    pub fn new(_cluster_size: usize) -> Self {
         Self {
-            cluster_size,
-            paxos_config: PaxosConfig::default(),
             _phantom: std::marker::PhantomData,
         }
     }
 
-    /// Sequence responses back into slot order to maintain linearizability
-    ///
-    /// This function takes slot-indexed responses that may arrive out of order
-    /// and returns them in the correct sequential order, buffering any responses
-    /// that arrive early until the gaps are filled.
-    ///
-    /// Based on the pattern from hydro/hydro_test/src/cluster/kv_replica/sequence_payloads.rs
-    fn sequence_responses<'a>(
-        deployment: &Cluster<'a, KVSNode>,
-        slotted_responses: Stream<(usize, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
-        let tick = deployment.tick();
-
-        // Create cycles for buffering out-of-order responses
-        let (buffered_responses_complete, buffered_responses) =
-            tick.cycle::<Stream<(usize, String), Tick<Cluster<'a, KVSNode>>, Bounded>>();
-
-        // Batch incoming responses and combine with buffered ones
-        let sorted_responses = slotted_responses
-            .batch(&tick, nondet!(/** batch for sequencing */))
-            .chain(buffered_responses)
-            .sort();
-
-        // Track the next expected slot number
-        let (next_slot_complete, next_slot) = tick.cycle_with_initial(tick.singleton(q!(0usize)));
-
-        // Find the highest contiguous slot we can process
-        let next_slot_after_processing = sorted_responses
-            .clone()
-            .cross_singleton(next_slot.clone())
-            .fold(
-                q!(|| 0usize),
-                q!(|new_next_slot, ((slot, _response), next_slot)| {
-                    if slot == std::cmp::max(*new_next_slot, next_slot) {
-                        *new_next_slot = slot + 1;
-                    }
-                }),
-            );
-
-        // Split responses into processable and buffered
-        let processable_responses = sorted_responses
-            .clone()
-            .cross_singleton(next_slot_after_processing.clone())
-            .filter(q!(|((slot, _response), highest_slot)| *slot < *highest_slot))
-            .map(q!(|((slot, response), _)| (slot, response)));
-
-        let new_buffered_responses = sorted_responses
-            .cross_singleton(next_slot_after_processing.clone())
-            .filter(q!(|((slot, _response), highest_slot)| *slot > *highest_slot))
-            .map(q!(|((slot, response), _)| (slot, response)));
-
-        // Complete the cycles
-        buffered_responses_complete.complete_next_tick(new_buffered_responses);
-        next_slot_complete.complete_next_tick(next_slot_after_processing);
-
-        // Return just the response strings in slot order
-        processable_responses
-            .map(q!(|(_slot, response)| response))
-            .all_ticks()
-    }
-
     /// Create a linearizable KVS server with custom Paxos configuration
-    pub fn with_paxos_config(cluster_size: usize, paxos_config: PaxosConfig) -> Self {
+    pub fn with_paxos_config(_cluster_size: usize, _paxos_config: PaxosConfig) -> Self {
         Self {
-            cluster_size,
-            paxos_config,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -137,13 +70,8 @@ impl<V, R> LinearizableKVSServer<V, R> {
     /// Create a linearizable KVS server that tolerates `f` failures
     ///
     /// This will configure Paxos to require `2f + 1` nodes for safety.
-    pub fn with_fault_tolerance(cluster_size: usize, f: usize) -> Self {
+    pub fn with_fault_tolerance(_cluster_size: usize, _f: usize) -> Self {
         Self {
-            cluster_size,
-            paxos_config: PaxosConfig {
-                f,
-                ..PaxosConfig::default()
-            },
             _phantom: std::marker::PhantomData,
         }
     }
@@ -195,7 +123,6 @@ where
         client_external: &External<'a, ()>,
         op_pipeline: Self::OpPipeline,
         replication: Self::ReplicationStrategy,
-        flow: &FlowBuilder<'a>,
     ) -> crate::server::ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,

@@ -50,6 +50,7 @@ impl<V> PaxosInterceptor<V> {
     ///
     /// This method takes a stream of operations and returns a stream of slot-indexed
     /// operations that are totally ordered by Paxos consensus.
+    #[allow(clippy::type_complexity)]
     pub fn apply_with_clusters<'a>(
         &self,
         proposers: &Cluster<'a, Proposer>,
@@ -182,7 +183,6 @@ where
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-        _flow: &FlowBuilder<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

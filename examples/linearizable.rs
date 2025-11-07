@@ -73,7 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external,
         op_pipeline,
         replication,
-        &flow,
     );
 
     // Deploy to localhost (3 nodes for Paxos consensus)

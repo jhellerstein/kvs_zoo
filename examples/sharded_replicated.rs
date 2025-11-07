@@ -52,7 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &client_external,
         pipeline,
         replication,
-        &flow,
     );
 
     // Deploy to localhost cluster (9 nodes total)
