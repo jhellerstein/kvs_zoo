@@ -14,12 +14,34 @@
 //! ## Architecture
 //!
 //! ```text
-//! Client → Paxos Consensus → Replicated Storage
-//!           (Total Order)    (Apply in Order)
+//! Client
+//!   │
+//!   └─▶ Paxos Interceptor (assigns total-order slot numbers)
+//!         │  (stream of (slot, op))
+//!         └─▶ Round-Robin Dispatch (one KVS node executes each slotted op)
+//!               │ (ordering preserved by slots)
+//!               └─▶ Replication Strategy (e.g. LogBased uses slots to replay PUTs)
+//!                     │
+//!                     └─▶ LWW Storage (apply PUT values; GET reads latest)
 //! ```
 //!
-//! The Paxos interceptor ensures all operations get a globally consistent
-//! sequence number before being applied to the underlying replicated storage.
+//! Flow summary:
+//! 1. Client requests arrive at the proxy and are fed into Paxos.
+//! 2. Paxos assigns a monotonically increasing slot number, producing `(slot, op)`.
+//! 3. Slotted operations are round-robin dispatched so only one KVS node executes each.
+//! 4. The replication strategy (e.g. `LogBased`) consumes slotted PUT tuples to ensure
+//!    deterministic replay / replication using the slot ordering.
+//! 5. Slots are stripped before storage; they exist solely to preserve global order
+//!    and replication replay semantics.
+//! 6. GETs read from an LWW snapshot; slot numbers are not needed for read paths.
+//!
+//! Notes:
+//! - `replication.replicate_slotted_data(..)` is where a strategy (like LogBased) can
+//!   use the slot numbers to guarantee consistent replication ordering.
+//! - The round-robin stage maintains Paxos order because slot numbers are carried
+//!   through dispatch until replication completes.
+//! - Alternative replication strategies may ignore slots if they do not require
+//!   ordered replay (e.g., trivial or single-node configurations).
 
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
