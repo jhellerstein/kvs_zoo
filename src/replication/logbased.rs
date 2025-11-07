@@ -1,6 +1,6 @@
 //! Log-Based Replication Wrapper
 //!
-//! This module provides a wrapper that adds slot-based ordering guarantees
+//! This module provides a wrapper that adds slot-based total ordering guarantees
 //! to any underlying replication strategy. It ensures operations are applied
 //! in sequential slot order, buffering out-of-order operations until gaps are filled.
 //!
