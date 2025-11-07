@@ -6,7 +6,7 @@
 //!
 //! ## Available Routers
 //!
-//! - **LocalRouter**: Broadcasts operations to all nodes (single-node or fully replicated)
+//! - **SingleNodeRouter**: Routes all operations to a single node (member 0). Formerly LocalRouter.
 //! - **RoundRobinRouter**: Distributes operations across replicas using round-robin
 //! - **ShardedRouter**: Partitions operations by key hash for horizontal scaling
 //!
@@ -30,12 +30,14 @@
 //! ```
 
 // Module declarations for routing interceptors
-pub mod local;
+pub mod local; // Deprecated, kept temporarily
 pub mod round_robin;
 pub mod sharded;
+pub mod single_node;
 
 // Re-export routing interceptor types for convenience
-pub use local::LocalRouter;
+pub use local::LocalRouter; // Deprecated
+pub use single_node::SingleNodeRouter;
 pub use round_robin::RoundRobinRouter;
 pub use sharded::ShardedRouter;
 

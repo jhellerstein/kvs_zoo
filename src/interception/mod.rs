@@ -37,7 +37,7 @@ pub mod routing;
 // Re-export routing interceptors for convenience
 pub use paxos::PaxosInterceptor;
 pub use paxos_core::PaxosConfig;
-pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
+pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 
 /// Core trait for operation interceptors
 ///

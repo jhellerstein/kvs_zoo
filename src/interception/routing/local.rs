@@ -1,6 +1,9 @@
-//! Local Router Operation Interceptor
+//! Local Router Operation Interceptor (Deprecated)
 //!
-//! The LocalRouter is intended for usage over a single node.
+//! NOTE: LocalRouter has been superseded by `SingleNodeRouter` which more clearly
+//! communicates the semantics of routing all operations to a single member.
+//! This type remains temporarily for backward compatibility and will be
+//! removed in a future revision.
 
 use crate::core::KVSNode;
 use crate::interception::OpIntercept;
@@ -8,12 +11,8 @@ use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// LocalRouter is the simplest routing strategy, sending every operation
-/// to every node in the cluster. This is appropriate for:
-/// - Single-node deployments (where the cluster contains just one node)
-/// - Fully replicated systems where all nodes have all data
-/// - Development and testing scenarios
-/// - Simple broadcast scenarios where all nodes should receive all operations
+/// LocalRouter (deprecated) now behaves like `SingleNodeRouter`, sending every
+/// operation to member 0. Prefer using `SingleNodeRouter` directly instead.
 ///
 /// ## Usage
 ///
@@ -27,10 +26,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ## Behavior
 ///
-/// For local development, the "cluster" typically contains just one node,
-/// making this effectively a single-node router. In multi-node scenarios,
-/// all nodes receive all operations, which is suitable for fully replicated
-/// architectures.
+/// Prefer using `SingleNodeRouter` which explicitly communicates intent.
 #[derive(Clone, Debug, Default)]
 pub struct LocalRouter;
 
@@ -53,9 +49,11 @@ impl<V> OpIntercept<V> for LocalRouter {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // Broadcast all operations to all nodes in the cluster
-        // For local development, this is typically just one node
-        operations.broadcast_bincode(cluster, nondet!(/** broadcast to all nodes */))
+    // Deprecated: replicated behavior moved to SingleNodeRouter.
+        operations
+            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .into_keyed()
+            .demux_bincode(cluster)
     }
 }
 
