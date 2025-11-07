@@ -260,7 +260,7 @@ where
         let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
 
         // Use the provided replication strategy for data synchronization
-    let replicated_data = replication.maintain_data(deployment, put_tuples.clone());
+    let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
 
         // Combine local and replicated data
         let all_put_tuples = put_tuples.interleave(replicated_data);
@@ -387,7 +387,7 @@ where
         let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
 
         // Use replication strategy for data synchronization
-    let replicated_data = replication.maintain_data(deployment, put_tuples.clone());
+    let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
         let all_put_tuples = put_tuples.interleave(replicated_data);
 
         // Execute operations using LWW storage (works with any V type)
