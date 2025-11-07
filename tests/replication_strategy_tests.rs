@@ -5,11 +5,13 @@
 
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::replication::{BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy};
+use kvs_zoo::replication::{
+    BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy,
+};
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer};
 use kvs_zoo::values::CausalString;
 use std::collections::HashSet;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 /// Helper function to create a causal string for testing
 fn create_causal_string(node_id: &str, value: &str) -> CausalString {
@@ -22,11 +24,11 @@ fn create_causal_string(node_id: &str, value: &str) -> CausalString {
 fn test_no_replication_strategy() {
     // Test that NoReplication implements ReplicationStrategy
     let no_repl = NoReplication::new();
-    
+
     // Test trait implementation
     fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
     _accepts_replication_strategy::<CausalString>(no_repl);
-    
+
     // Test unit type also works
     _accepts_replication_strategy::<CausalString>(());
 }
@@ -35,14 +37,14 @@ fn test_no_replication_strategy() {
 fn test_epidemic_gossip_strategy() {
     // Test that EpidemicGossip implements ReplicationStrategy
     let gossip = EpidemicGossip::<CausalString>::new();
-    
+
     // Test trait implementation
     fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
     _accepts_replication_strategy::<CausalString>(gossip);
-    
+
     // Test configuration
     let gossip_with_config = EpidemicGossip::<CausalString>::with_config(
-        kvs_zoo::replication::EpidemicGossipConfig::small_cluster()
+        kvs_zoo::replication::EpidemicGossipConfig::small_cluster(),
     );
     _accepts_replication_strategy::<CausalString>(gossip_with_config);
 }
@@ -51,14 +53,14 @@ fn test_epidemic_gossip_strategy() {
 fn test_broadcast_replication_strategy() {
     // Test that BroadcastReplication implements ReplicationStrategy
     let broadcast = BroadcastReplication::<CausalString>::new();
-    
+
     // Test trait implementation
     fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
     _accepts_replication_strategy::<CausalString>(broadcast);
-    
+
     // Test configuration
     let broadcast_with_config = BroadcastReplication::<CausalString>::with_config(
-        kvs_zoo::replication::BroadcastReplicationConfig::low_latency()
+        kvs_zoo::replication::BroadcastReplicationConfig::low_latency(),
     );
     _accepts_replication_strategy::<CausalString>(broadcast_with_config);
 }
@@ -67,18 +69,21 @@ fn test_broadcast_replication_strategy() {
 fn test_replication_strategy_type_compatibility() {
     // Test that all replication strategies work with the same value types
     fn _test_with_causal_type<R: ReplicationStrategy<CausalString>>(_strategy: R) {}
-    fn _test_with_lww_type<R: ReplicationStrategy<kvs_zoo::values::LwwWrapper<String>>>(_strategy: R) {}
-    
+    fn _test_with_lww_type<R: ReplicationStrategy<kvs_zoo::values::LwwWrapper<String>>>(
+        _strategy: R,
+    ) {
+    }
+
     // Test NoReplication
     _test_with_causal_type(NoReplication::new());
     _test_with_lww_type(NoReplication::new());
     _test_with_causal_type(());
     _test_with_lww_type(());
-    
+
     // Test EpidemicGossip
     _test_with_causal_type(EpidemicGossip::<CausalString>::new());
     _test_with_lww_type(EpidemicGossip::<kvs_zoo::values::LwwWrapper<String>>::new());
-    
+
     // Test BroadcastReplication
     _test_with_causal_type(BroadcastReplication::<CausalString>::new());
     _test_with_lww_type(BroadcastReplication::<kvs_zoo::values::LwwWrapper<String>>::new());
@@ -109,6 +114,7 @@ async fn test_replicated_kvs_with_no_replication() {
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
         NoReplication::new(),
+        &flow,
     );
 
     // Deploy with 2 replicas
@@ -169,17 +175,19 @@ async fn test_replicated_kvs_with_epidemic_gossip() {
 
     // Create replicated KVS server with EpidemicGossip
     let gossip_config = kvs_zoo::replication::EpidemicGossipConfig::small_cluster();
-    let kvs_cluster = ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::create_deployment(
-        &flow,
-        kvs_zoo::interception::RoundRobinRouter::new(),
-        EpidemicGossip::with_config(gossip_config),
-    );
+    let kvs_cluster =
+        ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::create_deployment(
+            &flow,
+            kvs_zoo::interception::RoundRobinRouter::new(),
+            EpidemicGossip::with_config(gossip_config),
+        );
     let client_port = ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
         EpidemicGossip::with_config(kvs_zoo::replication::EpidemicGossipConfig::small_cluster()),
+        &flow,
     );
 
     // Deploy with 3 replicas for gossip
@@ -248,17 +256,21 @@ async fn test_replicated_kvs_with_broadcast_replication() {
 
     // Create replicated KVS server with BroadcastReplication
     let broadcast_config = kvs_zoo::replication::BroadcastReplicationConfig::low_latency();
-    let kvs_cluster = ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::create_deployment(
-        &flow,
-        kvs_zoo::interception::RoundRobinRouter::new(),
-        BroadcastReplication::with_config(broadcast_config),
-    );
+    let kvs_cluster =
+        ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::create_deployment(
+            &flow,
+            kvs_zoo::interception::RoundRobinRouter::new(),
+            BroadcastReplication::with_config(broadcast_config),
+        );
     let client_port = ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
         kvs_zoo::interception::RoundRobinRouter::new(),
-        BroadcastReplication::with_config(kvs_zoo::replication::BroadcastReplicationConfig::low_latency()),
+        BroadcastReplication::with_config(
+            kvs_zoo::replication::BroadcastReplicationConfig::low_latency(),
+        ),
+        &flow,
     );
 
     // Deploy with 3 replicas for broadcast
@@ -325,7 +337,8 @@ fn test_replication_strategy_configurations() {
     // Test BroadcastReplication configurations
     let broadcast_default = kvs_zoo::replication::BroadcastReplicationConfig::default();
     let broadcast_low_latency = kvs_zoo::replication::BroadcastReplicationConfig::low_latency();
-    let broadcast_high_throughput = kvs_zoo::replication::BroadcastReplicationConfig::high_throughput();
+    let broadcast_high_throughput =
+        kvs_zoo::replication::BroadcastReplicationConfig::high_throughput();
     let broadcast_sync = kvs_zoo::replication::BroadcastReplicationConfig::synchronous();
 
     assert!(!broadcast_default.enable_batching);
@@ -379,18 +392,18 @@ fn test_replication_strategy_debug() {
 fn test_backward_compatibility() {
     // Test that migrated replication strategies maintain the same API
     // as the original implementations in the routers module
-    
+
     // Test that we can create instances the same way
     let _gossip = EpidemicGossip::<CausalString>::new();
     let _gossip_default = EpidemicGossip::<CausalString>::default();
     let _gossip_with_config = EpidemicGossip::<CausalString>::with_config(
-        kvs_zoo::replication::EpidemicGossipConfig::small_cluster()
+        kvs_zoo::replication::EpidemicGossipConfig::small_cluster(),
     );
 
     let _broadcast = BroadcastReplication::<CausalString>::new();
     let _broadcast_default = BroadcastReplication::<CausalString>::default();
     let _broadcast_with_config = BroadcastReplication::<CausalString>::with_config(
-        kvs_zoo::replication::BroadcastReplicationConfig::low_latency()
+        kvs_zoo::replication::BroadcastReplicationConfig::low_latency(),
     );
 
     // Test that configurations still work the same way

@@ -20,7 +20,7 @@
 //! let sharded = ShardedRouter::new(3);
 //! let round_robin = RoundRobinRouter::new();
 //! let identity = IdentityIntercept::new();
-//! 
+//!
 //! // Manual pipeline composition
 //! let pipeline = Pipeline::new(sharded, round_robin);
 //! ```
@@ -30,14 +30,14 @@ use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-pub mod routing;
 pub mod paxos;
 pub mod paxos_core;
+pub mod routing;
 
 // Re-export routing interceptors for convenience
-pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
 pub use paxos::PaxosInterceptor;
 pub use paxos_core::PaxosConfig;
+pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
 
 /// Core trait for operation interceptors
 ///
@@ -49,7 +49,7 @@ pub trait OpIntercept<V> {
     ///
     /// Takes operations from an external process and returns operations
     /// distributed across the cluster according to the interceptor's logic.
-    /// 
+    ///
     /// The flow builder is provided to allow interceptors to create their own
     /// clusters (e.g., for consensus protocols like Paxos).
     fn intercept_operations<'a>(
@@ -97,11 +97,11 @@ where
         // Apply the first interceptor (e.g., ShardedRouter)
         // This routes operations to specific cluster members
         self.first.intercept_operations(operations, cluster, flow)
-        
+
         // Note: For the current architecture, the second interceptor (LocalRouter)
         // is not needed when operations are already routed by the first interceptor.
         // The LocalRouter would broadcast to all nodes, which would override sharding.
-        // 
+        //
         // In a proper implementation, we would need different composition strategies
         // based on the interceptor types, but for now we just use the first interceptor.
     }

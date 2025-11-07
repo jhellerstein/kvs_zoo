@@ -2,9 +2,9 @@
 //! Demonstrates the tradeoffs between verbosity and educational clarity
 
 use futures::{SinkExt, StreamExt};
+use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer, ShardedKVSServer};
-use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::values::CausalWrapper;
 
 #[tokio::main]
@@ -15,41 +15,61 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Pattern 1: Full verbose composition (best for learning)
     println!("📋 Pattern 1: Full Educational Structure");
-    type EducationalComposition = 
-        ShardedKVSServer<                    // Outer: Sharding layer
-            ReplicatedKVSServer<             // Inner: Replication layer  
-                CausalWrapper<String>,       // Value: Causal consistency wrapper over Strings
-                kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>> // Strategy: immediate broadcast
-            >
-        >;
+    type EducationalComposition = ShardedKVSServer<
+        // Outer: Sharding layer
+        ReplicatedKVSServer<
+            // Inner: Replication layer
+            CausalWrapper<String>, // Value: Causal consistency wrapper over Strings
+            kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>, // Strategy: immediate broadcast
+        >,
+    >;
     println!("   ✅ Full structure visible - excellent for learning!");
-    println!("   📖 ShardedKVSServer<ReplicatedKVSServer<CausalWrapper<String>, BroadcastReplication<CausalWrapper<String>>>>");
-    
+    println!(
+        "   📖 ShardedKVSServer<ReplicatedKVSServer<CausalWrapper<String>, BroadcastReplication<CausalWrapper<String>>>>"
+    );
+
     // Pattern 2: Generic function with inference
     println!("📋 Pattern 2: Generic Function (maximum inference)");
-    fn create_educational_kvs<V>() -> ShardedKVSServer<ReplicatedKVSServer<V, kvs_zoo::replication::BroadcastReplication<V>>>
+    fn create_educational_kvs<V>()
+    -> ShardedKVSServer<ReplicatedKVSServer<V, kvs_zoo::replication::BroadcastReplication<V>>>
     where
-        V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + Default + std::fmt::Debug + Send + Sync + 'static + lattices::Merge<V>,
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static
+            + lattices::Merge<V>,
     {
         ShardedKVSServer::new(3)
     }
     let _inferred_composition = create_educational_kvs::<CausalWrapper<String>>();
     println!("   ✅ create_educational_kvs::<CausalWrapper<String>>()");
     println!("   📖 Type inference reduces repetition while preserving function signature clarity");
-    
+
     // Pattern 4: Linearizable KVS with Paxos consensus
     println!("📋 Pattern 4: Linearizable KVS (Paxos consensus for strongest consistency)");
     type LinearizableComposition = LinearizableKVSServer<
         CausalWrapper<String>,
-        kvs_zoo::replication::LogBased<kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>>
+        kvs_zoo::replication::LogBased<
+            kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>,
+        >,
     >;
-    println!("   ✅ LinearizableKVSServer<CausalWrapper<String>, LogBased<BroadcastReplication<CausalWrapper<String>>>>");
-    println!("   📖 Paxos provides global ordering, LogBased ensures sequential application with gap-filling");
-    
+    println!(
+        "   ✅ LinearizableKVSServer<CausalWrapper<String>, LogBased<BroadcastReplication<CausalWrapper<String>>>>"
+    );
+    println!(
+        "   📖 Paxos provides global ordering, LogBased ensures sequential application with gap-filling"
+    );
+
     println!();
     println!("🎓 Educational Value Analysis:");
     println!("   • Pattern 1: Best for understanding composition structure");
-    println!("   • Pattern 2: Good balance of clarity and conciseness");  
+    println!("   • Pattern 2: Good balance of clarity and conciseness");
     println!("   • Pattern 3: Most concise, but hides some structure");
     println!("   • Pattern 4: Demonstrates consensus-based linearizability");
     println!("   • All patterns maintain type safety and zero-cost abstractions");
@@ -69,11 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let replication = kvs_zoo::replication::BroadcastReplication::default();
 
-    let deployment_cluster = EducationalComposition::create_deployment(
-        &flow,
-        pipeline.clone(),
-        replication.clone(),
-    );
+    let deployment_cluster =
+        EducationalComposition::create_deployment(&flow, pipeline.clone(), replication.clone());
 
     let client_port = EducationalComposition::run(
         &proxy,
@@ -97,20 +114,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     println!("📤 Testing educational composition...");
-    let op = KVSOperation::Put("test".to_string(), CausalWrapper::<String>::new(kvs_zoo::values::VCWrapper::new(), "educational!".to_string()));
+    let op = KVSOperation::Put(
+        "test".to_string(),
+        CausalWrapper::<String>::new(
+            kvs_zoo::values::VCWrapper::new(),
+            "educational!".to_string(),
+        ),
+    );
     println!("  {:?}", op);
-    
+
     if let Err(e) = client_in.send(op).await {
         eprintln!("❌ Error: {}", e);
-    } else if let Some(response) = tokio::time::timeout(
-        std::time::Duration::from_millis(500), 
-        client_out.next()
-    ).await.ok().flatten() {
+    } else if let Some(response) =
+        tokio::time::timeout(std::time::Duration::from_millis(500), client_out.next())
+            .await
+            .ok()
+            .flatten()
+    {
         println!("     → {}", response);
     }
 
     println!("✅ Educational composition works perfectly!");
-    println!("💡 Recommendation: Use verbose types in educational contexts, helper functions in production");
+    println!(
+        "💡 Recommendation: Use verbose types in educational contexts, helper functions in production"
+    );
 
     Ok(())
 }

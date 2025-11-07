@@ -444,29 +444,29 @@ where
 pub mod compositions {
     use super::*;
     // Import replication strategies to avoid crate:: path issues in staged code
-    use crate::replication::{NoReplication, EpidemicGossip, BroadcastReplication};
-    
+    use crate::replication::{BroadcastReplication, EpidemicGossip, NoReplication};
+
     /// Local KVS with inferred value type
     pub type Local<V> = LocalKVSServer<V>;
-    
+
     /// Replicated KVS with inferred value type and default replication
     pub type Replicated<V> = ReplicatedKVSServer<V, NoReplication>;
-    
+
     /// Replicated KVS with gossip replication
     pub type ReplicatedGossip<V> = ReplicatedKVSServer<V, EpidemicGossip<V>>;
-    
+
     /// Replicated KVS with broadcast replication  
     pub type ReplicatedBroadcast<V> = ReplicatedKVSServer<V, BroadcastReplication<V>>;
-    
+
     /// Sharded local KVS
     pub type ShardedLocal<V> = ShardedKVSServer<Local<V>>;
-    
+
     /// Sharded replicated KVS with default replication
     pub type ShardedReplicated<V> = ShardedKVSServer<Replicated<V>>;
-    
+
     /// Sharded replicated KVS with gossip replication
     pub type ShardedReplicatedGossip<V> = ShardedKVSServer<ReplicatedGossip<V>>;
-    
+
     /// Sharded replicated KVS with broadcast replication
     pub type ShardedReplicatedBroadcast<V> = ShardedKVSServer<ReplicatedBroadcast<V>>;
 }

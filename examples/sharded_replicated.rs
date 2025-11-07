@@ -23,14 +23,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Full composition: ShardedKVSServer<ReplicatedKVSServer> (educational structure preserved)
-    type FullComposition = ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::replication::BroadcastReplication<CausalString>>>;
+    type FullComposition = ShardedKVSServer<
+        ReplicatedKVSServer<CausalString, kvs_zoo::replication::BroadcastReplication<CausalString>>,
+    >;
 
     // Symmetric pipeline composition: ShardedRouter.then(RoundRobinRouter)
     let pipeline = kvs_zoo::interception::Pipeline::new(
         kvs_zoo::interception::ShardedRouter::new(3), // 3 shards
         kvs_zoo::interception::RoundRobinRouter::new(), // Round-robin within each shard
     );
-    
+
     // Use broadcast replication for strong consistency within shards
     let replication = kvs_zoo::replication::BroadcastReplication::default();
 
@@ -41,11 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   • Pipeline: ShardedRouter → RoundRobinRouter");
     println!();
 
-    let deployment_cluster = FullComposition::create_deployment(
-        &flow,
-        pipeline.clone(),
-        replication.clone(),
-    );
+    let deployment_cluster =
+        FullComposition::create_deployment(&flow, pipeline.clone(), replication.clone());
 
     let client_port = FullComposition::run(
         &proxy,
@@ -74,17 +73,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Operations designed to hit different shards
     let operations = vec![
         // Shard 0 operations
-        KVSOperation::Put("user:alice".to_string(), CausalString::new(VCWrapper::new(), "Alice Smith".to_string())),
-        KVSOperation::Put("user:bob".to_string(), CausalString::new(VCWrapper::new(), "Bob Jones".to_string())),
-        
-        // Shard 1 operations  
-        KVSOperation::Put("config:timeout".to_string(), CausalString::new(VCWrapper::new(), "30s".to_string())),
-        KVSOperation::Put("config:retries".to_string(), CausalString::new(VCWrapper::new(), "3".to_string())),
-        
+        KVSOperation::Put(
+            "user:alice".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice Smith".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:bob".to_string(),
+            CausalString::new(VCWrapper::new(), "Bob Jones".to_string()),
+        ),
+        // Shard 1 operations
+        KVSOperation::Put(
+            "config:timeout".to_string(),
+            CausalString::new(VCWrapper::new(), "30s".to_string()),
+        ),
+        KVSOperation::Put(
+            "config:retries".to_string(),
+            CausalString::new(VCWrapper::new(), "3".to_string()),
+        ),
         // Shard 2 operations
-        KVSOperation::Put("data:metrics".to_string(), CausalString::new(VCWrapper::new(), "enabled".to_string())),
-        KVSOperation::Put("data:logs".to_string(), CausalString::new(VCWrapper::new(), "debug".to_string())),
-        
+        KVSOperation::Put(
+            "data:metrics".to_string(),
+            CausalString::new(VCWrapper::new(), "enabled".to_string()),
+        ),
+        KVSOperation::Put(
+            "data:logs".to_string(),
+            CausalString::new(VCWrapper::new(), "debug".to_string()),
+        ),
         // Read operations across all shards
         KVSOperation::Get("user:alice".to_string()),
         KVSOperation::Get("config:timeout".to_string()),

@@ -362,7 +362,9 @@ mod tests {
     fn test_epidemic_gossip_implements_replication_strategy() {
         // Test that EpidemicGossip implements ReplicationStrategy with CausalString
         fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(EpidemicGossip::<crate::values::CausalString>::new());
+        _test_replication_strategy::<crate::values::CausalString>(EpidemicGossip::<
+            crate::values::CausalString,
+        >::new());
     }
 
     #[test]

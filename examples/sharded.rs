@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy1 = flow1.process::<()>();
     let client_external1 = flow1.external::<()>();
 
-    // A sharded KVS is just a set of independent local KVSs, with a 
+    // A sharded KVS is just a set of independent local KVSs, with a
     // ShardedRouter interceptor to route operations to the appropriate shard,
     // where they are handled locally.
     // There is no replication in this example, it's simply sharded.
@@ -96,14 +96,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external2 = flow2.external::<()>();
 
     // Symmetric composition: more complex nesting
-    type ShardedReplicated = ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::replication::NoReplication>>;
+    type ShardedReplicated =
+        ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::replication::NoReplication>>;
     let pipeline2 = kvs_zoo::interception::Pipeline::new(
         kvs_zoo::interception::ShardedRouter::new(3),
         kvs_zoo::interception::RoundRobinRouter::new(),
     );
     let replication2 = kvs_zoo::replication::NoReplication::new();
 
-    let deployment2 = ShardedReplicated::create_deployment(&flow2, pipeline2.clone(), replication2.clone());
+    let deployment2 =
+        ShardedReplicated::create_deployment(&flow2, pipeline2.clone(), replication2.clone());
     let client_port2 = ShardedReplicated::run(
         &proxy2,
         &deployment2,
@@ -123,9 +125,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("📤 Sending operations to sharded replicated KVS...");
     let ops2 = vec![
-        KVSOperation::Put("user:1".to_string(), CausalString::new(VCWrapper::new(), "Alice".to_string())),
-        KVSOperation::Put("user:2".to_string(), CausalString::new(VCWrapper::new(), "Bob".to_string())),
-        KVSOperation::Put("user:3".to_string(), CausalString::new(VCWrapper::new(), "Charlie".to_string())),
+        KVSOperation::Put(
+            "user:1".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:2".to_string(),
+            CausalString::new(VCWrapper::new(), "Bob".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:3".to_string(),
+            CausalString::new(VCWrapper::new(), "Charlie".to_string()),
+        ),
         KVSOperation::Get("user:1".to_string()),
         KVSOperation::Get("user:2".to_string()),
         KVSOperation::Get("user:3".to_string()),
@@ -153,7 +164,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🎓 Composition patterns:");
     println!("   • ShardedKVSServer<LocalKVSServer> → Pipeline<ShardedRouter, LocalRouter>");
-    println!("   • ShardedKVSServer<ReplicatedKVSServer> → Pipeline<ShardedRouter, RoundRobinRouter>");
+    println!(
+        "   • ShardedKVSServer<ReplicatedKVSServer> → Pipeline<ShardedRouter, RoundRobinRouter>"
+    );
     println!("   • Type system enforces matching structures at compile time");
     println!("   • Zero-cost: all composition resolved at compile time");
 

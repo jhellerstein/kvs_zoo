@@ -35,8 +35,8 @@
 //! let replication: BroadcastReplication<String> = BroadcastReplication::default();
 //! ```
 
-pub mod gossip;
 pub mod broadcast;
+pub mod gossip;
 pub mod logbased;
 
 use crate::core::KVSNode;
@@ -44,8 +44,8 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Re-export replication strategies for convenience
-pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
+pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
 pub use logbased::LogBased;
 
 /// Core trait for replication strategies

@@ -36,7 +36,7 @@ where
     let batched_ops = slotted_operations
         .batch(&tick, nondet!(/** batch for sequencing */))
         .chain(buffered_ops);
-    
+
     let sorted_ops_singleton = batched_ops
         .fold(
             q!(|| Vec::new()),
@@ -48,39 +48,37 @@ where
             ops.sort_by_key(|(slot, _, _)| *slot);
             ops
         }));
-    
+
     // Convert singleton Vec back to stream
-    let sorted_ops = sorted_ops_singleton
-        .flat_map_ordered(q!(|ops| ops));
+    let sorted_ops = sorted_ops_singleton.flat_map_ordered(q!(|ops| ops));
 
     // Track the next expected slot number
     let (next_slot_complete, next_slot) = tick.cycle_with_initial(tick.singleton(q!(0usize)));
 
     // Find the highest contiguous slot we can process
-    let next_slot_after_processing = sorted_ops
-        .clone()
-        .cross_singleton(next_slot.clone())
-        .fold(
-            q!(|| 0usize),
-            q!(|new_next_slot, ((slot, _key, _value), next_slot)| {
-                if slot == std::cmp::max(*new_next_slot, next_slot) {
-                    *new_next_slot = slot + 1;
-                }
-            }),
-        );
+    let next_slot_after_processing = sorted_ops.clone().cross_singleton(next_slot.clone()).fold(
+        q!(|| 0usize),
+        q!(|new_next_slot, ((slot, _key, _value), next_slot)| {
+            if slot == std::cmp::max(*new_next_slot, next_slot) {
+                *new_next_slot = slot + 1;
+            }
+        }),
+    );
 
     // Split operations into processable and buffered
     let processable_ops = sorted_ops
         .clone()
         .cross_singleton(next_slot_after_processing.clone())
-        .filter(q!(|((slot, _key, _value), highest_slot)| *slot
-            < *highest_slot))
+        .filter(q!(
+            |((slot, _key, _value), highest_slot)| *slot < *highest_slot
+        ))
         .map(q!(|((slot, key, value), _)| (slot, key, value)));
 
     let new_buffered_ops = sorted_ops
         .cross_singleton(next_slot_after_processing.clone())
-        .filter(q!(|((slot, _key, _value), highest_slot)| *slot
-            > *highest_slot))
+        .filter(q!(
+            |((slot, _key, _value), highest_slot)| *slot > *highest_slot
+        ))
         .map(q!(|((slot, key, value), _)| (slot, key, value)));
 
     // Complete the cycles

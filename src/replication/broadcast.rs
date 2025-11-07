@@ -199,7 +199,7 @@ where
             // - Collect updates for batch_timeout duration
             // - Send batches when max_batch_size is reached
             // - Broadcast batched updates to all nodes
-            
+
             // For now, fall back to simple broadcasting
             self.handle_replication(cluster, local_put_tuples)
         } else {
@@ -243,7 +243,9 @@ mod tests {
     fn test_broadcast_replication_implements_replication_strategy() {
         // Test that BroadcastReplication implements ReplicationStrategy with CausalString
         fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<crate::values::CausalString>::new());
+        _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+            crate::values::CausalString,
+        >::new());
     }
 
     #[test]
@@ -255,17 +257,26 @@ mod tests {
 
         let low_latency_config = BroadcastReplicationConfig::low_latency();
         assert!(!low_latency_config.enable_batching);
-        assert_eq!(low_latency_config.batch_timeout, std::time::Duration::from_millis(50));
+        assert_eq!(
+            low_latency_config.batch_timeout,
+            std::time::Duration::from_millis(50)
+        );
         assert_eq!(low_latency_config.max_batch_size, 1);
 
         let high_throughput_config = BroadcastReplicationConfig::high_throughput();
         assert!(high_throughput_config.enable_batching);
-        assert_eq!(high_throughput_config.batch_timeout, std::time::Duration::from_millis(200));
+        assert_eq!(
+            high_throughput_config.batch_timeout,
+            std::time::Duration::from_millis(200)
+        );
         assert_eq!(high_throughput_config.max_batch_size, 100);
 
         let synchronous_config = BroadcastReplicationConfig::synchronous();
         assert!(!synchronous_config.enable_batching);
-        assert_eq!(synchronous_config.batch_timeout, std::time::Duration::from_millis(0));
+        assert_eq!(
+            synchronous_config.batch_timeout,
+            std::time::Duration::from_millis(0)
+        );
         assert_eq!(synchronous_config.max_batch_size, 1);
     }
 
@@ -288,8 +299,12 @@ mod tests {
         // Test that both strategies implement the same trait
         fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
 
-        _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<crate::values::CausalString>::new());
-        _accepts_replication_strategy::<crate::values::CausalString>(crate::replication::EpidemicGossip::<crate::values::CausalString>::new());
+        _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+            crate::values::CausalString,
+        >::new());
+        _accepts_replication_strategy::<crate::values::CausalString>(
+            crate::replication::EpidemicGossip::<crate::values::CausalString>::new(),
+        );
     }
 
     #[test]

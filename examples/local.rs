@@ -29,11 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let replication = (); // No replication for single node
 
     // Create a deployment using the server API
-    let kvs_cluster = LocalKVSServer::<String>::create_deployment(
-        &flow,
-        op_pipeline.clone(),
-        replication,
-    );
+    let kvs_cluster =
+        LocalKVSServer::<String>::create_deployment(&flow, op_pipeline.clone(), replication);
 
     // Set up the server
     let client_port = LocalKVSServer::<String>::run(

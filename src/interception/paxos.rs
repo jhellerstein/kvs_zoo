@@ -7,14 +7,15 @@
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::KVSOperation;
+use super::{
+    OpIntercept,
+    paxos_core::{Acceptor, PaxosConfig, PaxosPayload, Proposer, paxos_core},
+};
 use crate::core::KVSNode;
-use super::{OpIntercept, paxos_core::{paxos_core, PaxosConfig, PaxosPayload, Proposer, Acceptor}};
-
-
+use crate::protocol::KVSOperation;
 
 /// Paxos interceptor that provides total ordering of operations
-/// 
+///
 /// This interceptor uses the Paxos consensus algorithm to ensure that all operations
 /// are totally ordered across all nodes in the cluster, providing linearizability.
 #[derive(Clone)]
@@ -46,7 +47,7 @@ impl<V> PaxosInterceptor<V> {
     }
 
     /// Apply Paxos consensus to a stream of operations
-    /// 
+    ///
     /// This method takes a stream of operations and returns a stream of slot-indexed
     /// operations that are totally ordered by Paxos consensus.
     pub fn apply_with_clusters<'a>(
@@ -54,13 +55,18 @@ impl<V> PaxosInterceptor<V> {
         proposers: &Cluster<'a, Proposer>,
         acceptors: &Cluster<'a, Acceptor>,
         operations: Stream<KVSOperation<V>, Cluster<'a, Proposer>, Unbounded>,
-    ) -> Stream<(usize, Option<KVSOperation<V>>), Cluster<'a, Proposer>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, Option<KVSOperation<V>>),
+        Cluster<'a, Proposer>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         V: PaxosPayload,
     {
         // Create checkpoint Optional (no checkpointing for now)
         let a_checkpoint = acceptors.source_iter(q!([])).first();
-        
+
         // Call the real Paxos core implementation
         let (_ballots, sequenced_operations) = paxos_core(
             proposers,
@@ -71,7 +77,7 @@ impl<V> PaxosInterceptor<V> {
             nondet!(/** leader election non-determinism */),
             nondet!(/** commit non-determinism */),
         );
-        
+
         sequenced_operations
     }
 
@@ -86,19 +92,26 @@ impl<V> PaxosInterceptor<V> {
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, KVSOperation<V>),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // Use round-robin distribution
-        let operations_on_cluster = operations.round_robin_bincode(cluster, nondet!(/** round-robin distribution */));
-        
+        let operations_on_cluster =
+            operations.round_robin_bincode(cluster, nondet!(/** round-robin distribution */));
+
         // Add per-node slot numbers (not global, but demonstrates the mechanism)
         operations_on_cluster
             .enumerate()
             .assume_ordering(nondet!(/** enumerate provides ordering */))
             .inspect(q!(|(slot, op)| {
-                println!("[Paxos] Consensus-ordered slot {}: {:?}", 
+                println!(
+                    "[Paxos] Consensus-ordered slot {}: {:?}",
                     slot,
                     match op {
                         KVSOperation::Put(key, _) => format!("PUT {}", key),
@@ -107,7 +120,7 @@ impl<V> PaxosInterceptor<V> {
                 );
             }))
     }
-    
+
     /// Intercept operations and return them with global slot numbers from Paxos
     ///
     /// This uses real Paxos consensus to assign global slot numbers to operations.
@@ -127,11 +140,13 @@ impl<V> PaxosInterceptor<V> {
         V: PaxosPayload,
     {
         // Send operations to proposers
-        let operations_on_proposers = operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
-        
+        let operations_on_proposers =
+            operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
+
         // Run Paxos consensus
-        let slotted_on_proposers = self.apply_with_clusters(proposers, acceptors, operations_on_proposers);
-        
+        let slotted_on_proposers =
+            self.apply_with_clusters(proposers, acceptors, operations_on_proposers);
+
         // Filter out None values and send back to proxy
         // The proxy can then route these slotted operations as needed
         slotted_on_proposers
@@ -141,7 +156,8 @@ impl<V> PaxosInterceptor<V> {
             .map(q!(|(_member_id, slotted_op)| slotted_op))
             .assume_ordering(nondet!(/** Paxos provides total ordering */))
             .inspect(q!(|(slot, op)| {
-                println!("[Paxos] Consensus-ordered slot {}: {:?}", 
+                println!(
+                    "[Paxos] Consensus-ordered slot {}: {:?}",
                     slot,
                     match op {
                         KVSOperation::Put(key, _) => format!("PUT {}", key),
@@ -174,16 +190,18 @@ where
         // Use the existing KVS cluster for consensus-like behavior
         // This avoids the cluster instantiation issue while providing total ordering
         // TODO: Integrate with real Paxos clusters when cluster architecture supports it
-        
+
         // Use round-robin to distribute operations across nodes (not broadcast!)
         // This ensures each operation is processed by exactly one node
-        let operations_on_cluster = operations.round_robin_bincode(cluster, nondet!(/** round-robin distribution */));
-        
+        let operations_on_cluster =
+            operations.round_robin_bincode(cluster, nondet!(/** round-robin distribution */));
+
         // Provide consensus-like behavior with total ordering
         operations_on_cluster
             .enumerate()
             .inspect(q!(|(slot, op)| {
-                println!("[Paxos] Consensus-ordered slot {}: {:?}", 
+                println!(
+                    "[Paxos] Consensus-ordered slot {}: {:?}",
                     slot,
                     match op {
                         KVSOperation::Put(key, _) => format!("PUT {}", key),
@@ -196,21 +214,17 @@ where
 }
 
 /// Create Paxos clusters for consensus
-/// 
+///
 /// This function sets up the necessary clusters for Paxos consensus,
 /// including proposers and acceptors.
 pub fn create_paxos_clusters<'a>(
     flow: &FlowBuilder<'a>,
     cluster_size: usize,
-) -> (
-    Cluster<'a, Proposer>,
-    Cluster<'a, Acceptor>,
-    PaxosConfig,
-) {
+) -> (Cluster<'a, Proposer>, Cluster<'a, Acceptor>, PaxosConfig) {
     // Create proposer cluster
     let proposers = flow.cluster::<Proposer>();
 
-    // Create acceptor cluster  
+    // Create acceptor cluster
     let acceptors = flow.cluster::<Acceptor>();
 
     let config = PaxosConfig {

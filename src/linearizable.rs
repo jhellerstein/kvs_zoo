@@ -25,7 +25,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
-use crate::interception::{PaxosInterceptor, PaxosConfig};
+use crate::interception::{PaxosConfig, PaxosInterceptor};
 use crate::protocol::KVSOperation;
 use crate::replication::ReplicationStrategy;
 use crate::server::KVSServer;
@@ -63,34 +63,33 @@ impl<V, R> LinearizableKVSServer<V, R> {
             _phantom: std::marker::PhantomData,
         }
     }
-    
+
     /// Sequence responses back into slot order to maintain linearizability
-    /// 
+    ///
     /// This function takes slot-indexed responses that may arrive out of order
     /// and returns them in the correct sequential order, buffering any responses
     /// that arrive early until the gaps are filled.
-    /// 
+    ///
     /// Based on the pattern from hydro/hydro_test/src/cluster/kv_replica/sequence_payloads.rs
     fn sequence_responses<'a>(
         deployment: &Cluster<'a, KVSNode>,
         slotted_responses: Stream<(usize, String), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         let tick = deployment.tick();
-        
+
         // Create cycles for buffering out-of-order responses
-        let (buffered_responses_complete, buffered_responses) = 
+        let (buffered_responses_complete, buffered_responses) =
             tick.cycle::<Stream<(usize, String), Tick<Cluster<'a, KVSNode>>, Bounded>>();
-        
+
         // Batch incoming responses and combine with buffered ones
         let sorted_responses = slotted_responses
             .batch(&tick, nondet!(/** batch for sequencing */))
             .chain(buffered_responses)
             .sort();
-        
+
         // Track the next expected slot number
-        let (next_slot_complete, next_slot) = 
-            tick.cycle_with_initial(tick.singleton(q!(0usize)));
-        
+        let (next_slot_complete, next_slot) = tick.cycle_with_initial(tick.singleton(q!(0usize)));
+
         // Find the highest contiguous slot we can process
         let next_slot_after_processing = sorted_responses
             .clone()
@@ -103,23 +102,23 @@ impl<V, R> LinearizableKVSServer<V, R> {
                     }
                 }),
             );
-        
+
         // Split responses into processable and buffered
         let processable_responses = sorted_responses
             .clone()
             .cross_singleton(next_slot_after_processing.clone())
             .filter(q!(|((slot, _response), highest_slot)| *slot < *highest_slot))
             .map(q!(|((slot, response), _)| (slot, response)));
-        
+
         let new_buffered_responses = sorted_responses
             .cross_singleton(next_slot_after_processing.clone())
             .filter(q!(|((slot, _response), highest_slot)| *slot > *highest_slot))
             .map(q!(|((slot, response), _)| (slot, response)));
-        
+
         // Complete the cycles
         buffered_responses_complete.complete_next_tick(new_buffered_responses);
         next_slot_complete.complete_next_tick(next_slot_after_processing);
-        
+
         // Return just the response strings in slot order
         processable_responses
             .map(q!(|(_slot, response)| response))
@@ -136,7 +135,7 @@ impl<V, R> LinearizableKVSServer<V, R> {
     }
 
     /// Create a linearizable KVS server that tolerates `f` failures
-    /// 
+    ///
     /// This will configure Paxos to require `2f + 1` nodes for safety.
     pub fn with_fault_tolerance(cluster_size: usize, f: usize) -> Self {
         Self {
@@ -167,10 +166,10 @@ where
 {
     /// Uses Paxos interceptor for total ordering
     type OpPipeline = PaxosInterceptor<V>;
-    
+
     /// Delegates replication to the specified strategy
     type ReplicationStrategy = R;
-    
+
     /// Uses a cluster deployment for the linearizable service
     /// Returns (KVS cluster, Proposer cluster, Acceptor cluster)
     type Deployment<'a> = (
@@ -203,7 +202,7 @@ where
     {
         // Unpack deployment tuple
         let (kvs_cluster, proposers, acceptors) = deployment;
-        
+
         // Use bidirectional external connection
         let (bidi_port, operations_stream, _membership, complete_sink) =
             proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
@@ -219,14 +218,15 @@ where
             proposers,
             acceptors,
         );
-        
+
         // Round-robin the slotted operations to KVS nodes
         // This ensures only ONE node processes each operation and responds
         // round_robin_bincode preserves the total ordering from Paxos
         let slotted_operations_with_slots = slotted_operations_on_proxy
             .round_robin_bincode(kvs_cluster, nondet!(/** round-robin to KVS nodes */))
             .inspect(q!(|(slot, op)| {
-                println!("[Linearizable] Processing slot {}: {:?}", 
+                println!(
+                    "[Linearizable] Processing slot {}: {:?}",
                     slot,
                     match op {
                         KVSOperation::Put(key, _) => format!("PUT {}", key),
@@ -236,34 +236,35 @@ where
             }));
 
         // Demux operations into PUTs and GETs for proper handling
-        let put_tuples_slotted = slotted_operations_with_slots
-            .clone()
-            .filter_map(q!(|(slot, op)| match op {
-                KVSOperation::Put(key, value) => Some((slot, key, value)),
-                KVSOperation::Get(_) => None,
-            }));
-        
-        let get_keys_slotted = slotted_operations_with_slots
-            .filter_map(q!(|(slot, op)| match op {
+        let put_tuples_slotted =
+            slotted_operations_with_slots
+                .clone()
+                .filter_map(q!(|(slot, op)| match op {
+                    KVSOperation::Put(key, value) => Some((slot, key, value)),
+                    KVSOperation::Get(_) => None,
+                }));
+
+        let get_keys_slotted =
+            slotted_operations_with_slots.filter_map(q!(|(slot, op)| match op {
                 KVSOperation::Put(_, _) => None,
                 KVSOperation::Get(key) => Some((slot, key)),
             }));
-        
+
         // Use replication strategy for PUT operations with slot numbers
-        let replicated_data_slotted = replication.replicate_slotted_data(
-            kvs_cluster, 
-            put_tuples_slotted.clone()
-        );
-        
+        let replicated_data_slotted =
+            replication.replicate_slotted_data(kvs_cluster, put_tuples_slotted.clone());
+
         // Combine local and replicated PUTs (all slotted)
-        let all_put_tuples_slotted = put_tuples_slotted.clone().interleave(replicated_data_slotted);
-        
+        let all_put_tuples_slotted = put_tuples_slotted
+            .clone()
+            .interleave(replicated_data_slotted);
+
         // Strip slots for storage (storage doesn't need slots)
         let all_put_tuples = all_put_tuples_slotted.map(q!(|(_slot, key, value)| (key, value)));
-        
+
         // Execute PUT operations using LWW storage
         let kvs_state = crate::lww::KVSLww::put(all_put_tuples);
-        
+
         // Handle GET operations (strip slots)
         let get_keys = get_keys_slotted.map(q!(|(_slot, key)| key));
         let ticker = kvs_cluster.tick();
@@ -271,11 +272,17 @@ where
             get_keys.batch(&ticker, nondet!(/** batch gets */)),
             kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
         );
-        
+
         // Format responses (strip slots from PUTs)
-        let put_responses = put_tuples_slotted.map(q!(|(_slot, key, _value)| format!("PUT {} = OK [LINEARIZABLE]", key)));
-        let get_responses = get_results.map(q!(|(key, value)| format!("GET {} = {:?} [LINEARIZABLE]", key, value)));
-        
+        let put_responses = put_tuples_slotted.map(q!(|(_slot, key, _value)| format!(
+            "PUT {} = OK [LINEARIZABLE]",
+            key
+        )));
+        let get_responses = get_results.map(q!(|(key, value)| format!(
+            "GET {} = {:?} [LINEARIZABLE]",
+            key, value
+        )));
+
         // Combine all responses
         let responses = put_responses.interleave(get_responses.all_ticks());
 
@@ -311,29 +318,48 @@ mod tests {
 
     #[test]
     fn test_linearizable_kvs_creation() {
-        let _kvs = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
-        
+        let _kvs =
+            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
+
         let custom_config = PaxosConfig {
             f: 2,
             i_am_leader_send_timeout: 2,
             i_am_leader_check_timeout: 4,
             i_am_leader_check_timeout_delay_multiplier: 2,
         };
-        let _kvs_custom = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::with_paxos_config(5, custom_config);
-        
-        let _kvs_fault_tolerant = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::with_fault_tolerance(5, 2);
+        let _kvs_custom = LinearizableKVSServer::<
+            LwwWrapper<String>,
+            crate::replication::NoReplication,
+        >::with_paxos_config(5, custom_config);
+
+        let _kvs_fault_tolerant = LinearizableKVSServer::<
+            LwwWrapper<String>,
+            crate::replication::NoReplication,
+        >::with_fault_tolerance(5, 2);
     }
 
     #[test]
     fn test_linearizable_kvs_implements_kvs_server() {
         // Test that LinearizableKVSServer implements KVSServer
-        fn _test_kvs_server<V, S>(_server: S) 
-        where 
+        fn _test_kvs_server<V, S>(_server: S)
+        where
             S: KVSServer<V>,
-            V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + std::fmt::Debug + lattices::Merge<V> + Send + Sync + 'static,
-        {}
-        
-        let kvs = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
+            V: Clone
+                + Serialize
+                + for<'de> Deserialize<'de>
+                + PartialEq
+                + Eq
+                + Default
+                + std::fmt::Debug
+                + lattices::Merge<V>
+                + Send
+                + Sync
+                + 'static,
+        {
+        }
+
+        let kvs =
+            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::new(3);
         _test_kvs_server(kvs);
     }
 
@@ -341,27 +367,27 @@ mod tests {
     fn test_linearizable_kvs_size() {
         let op_pipeline = PaxosInterceptor::new();
         let replication = crate::replication::NoReplication::new();
-        
-        let size = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::size(op_pipeline, replication);
+
+        let size =
+            LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::size(
+                op_pipeline,
+                replication,
+            );
         assert_eq!(size, 3); // Minimum for Paxos consensus
     }
-
-
 
     #[test]
     fn test_linearizable_kvs_deployment_creation() {
         let flow = hydro_lang::compile::builder::FlowBuilder::new();
         let op_pipeline = PaxosInterceptor::new();
         let replication = crate::replication::NoReplication::new();
-        
-        let _deployment = LinearizableKVSServer::<LwwWrapper<String>, crate::replication::NoReplication>::create_deployment(
-            &flow,
-            op_pipeline,
-            replication,
-        );
-        
+
+        let _deployment = LinearizableKVSServer::<
+            LwwWrapper<String>,
+            crate::replication::NoReplication,
+        >::create_deployment(&flow, op_pipeline, replication);
+
         // Finalize the flow to avoid panic
         let _nodes = flow.finalize();
     }
-
 }

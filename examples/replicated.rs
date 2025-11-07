@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // or in the background.
     // Use small_cluster config for faster gossip (500ms interval instead of 1s)
     let gossip_replication = kvs_zoo::replication::EpidemicGossip::with_config(
-        kvs_zoo::replication::EpidemicGossipConfig::small_cluster()
+        kvs_zoo::replication::EpidemicGossipConfig::small_cluster(),
     );
 
     let kvs_cluster = ReplicatedKVSServer::<CausalString, _>::create_deployment(
@@ -69,9 +69,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo operations
     let put_operations = vec![
-        KVSOperation::Put("user:1".to_string(), CausalString::new(VCWrapper::new(), "Alice".to_string())),
-        KVSOperation::Put("user:2".to_string(), CausalString::new(VCWrapper::new(), "Bob".to_string())),
-        KVSOperation::Put("user:1".to_string(), CausalString::new(VCWrapper::new(), "Alice Updated".to_string())),
+        KVSOperation::Put(
+            "user:1".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:2".to_string(),
+            CausalString::new(VCWrapper::new(), "Bob".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:1".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice Updated".to_string()),
+        ),
     ];
     let get_operations = vec![
         KVSOperation::Get("user:1".to_string()),
@@ -95,14 +104,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             println!("     → {}", response);
         }
-   }
+    }
 
     // Wait for gossip replication (small_cluster config: 500ms interval, wait 6x)
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
 
-   for (i, op) in get_operations.into_iter().enumerate() {
+    for (i, op) in get_operations.into_iter().enumerate() {
         println!("  {} {:?}", i + 1, op);
-
 
         if let Err(e) = client_in.send(op).await {
             eprintln!("❌ Error: {}", e);
@@ -117,8 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             println!("     → {}", response);
         }
-   }
- 
+    }
 
     println!("✅ Gossip replication demo completed");
     println!();

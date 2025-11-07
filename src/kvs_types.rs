@@ -70,7 +70,7 @@ pub type StringKVSShardedReplicated = KVSShardedReplicated<String>;
 // =============================================================================
 
 // Import value types to avoid crate:: path issues in staged code
-use crate::values::{LwwWrapper, CausalString};
+use crate::values::{CausalString, LwwWrapper};
 
 /// Local KVS with LWW wrapper values
 pub type KVSLocalLwwWrapper<T> = KVSLocalLww<LwwWrapper<T>>;

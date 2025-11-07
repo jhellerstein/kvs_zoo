@@ -49,20 +49,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create linearizable KVS with Paxos consensus and log-based broadcast replication
     // LogBased wrapper ensures operations are applied in slot order across all replicas
     type LinearizableKVS = LinearizableKVSServer<
-        LwwWrapper<String>, 
-        kvs_zoo::replication::LogBased<kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>>
+        LwwWrapper<String>,
+        kvs_zoo::replication::LogBased<
+            kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>,
+        >,
     >;
-    
+
     let op_pipeline = kvs_zoo::interception::PaxosInterceptor::with_config(paxos_config);
-    let replication = kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
+    let replication =
+        kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
 
     // Create deployment (returns KVS cluster + Paxos clusters)
-    let (kvs_cluster, proposers, acceptors) = LinearizableKVS::create_deployment(
-        &flow,
-        op_pipeline.clone(),
-        replication.clone(),
-    );
-    
+    let (kvs_cluster, proposers, acceptors) =
+        LinearizableKVS::create_deployment(&flow, op_pipeline.clone(), replication.clone());
+
     let deployment_tuple = (kvs_cluster.clone(), proposers.clone(), acceptors.clone());
 
     // Run the linearizable KVS
@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         kvs_zoo::interception::PaxosInterceptor::new(),
         kvs_zoo::replication::LogBased::new(kvs_zoo::replication::BroadcastReplication::new()),
     );
-    
+
     // Deploy all three clusters!
     let nodes = flow
         .with_process(&proxy, localhost.clone())
@@ -106,19 +106,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Initial writes
         KVSOperation::Put("account_a".to_string(), LwwWrapper::new("100".to_string())),
         KVSOperation::Put("account_b".to_string(), LwwWrapper::new("50".to_string())),
-        
         // Read initial state
         KVSOperation::Get("account_a".to_string()),
         KVSOperation::Get("account_b".to_string()),
-        
         // Simulate a transfer (these operations will be linearized)
         KVSOperation::Put("account_a".to_string(), LwwWrapper::new("75".to_string())), // -25
         KVSOperation::Put("account_b".to_string(), LwwWrapper::new("75".to_string())), // +25
-        
         // Read final state (linearizable reads)
         KVSOperation::Get("account_a".to_string()),
         KVSOperation::Get("account_b".to_string()),
-        
         // Demonstrate concurrent operations get linearized
         KVSOperation::Put("counter".to_string(), LwwWrapper::new("1".to_string())),
         KVSOperation::Put("counter".to_string(), LwwWrapper::new("2".to_string())),
@@ -135,10 +131,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Wait for response with timeout
-        if let Some(response) = tokio::time::timeout(
-            std::time::Duration::from_millis(1000), 
-            client_out.next()
-        ).await.ok().flatten() {
+        if let Some(response) =
+            tokio::time::timeout(std::time::Duration::from_millis(1000), client_out.next())
+                .await
+                .ok()
+                .flatten()
+        {
             println!("     → {}", response);
         } else {
             println!("     → (timeout - Paxos consensus may take time)");

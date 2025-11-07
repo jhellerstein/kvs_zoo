@@ -44,9 +44,10 @@ use serde::{Deserialize, Serialize};
 /// ## Example
 /// ```rust
 /// use kvs_zoo::replication::{LogBased, BroadcastReplication};
+/// use kvs_zoo::values::CausalString;
 ///
 /// // Wrap broadcast replication with log-based ordering
-/// let replication = LogBased::new(BroadcastReplication::new());
+/// let replication = LogBased::new(BroadcastReplication::<CausalString>::new());
 /// ```
 #[derive(Clone, Debug)]
 pub struct LogBased<R> {
@@ -129,7 +130,6 @@ impl<R> LogBased<R> {
         self.inner
             .replicate_slotted_data(cluster, local_slotted_data)
     }
-
 }
 
 #[cfg(test)]
@@ -141,8 +141,7 @@ mod tests {
     fn test_logbased_creation() {
         let _logbased_broadcast =
             LogBased::new(BroadcastReplication::<crate::values::CausalString>::new());
-        let _logbased_gossip =
-            LogBased::new(EpidemicGossip::<crate::values::CausalString>::new());
+        let _logbased_gossip = LogBased::new(EpidemicGossip::<crate::values::CausalString>::new());
         let _logbased_none = LogBased::new(NoReplication::new());
     }
 
@@ -174,9 +173,9 @@ mod tests {
         _test_replication_strategy::<crate::values::CausalString>(LogBased::new(
             BroadcastReplication::<crate::values::CausalString>::new(),
         ));
-        _test_replication_strategy::<crate::values::CausalString>(LogBased::new(
-            EpidemicGossip::<crate::values::CausalString>::new(),
-        ));
+        _test_replication_strategy::<crate::values::CausalString>(LogBased::new(EpidemicGossip::<
+            crate::values::CausalString,
+        >::new()));
     }
 
     #[test]
@@ -197,8 +196,8 @@ mod tests {
     fn test_logbased_send_sync() {
         fn _requires_send_sync<T: Send + Sync>(_t: T) {}
         _requires_send_sync(LogBased::new(NoReplication::new()));
-        _requires_send_sync(LogBased::new(
-            BroadcastReplication::<crate::values::CausalString>::new(),
-        ));
+        _requires_send_sync(LogBased::new(BroadcastReplication::<
+            crate::values::CausalString,
+        >::new()));
     }
 }
