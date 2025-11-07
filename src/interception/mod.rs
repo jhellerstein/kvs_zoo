@@ -20,7 +20,7 @@
 //! let sharded = ShardedRouter::new(3);
 //! let round_robin = RoundRobinRouter::new();
 //! let identity = IdentityIntercept::new();
-//! 
+//!
 //! // Manual pipeline composition
 //! let pipeline = Pipeline::new(sharded, round_robin);
 //! ```
@@ -30,10 +30,14 @@ use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub mod paxos;
+pub mod paxos_core;
 pub mod routing;
 
 // Re-export routing interceptors for convenience
-pub use routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
+pub use paxos::PaxosInterceptor;
+pub use paxos_core::PaxosConfig;
+pub use routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
 
 /// Core trait for operation interceptors
 ///
@@ -72,7 +76,7 @@ impl<A, B> Pipeline<A, B> {
     }
 }
 
-impl<V, A, B> OpIntercept<V> for Pipeline<A, B>
+impl<A, B, V> OpIntercept<V> for Pipeline<A, B>
 where
     A: OpIntercept<V>,
     B: OpIntercept<V>,
@@ -88,11 +92,11 @@ where
         // Apply the first interceptor (e.g., ShardedRouter)
         // This routes operations to specific cluster members
         self.first.intercept_operations(operations, cluster)
-        
+
         // Note: For the current architecture, the second interceptor (LocalRouter)
         // is not needed when operations are already routed by the first interceptor.
         // The LocalRouter would broadcast to all nodes, which would override sharding.
-        // 
+        //
         // In a proper implementation, we would need different composition strategies
         // based on the interceptor types, but for now we just use the first interceptor.
     }
@@ -141,7 +145,7 @@ impl<V> OpIntercept<V> for IdentityIntercept {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
+    use crate::interception::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
 
     #[test]
     fn test_identity_intercept_creation() {
@@ -187,21 +191,21 @@ mod tests {
             Pipeline::new(IdentityIntercept::new(), IdentityIntercept::new());
 
         // Test heterogeneous composition with different router types
-        let _local_identity_pipeline: Pipeline<LocalRouter, IdentityIntercept> =
-            Pipeline::new(LocalRouter::new(), IdentityIntercept::new());
+        let _local_identity_pipeline: Pipeline<SingleNodeRouter, IdentityIntercept> =
+            Pipeline::new(SingleNodeRouter::new(), IdentityIntercept::new());
 
         let _sharded_round_robin_pipeline: Pipeline<ShardedRouter, RoundRobinRouter> =
             Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
 
         // Test deeply nested composition
-        let inner = Pipeline::new(LocalRouter::new(), RoundRobinRouter::new());
-        let _nested_pipeline: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, ShardedRouter> =
+        let inner = Pipeline::new(SingleNodeRouter::new(), RoundRobinRouter::new());
+        let _nested_pipeline: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> =
             Pipeline::new(inner, ShardedRouter::new(5));
     }
 
     #[test]
     fn test_pipeline_clone_debug() {
-        let pipeline = Pipeline::new(IdentityIntercept::new(), LocalRouter::new());
+        let pipeline = Pipeline::new(IdentityIntercept::new(), SingleNodeRouter::new());
         let _cloned = pipeline.clone();
         let _debug_str = format!("{:?}", pipeline);
     }
@@ -215,14 +219,14 @@ mod tests {
         fn _has_then_method<V, T: OpInterceptExt<V>>(_t: T) {}
 
         _has_then_method::<String, _>(IdentityIntercept::new());
-        _has_then_method::<String, _>(LocalRouter::new());
+        _has_then_method::<String, _>(SingleNodeRouter::new());
         _has_then_method::<String, _>(RoundRobinRouter::new());
         _has_then_method::<String, _>(ShardedRouter::new(3));
 
         // Test chaining using Pipeline::new (equivalent to .then() but without type inference issues)
         let _chained = Pipeline::new(IdentityIntercept::new(), IdentityIntercept::new());
-        let _local_then_identity = Pipeline::new(LocalRouter::new(), IdentityIntercept::new());
-        let _round_robin_then_local = Pipeline::new(RoundRobinRouter::new(), LocalRouter::new());
+        let _local_then_identity = Pipeline::new(SingleNodeRouter::new(), IdentityIntercept::new());
+        let _round_robin_then_local = Pipeline::new(RoundRobinRouter::new(), SingleNodeRouter::new());
 
         // Test multi-level chaining
         let step1 = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
@@ -232,13 +236,13 @@ mod tests {
     #[test]
     fn test_interception_ext_trait_type_inference() {
         // Test type inference and structure using Pipeline::new
-        let step1: Pipeline<LocalRouter, RoundRobinRouter> =
-            Pipeline::new(LocalRouter::new(), RoundRobinRouter::new());
-        let pipeline: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, ShardedRouter> =
+        let step1: Pipeline<SingleNodeRouter, RoundRobinRouter> =
+            Pipeline::new(SingleNodeRouter::new(), RoundRobinRouter::new());
+        let pipeline: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> =
             Pipeline::new(step1, ShardedRouter::new(4));
 
         // Verify the resulting type structure
-        let _typed_pipeline: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, ShardedRouter> =
+        let _typed_pipeline: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> =
             pipeline;
 
         // Test that the extension trait method exists (even if we can't easily test it due to type inference)
@@ -258,7 +262,7 @@ mod tests {
         // Test that interceptors can be used as trait objects if needed
         let interceptors: Vec<Box<dyn OpIntercept<String>>> = vec![
             Box::new(IdentityIntercept::new()),
-            Box::new(LocalRouter::new()),
+            Box::new(SingleNodeRouter::new()),
             Box::new(RoundRobinRouter::new()),
             Box::new(ShardedRouter::new(3)),
         ];
@@ -269,7 +273,7 @@ mod tests {
     #[test]
     fn test_pipeline_implements_interception() {
         // Test that Pipeline itself implements OpIntercept
-        let pipeline = Pipeline::new(LocalRouter::new(), RoundRobinRouter::new());
+        let pipeline = Pipeline::new(SingleNodeRouter::new(), RoundRobinRouter::new());
 
         // This should compile, demonstrating that Pipeline implements OpIntercept
         fn _test_interception<V>(_interceptor: impl OpIntercept<V>) {}
@@ -282,53 +286,53 @@ mod tests {
         fn _has_then_method<T: OpInterceptExt<String>>(_t: T) {}
 
         _has_then_method(IdentityIntercept::new());
-        _has_then_method(LocalRouter::new());
+        _has_then_method(SingleNodeRouter::new());
         _has_then_method(RoundRobinRouter::new());
         _has_then_method(ShardedRouter::new(3));
-        _has_then_method(Pipeline::new(LocalRouter::new(), IdentityIntercept::new()));
+        _has_then_method(Pipeline::new(SingleNodeRouter::new(), IdentityIntercept::new()));
     }
 
     #[test]
     fn test_zero_cost_composition_structure() {
         // Test that composition creates the expected nested structure
-        let a = LocalRouter::new();
+        let a = SingleNodeRouter::new();
         let b = RoundRobinRouter::new();
         let c = ShardedRouter::new(3);
 
         // Test binary composition with explicit types using Pipeline::new
-        let ab: Pipeline<LocalRouter, RoundRobinRouter> = Pipeline::new(a, b);
-        let abc: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, ShardedRouter> =
+        let ab: Pipeline<SingleNodeRouter, RoundRobinRouter> = Pipeline::new(a, b);
+        let abc: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> =
             Pipeline::new(ab, c);
 
         // Verify structure through type system (this compiles = correct structure)
-        let _typed_abc: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, ShardedRouter> = abc;
+        let _typed_abc: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, ShardedRouter> = abc;
 
         // Test that the structure is zero-cost (no runtime overhead)
         assert_eq!(
-            std::mem::size_of::<Pipeline<LocalRouter, RoundRobinRouter>>(),
-            std::mem::size_of::<LocalRouter>() + std::mem::size_of::<RoundRobinRouter>()
+            std::mem::size_of::<Pipeline<SingleNodeRouter, RoundRobinRouter>>(),
+            std::mem::size_of::<SingleNodeRouter>() + std::mem::size_of::<RoundRobinRouter>()
         );
     }
 
     #[test]
     fn test_pipeline_associativity_types() {
         // Test that (A.then(B)).then(C) and A.then(B.then(C)) have different but valid types
-        let a = LocalRouter::new();
+        let a = SingleNodeRouter::new();
         let b = RoundRobinRouter::new();
         let c = IdentityIntercept::new();
 
         // Left-associative: (A.then(B)).then(C) using Pipeline::new
-        let ab: Pipeline<LocalRouter, RoundRobinRouter> = Pipeline::new(a.clone(), b.clone());
-        let left_assoc: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, IdentityIntercept> =
+        let ab: Pipeline<SingleNodeRouter, RoundRobinRouter> = Pipeline::new(a.clone(), b.clone());
+        let left_assoc: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, IdentityIntercept> =
             Pipeline::new(ab, c.clone());
-        let _left_typed: Pipeline<Pipeline<LocalRouter, RoundRobinRouter>, IdentityIntercept> =
+        let _left_typed: Pipeline<Pipeline<SingleNodeRouter, RoundRobinRouter>, IdentityIntercept> =
             left_assoc;
 
         // Right-associative: A.then(B.then(C)) using Pipeline::new
         let bc: Pipeline<RoundRobinRouter, IdentityIntercept> = Pipeline::new(b, c);
-        let right_assoc: Pipeline<LocalRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
+        let right_assoc: Pipeline<SingleNodeRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
             Pipeline::new(a, bc);
-        let _right_typed: Pipeline<LocalRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
+        let _right_typed: Pipeline<SingleNodeRouter, Pipeline<RoundRobinRouter, IdentityIntercept>> =
             right_assoc;
 
         // Verify that the types are different (this is a compile-time check)

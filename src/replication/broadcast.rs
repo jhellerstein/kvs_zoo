@@ -131,6 +131,20 @@ where
         // This preserves the existing behavior while adapting to the new trait
         self.handle_replication(cluster, local_data)
     }
+
+    // Ordered logs with "slots" (positions) need to be replicated for ordered "replay".
+    // See logbased.rs.
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        // Broadcast slotted operations to all nodes
+        local_slotted_data
+            .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
+            .values()
+            .assume_ordering(nondet!(/** broadcast messages unordered */))
+    }
 }
 
 impl<V> BroadcastReplication<V>
@@ -187,7 +201,7 @@ where
             // - Collect updates for batch_timeout duration
             // - Send batches when max_batch_size is reached
             // - Broadcast batched updates to all nodes
-            
+
             // For now, fall back to simple broadcasting
             self.handle_replication(cluster, local_put_tuples)
         } else {
@@ -231,7 +245,9 @@ mod tests {
     fn test_broadcast_replication_implements_replication_strategy() {
         // Test that BroadcastReplication implements ReplicationStrategy with CausalString
         fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<crate::values::CausalString>::new());
+        _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+            crate::values::CausalString,
+        >::new());
     }
 
     #[test]
@@ -243,17 +259,26 @@ mod tests {
 
         let low_latency_config = BroadcastReplicationConfig::low_latency();
         assert!(!low_latency_config.enable_batching);
-        assert_eq!(low_latency_config.batch_timeout, std::time::Duration::from_millis(50));
+        assert_eq!(
+            low_latency_config.batch_timeout,
+            std::time::Duration::from_millis(50)
+        );
         assert_eq!(low_latency_config.max_batch_size, 1);
 
         let high_throughput_config = BroadcastReplicationConfig::high_throughput();
         assert!(high_throughput_config.enable_batching);
-        assert_eq!(high_throughput_config.batch_timeout, std::time::Duration::from_millis(200));
+        assert_eq!(
+            high_throughput_config.batch_timeout,
+            std::time::Duration::from_millis(200)
+        );
         assert_eq!(high_throughput_config.max_batch_size, 100);
 
         let synchronous_config = BroadcastReplicationConfig::synchronous();
         assert!(!synchronous_config.enable_batching);
-        assert_eq!(synchronous_config.batch_timeout, std::time::Duration::from_millis(0));
+        assert_eq!(
+            synchronous_config.batch_timeout,
+            std::time::Duration::from_millis(0)
+        );
         assert_eq!(synchronous_config.max_batch_size, 1);
     }
 
@@ -276,16 +301,22 @@ mod tests {
         // Test that both strategies implement the same trait
         fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
 
-        _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<crate::values::CausalString>::new());
-        _accepts_replication_strategy::<crate::values::CausalString>(crate::replication::EpidemicGossip::<crate::values::CausalString>::new());
+        _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+            crate::values::CausalString,
+        >::new());
+        _accepts_replication_strategy::<crate::values::CausalString>(
+            crate::replication::EpidemicGossip::<crate::values::CausalString>::new(),
+        );
     }
 
     #[test]
     fn test_broadcast_replication_config_builder_pattern() {
         // Test that configs can be built and modified
-        let mut config = BroadcastReplicationConfig::default();
-        config.enable_batching = true;
-        config.max_batch_size = 200;
+        let config = BroadcastReplicationConfig {
+            enable_batching: true,
+            max_batch_size: 200,
+            ..Default::default()
+        };
 
         let _broadcast = BroadcastReplication::<String>::with_config(config);
     }

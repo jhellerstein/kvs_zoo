@@ -1,4 +1,4 @@
-//! Local KVS example using new composable architecture
+//! Local KVS example
 //! Single-node KVS with LocalRouter and no replication
 
 use futures::{SinkExt, StreamExt};
@@ -21,18 +21,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Create operation pipeline and replication strategy
-    let op_pipeline = kvs_zoo::interception::LocalRouter::new();
+    // A more sophisticated KVS might have a pipeline of traffic "interceptors"
+    // to do things like order or route the inbound operations.
+    // It might also have a replication strategy like Broadcast or Epidemic Gossip.
+    // But here we'll just create no-ops for each!
+    let op_pipeline = kvs_zoo::interception::SingleNodeRouter::new();
     let replication = (); // No replication for single node
 
-    // Create deployment using the server API
-    let kvs_cluster = LocalKVSServer::<String>::create_deployment(
-        &flow,
-        op_pipeline.clone(),
-        replication,
-    );
+    // Create a deployment using the server API
+    let kvs_cluster =
+        LocalKVSServer::<String>::create_deployment(&flow, op_pipeline.clone(), replication);
 
-    // Run the server
+    // Set up the server
     let client_port = LocalKVSServer::<String>::run(
         &proxy,
         &kvs_cluster,
@@ -52,6 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
     deployment.start().await?;
 
+    // give it a chance to launch
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     println!("📤 Sending operations...");

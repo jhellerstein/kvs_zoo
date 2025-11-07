@@ -42,14 +42,14 @@ async fn test_local_kvs_service() {
     // Create local KVS server
     let kvs_cluster = LocalKVSServer::<String>::create_deployment(
         &flow,
-        kvs_zoo::interception::LocalRouter::new(),
+        kvs_zoo::interception::SingleNodeRouter::new(),
         (),
     );
     let client_port = LocalKVSServer::<String>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::LocalRouter::new(),
+        kvs_zoo::interception::SingleNodeRouter::new(),
         (),
     );
 
@@ -214,7 +214,7 @@ async fn test_sharded_kvs_service() {
         &flow,
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::LocalRouter::new(),
+            kvs_zoo::interception::SingleNodeRouter::new(),
         ),
         (),
     );
@@ -224,7 +224,7 @@ async fn test_sharded_kvs_service() {
         &client_external,
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::LocalRouter::new(),
+            kvs_zoo::interception::SingleNodeRouter::new(),
         ),
         (),
     );
@@ -253,7 +253,7 @@ async fn test_sharded_kvs_service() {
         let shard = kvs_zoo::interception::ShardedRouter::calculate_shard_id(key, 3);
         println!("  {} -> shard {}", key, shard);
     }
-    
+
     let operations = vec![
         KVSOperation::Put("shard_key_0".to_string(), "value_0".to_string()),
         KVSOperation::Put("shard_key_1".to_string(), "value_1".to_string()),
@@ -264,11 +264,11 @@ async fn test_sharded_kvs_service() {
 
     for (i, op) in operations.into_iter().enumerate() {
         println!("📤 Sending operation {}: {:?}", i, op);
-        
+
         match client_in.send(op).await {
             Ok(_) => {
                 println!("✅ Operation {} sent successfully", i);
-                
+
                 // For GET operations, try to get a response
                 if i >= 2 {
                     // Give more time for sharded operations to complete
@@ -281,12 +281,14 @@ async fn test_sharded_kvs_service() {
                                 2 => assert!(
                                     response.contains("shard_key_0")
                                         && response.contains("value_0"),
-                                    "Expected shard_key_0 with value_0, got: {}", response
+                                    "Expected shard_key_0 with value_0, got: {}",
+                                    response
                                 ),
                                 3 => assert!(
                                     response.contains("shard_key_1")
                                         && response.contains("value_1"),
-                                    "Expected shard_key_1 with value_1, got: {}", response
+                                    "Expected shard_key_1 with value_1, got: {}",
+                                    response
                                 ),
                                 4 => assert_eq!(response, "GET nonexistent = NOT FOUND"),
                                 _ => {}
@@ -296,14 +298,17 @@ async fn test_sharded_kvs_service() {
                             println!("⚠️  Operation {}: No response (connection closed)", i)
                         }
                         Err(_) => {
-                            println!("⚠️  Operation {}: Timeout - this might indicate a sharding issue", i);
+                            println!(
+                                "⚠️  Operation {}: Timeout - this might indicate a sharding issue",
+                                i
+                            );
                             // Don't fail the test on timeout for now, just log it
                         }
                     }
                 } else {
                     println!("✅ Operation {}: PUT completed", i);
                 }
-                
+
                 // Wait between all operations to ensure proper sequencing
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }

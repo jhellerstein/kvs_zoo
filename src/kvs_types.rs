@@ -69,14 +69,17 @@ pub type StringKVSShardedReplicated = KVSShardedReplicated<String>;
 // Value-Specific Aliases
 // =============================================================================
 
+// Import value types to avoid crate:: path issues in staged code
+use crate::values::{CausalString, LwwWrapper};
+
 /// Local KVS with LWW wrapper values
-pub type KVSLocalLwwWrapper<T> = KVSLocalLww<crate::values::LwwWrapper<T>>;
+pub type KVSLocalLwwWrapper<T> = KVSLocalLww<LwwWrapper<T>>;
 
 /// Replicated KVS with causal values (most common for replicated systems)
-pub type KVSReplicatedCausal = KVSReplicatedEpidemicGossip<crate::values::CausalString>;
+pub type KVSReplicatedCausal = KVSReplicatedEpidemicGossip<CausalString>;
 
 /// Sharded + Replicated KVS with causal values (recommended for production)
-pub type KVSShardedReplicatedCausal = KVSShardedReplicated<crate::values::CausalString>;
+pub type KVSShardedReplicatedCausal = KVSShardedReplicated<CausalString>;
 
 /// Sharded + Replicated KVS with LWW values (simpler conflict resolution)
-pub type KVSShardedReplicatedLww = KVSShardedReplicated<crate::values::LwwWrapper<String>>;
+pub type KVSShardedReplicatedLww = KVSShardedReplicated<LwwWrapper<String>>;

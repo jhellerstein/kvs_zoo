@@ -35,16 +35,18 @@
 //! let replication: BroadcastReplication<String> = BroadcastReplication::default();
 //! ```
 
-pub mod gossip;
 pub mod broadcast;
+pub mod gossip;
+pub mod logbased;
 
 use crate::core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Re-export replication strategies for convenience
-pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
+pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
+pub use logbased::LogBased;
 
 /// Core trait for replication strategies
 ///
@@ -52,7 +54,7 @@ pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
 /// operating independently of operation processing. They ensure data consistency
 /// and availability across the distributed system.
 pub trait ReplicationStrategy<V> {
-    /// Replicate data across the cluster
+    /// Replicate data across the cluster (unordered)
     ///
     /// Takes a stream of local data updates and returns a stream of replicated
     /// data received from other nodes. The strategy determines how data is
@@ -64,6 +66,30 @@ pub trait ReplicationStrategy<V> {
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
+
+    /// Replicate slotted data across the cluster (ordered by slot)
+    ///
+    /// Takes a stream of slot-indexed data updates and returns a stream of
+    /// replicated data received from other nodes, maintaining slot ordering.
+    /// This is used by consensus protocols like Paxos to ensure operations
+    /// are applied in the same order across all replicas.
+    ///
+    /// Default implementation simply strips slots and uses unordered replication.
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Default: strip slots, replicate unordered (loses ordering guarantees)
+        // Note: This doesn't preserve slots properly - use LogBased wrapper for proper ordering
+        let unslotted = local_slotted_data.map(q!(|(_slot, key, value)| (key, value)));
+        let replicated = self.replicate_data(cluster, unslotted);
+        // Re-add dummy slot 0 (ordering is lost)
+        replicated.map(q!(|(key, value)| (0usize, key, value)))
+    }
 }
 
 /// No-op replication strategy for single-node systems

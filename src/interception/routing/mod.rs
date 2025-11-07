@@ -6,7 +6,7 @@
 //!
 //! ## Available Routers
 //!
-//! - **LocalRouter**: Broadcasts operations to all nodes (single-node or fully replicated)
+//! - **SingleNodeRouter**: Routes all operations to a single node (member 0). Formerly LocalRouter.
 //! - **RoundRobinRouter**: Distributes operations across replicas using round-robin
 //! - **ShardedRouter**: Partitions operations by key hash for horizontal scaling
 //!
@@ -17,7 +17,7 @@
 //! use kvs_zoo::interception::OpInterceptExt;
 //!
 //! // Simple local routing
-//! let local = LocalRouter::new();
+//! let local = SingleNodeRouter::new();
 //!
 //! // Load balancing across replicas
 //! let round_robin = RoundRobinRouter::new();
@@ -30,12 +30,12 @@
 //! ```
 
 // Module declarations for routing interceptors
-pub mod local;
 pub mod round_robin;
 pub mod sharded;
+pub mod single_node;
 
 // Re-export routing interceptor types for convenience
-pub use local::LocalRouter;
+pub use single_node::SingleNodeRouter;
 pub use round_robin::RoundRobinRouter;
 pub use sharded::ShardedRouter;
 
@@ -47,18 +47,18 @@ mod tests {
     #[test]
     fn test_router_composition_with_pipeline() {
         // Test that routers can be composed using Pipeline
-        let local = LocalRouter::new();
+        let local = SingleNodeRouter::new();
         let round_robin = RoundRobinRouter::new();
         let sharded = ShardedRouter::new(3);
 
         // Test binary composition
-        let _local_then_round_robin: Pipeline<LocalRouter, RoundRobinRouter> =
+        let _local_then_round_robin: Pipeline<SingleNodeRouter, RoundRobinRouter> =
             Pipeline::new(local.clone(), round_robin.clone());
 
         let _sharded_then_round_robin: Pipeline<ShardedRouter, RoundRobinRouter> =
             Pipeline::new(sharded.clone(), round_robin.clone());
 
-        let _round_robin_then_local: Pipeline<RoundRobinRouter, LocalRouter> =
+        let _round_robin_then_local: Pipeline<RoundRobinRouter, SingleNodeRouter> =
             Pipeline::new(round_robin, local);
     }
 
@@ -67,18 +67,18 @@ mod tests {
         // Test that composition creates the expected nested types
         let sharded = ShardedRouter::new(5);
         let round_robin = RoundRobinRouter::new();
-        let local = LocalRouter::new();
+        let local = SingleNodeRouter::new();
 
         // Test two-level composition
         let sharded_round_robin: Pipeline<ShardedRouter, RoundRobinRouter> =
             Pipeline::new(sharded, round_robin);
 
         // Test three-level composition
-        let complex_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, LocalRouter> =
+        let complex_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, SingleNodeRouter> =
             Pipeline::new(sharded_round_robin, local);
 
         // Verify the type structure is correct (this compiles = correct types)
-        let _typed_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, LocalRouter> =
+        let _typed_pipeline: Pipeline<Pipeline<ShardedRouter, RoundRobinRouter>, SingleNodeRouter> =
             complex_pipeline;
     }
 
@@ -93,7 +93,7 @@ mod tests {
 
         // Pattern: LocalRouter (single interceptor)
         // This matches LocalKVSServer<V>
-        let _local_only = LocalRouter::new();
+        let _local_only = SingleNodeRouter::new();
 
         // Pattern: RoundRobinRouter (single interceptor)
         // This matches ReplicatedKVSServer<V>
@@ -106,7 +106,7 @@ mod tests {
 
         fn _test_traits<V>(_router: impl OpInterceptExt<V> + Clone + std::fmt::Debug) {}
 
-        _test_traits::<String>(LocalRouter::new());
+        _test_traits::<String>(SingleNodeRouter::new());
         _test_traits::<String>(RoundRobinRouter::new());
         _test_traits::<String>(ShardedRouter::new(3));
     }
@@ -116,15 +116,15 @@ mod tests {
         // Test different ordering possibilities as mentioned in requirements
         let sharded = ShardedRouter::new(3);
         let round_robin = RoundRobinRouter::new();
-        let local = LocalRouter::new();
+        let local = SingleNodeRouter::new();
 
         // Different valid orderings
         let _order1: Pipeline<ShardedRouter, RoundRobinRouter> =
             Pipeline::new(sharded.clone(), round_robin.clone());
         let _order2: Pipeline<RoundRobinRouter, ShardedRouter> =
             Pipeline::new(round_robin.clone(), sharded.clone());
-        let _order3: Pipeline<LocalRouter, ShardedRouter> = Pipeline::new(local.clone(), sharded);
-        let _order4: Pipeline<RoundRobinRouter, LocalRouter> = Pipeline::new(round_robin, local);
+        let _order3: Pipeline<SingleNodeRouter, ShardedRouter> = Pipeline::new(local.clone(), sharded);
+        let _order4: Pipeline<RoundRobinRouter, SingleNodeRouter> = Pipeline::new(round_robin, local);
 
         // All should compile, demonstrating flexible ordering
     }

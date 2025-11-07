@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 // Type aliases for server ports
 type ServerBidiPort<V> =
     ExternalBincodeBidi<KVSOperation<V>, String, hydro_lang::location::external_process::Many>;
-type ServerPorts<V> = ServerBidiPort<V>;
+pub type ServerPorts<V> = ServerBidiPort<V>;
 
 /// Abstraction over KVS servers that can be either single nodes or clusters
 ///
@@ -40,8 +40,6 @@ type ServerPorts<V> = ServerBidiPort<V>;
 ///
 /// The trait now includes associated types for operation pipelines and replication
 /// strategies, enabling symmetric composition between servers and their processing logic.
-///
-
 pub trait KVSServer<V>
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
@@ -115,7 +113,7 @@ where
         + Sync
         + 'static,
 {
-    type OpPipeline = crate::interception::LocalRouter;
+    type OpPipeline = crate::interception::SingleNodeRouter;
     type ReplicationStrategy = ();
     type Deployment<'a> = Cluster<'a, KVSNode>;
 
@@ -437,28 +435,30 @@ where
 /// Type alias for common server compositions to reduce repetition
 pub mod compositions {
     use super::*;
-    
+    // Import replication strategies to avoid crate:: path issues in staged code
+    use crate::replication::{BroadcastReplication, EpidemicGossip, NoReplication};
+
     /// Local KVS with inferred value type
     pub type Local<V> = LocalKVSServer<V>;
-    
+
     /// Replicated KVS with inferred value type and default replication
-    pub type Replicated<V> = ReplicatedKVSServer<V, crate::replication::NoReplication>;
-    
+    pub type Replicated<V> = ReplicatedKVSServer<V, NoReplication>;
+
     /// Replicated KVS with gossip replication
-    pub type ReplicatedGossip<V> = ReplicatedKVSServer<V, crate::replication::EpidemicGossip<V>>;
-    
+    pub type ReplicatedGossip<V> = ReplicatedKVSServer<V, EpidemicGossip<V>>;
+
     /// Replicated KVS with broadcast replication  
-    pub type ReplicatedBroadcast<V> = ReplicatedKVSServer<V, crate::replication::BroadcastReplication<V>>;
-    
+    pub type ReplicatedBroadcast<V> = ReplicatedKVSServer<V, BroadcastReplication<V>>;
+
     /// Sharded local KVS
     pub type ShardedLocal<V> = ShardedKVSServer<Local<V>>;
-    
+
     /// Sharded replicated KVS with default replication
     pub type ShardedReplicated<V> = ShardedKVSServer<Replicated<V>>;
-    
+
     /// Sharded replicated KVS with gossip replication
     pub type ShardedReplicatedGossip<V> = ShardedKVSServer<ReplicatedGossip<V>>;
-    
+
     /// Sharded replicated KVS with broadcast replication
     pub type ShardedReplicatedBroadcast<V> = ShardedKVSServer<ReplicatedBroadcast<V>>;
 }
@@ -483,7 +483,7 @@ mod tests {
         println!("✅ Server types compile!");
 
         // Test size calculations with new trait signature
-        let local_pipeline = crate::interception::LocalRouter::new();
+        let local_pipeline = crate::interception::SingleNodeRouter::new();
         let local_replication = ();
         println!(
             "   LocalKVS size: {}",
@@ -501,7 +501,7 @@ mod tests {
 
         let sharded_local_pipeline = crate::interception::Pipeline::new(
             crate::interception::ShardedRouter::new(3),
-            crate::interception::LocalRouter::new(),
+            crate::interception::SingleNodeRouter::new(),
         );
         let sharded_local_replication = ();
         println!(
@@ -533,7 +533,7 @@ mod tests {
         let flow = FlowBuilder::new();
 
         // Test that deployments can be created with new trait signature
-        let local_pipeline = crate::interception::LocalRouter::new();
+        let local_pipeline = crate::interception::SingleNodeRouter::new();
         let local_replication = ();
         let _local_deployment = <LocalKVSServer<String> as KVSServer<String>>::create_deployment(
             &flow,
@@ -554,7 +554,7 @@ mod tests {
 
         let sharded_local_pipeline = crate::interception::Pipeline::new(
             crate::interception::ShardedRouter::new(3),
-            crate::interception::LocalRouter::new(),
+            crate::interception::SingleNodeRouter::new(),
         );
         let sharded_local_replication = ();
         let _sharded_local_deployments = <ShardedKVSServer<LocalKVSServer<String>> as KVSServer<
@@ -592,7 +592,7 @@ mod tests {
         type LocalReplication = <LocalServer as KVSServer<String>>::ReplicationStrategy;
 
         // Verify types match expected structure
-        let _local_pipeline: LocalPipeline = crate::interception::LocalRouter::new();
+        let _local_pipeline: LocalPipeline = crate::interception::SingleNodeRouter::new();
         let _local_replication: LocalReplication = ();
 
         // ReplicatedKVSServer should use RoundRobinRouter and configurable replication
@@ -615,7 +615,7 @@ mod tests {
 
         let _sharded_local_pipeline: ShardedLocalPipeline = crate::interception::Pipeline::new(
             crate::interception::ShardedRouter::new(3),
-            crate::interception::LocalRouter::new(),
+            crate::interception::SingleNodeRouter::new(),
         );
         let _sharded_local_replication: ShardedLocalReplication = ();
 
@@ -666,7 +666,7 @@ mod tests {
         // These should be concrete types, not trait objects
         assert_eq!(
             std::mem::size_of::<LocalPipeline>(),
-            std::mem::size_of::<crate::interception::LocalRouter>()
+            std::mem::size_of::<crate::interception::SingleNodeRouter>()
         );
         assert_eq!(
             std::mem::size_of::<LocalReplication>(),
@@ -717,7 +717,7 @@ mod tests {
         }
 
         _different_types(
-            crate::interception::LocalRouter::new(),
+            crate::interception::SingleNodeRouter::new(),
             crate::interception::RoundRobinRouter::new(),
         );
 

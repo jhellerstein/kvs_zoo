@@ -22,12 +22,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Example 1: Gossip replication (suitable for large clusters)
-    println!("📋 Example 1: Gossip Replication");
+    println!("📋 Example: Gossip Replication");
+
+    // The intercept's job for KVSReplicated is just to load-balance requests across the cluster.
+    // We use RoundRobinRouter to achieve that.
     let op_pipeline = kvs_zoo::interception::RoundRobinRouter::new();
+    // The ReplicatedKVSServer needs to be set up with a replication protocol.
+    // As an example, we'll use async background Gossip replication (suitable for large clusters)
+    // We could have chosen Broadcast replication instead, which can run synchronously
+    // or in the background.
     // Use small_cluster config for faster gossip (500ms interval instead of 1s)
     let gossip_replication = kvs_zoo::replication::EpidemicGossip::with_config(
-        kvs_zoo::replication::EpidemicGossipConfig::small_cluster()
+        kvs_zoo::replication::EpidemicGossipConfig::small_cluster(),
     );
 
     let kvs_cluster = ReplicatedKVSServer::<CausalString, _>::create_deployment(
@@ -62,9 +68,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo operations
     let put_operations = vec![
-        KVSOperation::Put("user:1".to_string(), CausalString::new(VCWrapper::new(), "Alice".to_string())),
-        KVSOperation::Put("user:2".to_string(), CausalString::new(VCWrapper::new(), "Bob".to_string())),
-        KVSOperation::Put("user:1".to_string(), CausalString::new(VCWrapper::new(), "Alice Updated".to_string())),
+        KVSOperation::Put(
+            "user:1".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:2".to_string(),
+            CausalString::new(VCWrapper::new(), "Bob".to_string()),
+        ),
+        KVSOperation::Put(
+            "user:1".to_string(),
+            CausalString::new(VCWrapper::new(), "Alice Updated".to_string()),
+        ),
     ];
     let get_operations = vec![
         KVSOperation::Get("user:1".to_string()),
@@ -88,14 +103,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             println!("     → {}", response);
         }
-   }
+    }
 
     // Wait for gossip replication (small_cluster config: 500ms interval, wait 6x)
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
 
-   for (i, op) in get_operations.into_iter().enumerate() {
+    for (i, op) in get_operations.into_iter().enumerate() {
         println!("  {} {:?}", i + 1, op);
-
 
         if let Err(e) = client_in.send(op).await {
             eprintln!("❌ Error: {}", e);
@@ -110,17 +124,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             println!("     → {}", response);
         }
-   }
- 
+    }
 
-    println!("✅ Gossip replication demo completed");
-    println!();
-    println!("🎓 Replication Strategy Notes:");
-    println!("   • This example uses EpidemicGossip for eventual consistency");
-    println!("   • Alternative: BroadcastReplication for stronger consistency");
-    println!("   • Both strategies work with the same RoundRobinRouter pipeline");
-    println!("   • The composable architecture separates routing from replication concerns");
-
+    println!("✅ Demo completed");
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     Ok(())
