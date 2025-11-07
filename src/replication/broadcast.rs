@@ -122,7 +122,7 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -134,7 +134,7 @@ where
 
     // Ordered logs with "slots" (positions) need to be replicated for ordered "replay".
     // See logbased.rs.
-    fn replicate_slotted_data<'a>(
+    fn maintain_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,

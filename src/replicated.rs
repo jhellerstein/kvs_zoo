@@ -45,7 +45,7 @@ impl<R> KVSReplicated<R> {
         // Use replication strategy to get remote operations
         let replication_strategy = R::default();
         let remote_put_tuples =
-            replication_strategy.replicate_data(cluster, local_put_tuples.clone());
+            replication_strategy.maintain_data(cluster, local_put_tuples.clone());
 
         // Combine local and remote operations
         let all_put_tuples = local_put_tuples.interleave(remote_put_tuples);

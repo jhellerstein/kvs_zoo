@@ -36,7 +36,7 @@
 //! 6. GETs read from an LWW snapshot; slot numbers are not needed for read paths.
 //!
 //! Notes:
-//! - `replication.replicate_slotted_data(..)` is where a strategy (like LogBased) can
+//! - `replication.maintain_slotted_data(..)` is where a strategy (like LogBased) can
 //!   use the slot numbers to guarantee consistent replication ordering.
 //! - The round-robin stage maintains Paxos order because slot numbers are carried
 //!   through dispatch until replication completes.
@@ -201,7 +201,7 @@ where
 
         // Use replication strategy for PUT operations with slot numbers
         let replicated_data_slotted =
-            replication.replicate_slotted_data(kvs_cluster, put_tuples_slotted.clone());
+            replication.maintain_slotted_data(kvs_cluster, put_tuples_slotted.clone());
 
         // Combine local and replicated PUTs (all slotted)
         let all_put_tuples_slotted = put_tuples_slotted

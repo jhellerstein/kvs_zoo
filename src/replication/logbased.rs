@@ -84,7 +84,7 @@ where
     R: ReplicationStrategy<V>,
 {
     /// Unordered replication delegates to inner strategy
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -92,11 +92,11 @@ where
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        self.inner.replicate_data(cluster, local_data)
+        self.inner.maintain_data(cluster, local_data)
     }
 
     /// Slotted replication with gap-filling sequencing
-    fn replicate_slotted_data<'a>(
+    fn maintain_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -128,7 +128,7 @@ impl<R> LogBased<R> {
         R: ReplicationStrategy<V>,
     {
         self.inner
-            .replicate_slotted_data(cluster, local_slotted_data)
+            .maintain_slotted_data(cluster, local_slotted_data)
     }
 }
 

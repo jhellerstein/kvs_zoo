@@ -142,7 +142,7 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,

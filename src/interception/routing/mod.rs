@@ -13,10 +13,10 @@
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::interception::routing::{LocalRouter, RoundRobinRouter, ShardedRouter};
+//! use kvs_zoo::interception::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
 //! use kvs_zoo::interception::OpInterceptExt;
 //!
-//! // Simple local routing
+//! // Simple single-node routing
 //! let local = SingleNodeRouter::new();
 //!
 //! // Load balancing across replicas

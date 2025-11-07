@@ -54,12 +54,12 @@ pub use logbased::LogBased;
 /// operating independently of operation processing. They ensure data consistency
 /// and availability across the distributed system.
 pub trait ReplicationStrategy<V> {
-    /// Replicate data across the cluster (unordered)
+    /// Maintain data across the cluster (unordered)
     ///
-    /// Takes a stream of local data updates and returns a stream of replicated
-    /// data received from other nodes. The strategy determines how data is
+    /// Takes a stream of local data updates and returns a stream of data
+    /// maintained by other nodes. The strategy determines how data is
     /// synchronized (gossip, broadcast, etc.).
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -67,15 +67,15 @@ pub trait ReplicationStrategy<V> {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 
-    /// Replicate slotted data across the cluster (ordered by slot)
+    /// Maintain slotted data across the cluster (ordered by slot)
     ///
     /// Takes a stream of slot-indexed data updates and returns a stream of
-    /// replicated data received from other nodes, maintaining slot ordering.
+    /// maintained data received from other nodes, maintaining slot ordering.
     /// This is used by consensus protocols like Paxos to ensure operations
     /// are applied in the same order across all replicas.
     ///
-    /// Default implementation simply strips slots and uses unordered replication.
-    fn replicate_slotted_data<'a>(
+    /// Default implementation simply strips slots and uses unordered maintenance.
+    fn maintain_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -83,12 +83,12 @@ pub trait ReplicationStrategy<V> {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // Default: strip slots, replicate unordered (loses ordering guarantees)
+        // Default: strip slots, maintain unordered (loses ordering guarantees)
         // Note: This doesn't preserve slots properly - use LogBased wrapper for proper ordering
         let unslotted = local_slotted_data.map(q!(|(_slot, key, value)| (key, value)));
-        let replicated = self.replicate_data(cluster, unslotted);
+        let maintained = self.maintain_data(cluster, unslotted);
         // Re-add dummy slot 0 (ordering is lost)
-        replicated.map(q!(|(key, value)| (0usize, key, value)))
+        maintained.map(q!(|(key, value)| (0usize, key, value)))
     }
 }
 
@@ -109,7 +109,7 @@ impl NoReplication {
 }
 
 impl<V> ReplicationStrategy<V> for NoReplication {
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
@@ -127,7 +127,7 @@ impl<V> ReplicationStrategy<V> for NoReplication {
 /// The unit type `()` can be used as a convenient no-op replication strategy,
 /// providing the same behavior as NoReplication with even less overhead.
 impl<V> ReplicationStrategy<V> for () {
-    fn replicate_data<'a>(
+    fn maintain_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
