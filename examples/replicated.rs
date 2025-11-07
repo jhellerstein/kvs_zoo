@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The intercept's job for KVSReplicated is just to load-balance requests across the cluster.
     // We use RoundRobinRouter to achieve that.
-    let op_pipeline = kvs_zoo::interception::RoundRobinRouter::new();
+    let op_pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
     // The ReplicatedKVSServer needs to be set up with a replication protocol.
     // As an example, we'll use async background Gossip replication (suitable for large clusters)
     // We could have chosen Broadcast replication instead, which can run synchronously

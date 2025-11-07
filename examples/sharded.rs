@@ -30,9 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // where they are handled locally.
     // There is no replication in this example, it's simply sharded.
     type ShardedLocal = ShardedKVSServer<LocalKVSServer<String>>;
-    let pipeline1 = kvs_zoo::interception::Pipeline::new(
-        kvs_zoo::interception::ShardedRouter::new(3),
-        kvs_zoo::interception::SingleNodeRouter::new(),
+    let pipeline1 = kvs_zoo::dispatch::Pipeline::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::dispatch::SingleNodeRouter::new(),
     );
     let replication1 = ();
 
@@ -97,9 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Symmetric composition: more complex nesting
     type ShardedReplicated =
         ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>>;
-    let pipeline2 = kvs_zoo::interception::Pipeline::new(
-        kvs_zoo::interception::ShardedRouter::new(3),
-        kvs_zoo::interception::RoundRobinRouter::new(),
+    let pipeline2 = kvs_zoo::dispatch::Pipeline::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
     );
     let replication2 = kvs_zoo::maintain::NoReplication::new();
 

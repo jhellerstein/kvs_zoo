@@ -4,7 +4,7 @@
 //! operation processing at each replica, ensuring linearizability
 //! guarantees are preserved.
 
-use kvs_zoo::interception::PaxosInterceptor;
+use kvs_zoo::dispatch::PaxosInterceptor;
 use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::KVSServer;

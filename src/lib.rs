@@ -2,7 +2,7 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod config;
 pub mod core;
-pub mod interception;
+pub mod dispatch;
 pub mod kvs_types;
 pub mod linearizable;
 pub mod lww;

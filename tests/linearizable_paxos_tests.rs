@@ -6,7 +6,7 @@
 //! 3. The LogBased replication correctly sequences operations
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::interception::PaxosInterceptor;
+use kvs_zoo::dispatch::PaxosInterceptor;
 use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::maintain::LogBased;
 use kvs_zoo::protocol::KVSOperation;

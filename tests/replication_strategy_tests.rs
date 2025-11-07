@@ -103,14 +103,14 @@ async fn test_replicated_kvs_with_no_replication() {
     // Create replicated KVS server with NoReplication using CausalString
     let kvs_cluster = ReplicatedKVSServer::<CausalString, NoReplication>::create_deployment(
         &flow,
-        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
         NoReplication::new(),
     );
     let client_port = ReplicatedKVSServer::<CausalString, NoReplication>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
         NoReplication::new(),
     );
 
@@ -175,14 +175,14 @@ async fn test_replicated_kvs_with_epidemic_gossip() {
     let kvs_cluster =
         ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::create_deployment(
             &flow,
-            kvs_zoo::interception::RoundRobinRouter::new(),
+            kvs_zoo::dispatch::RoundRobinRouter::new(),
             EpidemicGossip::with_config(gossip_config),
         );
     let client_port = ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
         EpidemicGossip::with_config(kvs_zoo::maintain::EpidemicGossipConfig::small_cluster()),
     );
 
@@ -255,14 +255,14 @@ async fn test_replicated_kvs_with_broadcast_replication() {
     let kvs_cluster =
         ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::create_deployment(
             &flow,
-            kvs_zoo::interception::RoundRobinRouter::new(),
+            kvs_zoo::dispatch::RoundRobinRouter::new(),
             BroadcastReplication::with_config(broadcast_config),
         );
     let client_port = ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
         BroadcastReplication::with_config(
             kvs_zoo::maintain::BroadcastReplicationConfig::low_latency(),
         ),

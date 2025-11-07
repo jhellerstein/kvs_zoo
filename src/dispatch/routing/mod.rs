@@ -13,8 +13,8 @@
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::interception::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
-//! use kvs_zoo::interception::OpInterceptExt;
+//! use kvs_zoo::dispatch::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
+//! use kvs_zoo::dispatch::OpInterceptExt;
 //!
 //! // Simple single-node routing
 //! let local = SingleNodeRouter::new();
@@ -26,7 +26,7 @@
 //! let sharded = ShardedRouter::new(3);
 //!
 //! // Manual pipeline composition
-//! let pipeline = kvs_zoo::interception::Pipeline::new(sharded, round_robin);
+//! let pipeline = kvs_zoo::dispatch::Pipeline::new(sharded, round_robin);
 //! ```
 
 // Module declarations for routing interceptors
@@ -42,7 +42,7 @@ pub use single_node::SingleNodeRouter;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::{OpInterceptExt, Pipeline};
+    use crate::dispatch::{OpInterceptExt, Pipeline};
 
     #[test]
     fn test_router_composition_with_pipeline() {

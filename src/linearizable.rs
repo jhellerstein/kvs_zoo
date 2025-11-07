@@ -47,7 +47,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::core::KVSNode;
-use crate::interception::{PaxosConfig, PaxosInterceptor};
+use crate::dispatch::{PaxosConfig, PaxosInterceptor};
 use crate::maintain::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use crate::server::KVSServer;
@@ -124,8 +124,8 @@ where
     /// Returns (KVS cluster, Proposer cluster, Acceptor cluster)
     type Deployment<'a> = (
         Cluster<'a, KVSNode>,
-        Cluster<'a, crate::interception::paxos_core::Proposer>,
-        Cluster<'a, crate::interception::paxos_core::Acceptor>,
+        Cluster<'a, crate::dispatch::paxos_core::Proposer>,
+        Cluster<'a, crate::dispatch::paxos_core::Acceptor>,
     );
 
     fn create_deployment<'a>(
@@ -134,8 +134,8 @@ where
         _replication: Self::ReplicationStrategy,
     ) -> Self::Deployment<'a> {
         let kvs_cluster = flow.cluster::<KVSNode>();
-        let proposers = flow.cluster::<crate::interception::paxos_core::Proposer>();
-        let acceptors = flow.cluster::<crate::interception::paxos_core::Acceptor>();
+        let proposers = flow.cluster::<crate::dispatch::paxos_core::Proposer>();
+        let acceptors = flow.cluster::<crate::dispatch::paxos_core::Acceptor>();
         (kvs_cluster, proposers, acceptors)
     }
 
@@ -262,7 +262,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::PaxosConfig;
+    use crate::dispatch::PaxosConfig;
     use crate::values::LwwWrapper;
 
     #[test]

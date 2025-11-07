@@ -42,14 +42,14 @@ async fn test_local_kvs_service() {
     // Create local KVS server
     let kvs_cluster = LocalKVSServer::<String>::create_deployment(
         &flow,
-        kvs_zoo::interception::SingleNodeRouter::new(),
+        kvs_zoo::dispatch::SingleNodeRouter::new(),
         (),
     );
     let client_port = LocalKVSServer::<String>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::SingleNodeRouter::new(),
+        kvs_zoo::dispatch::SingleNodeRouter::new(),
         (),
     );
 
@@ -123,14 +123,14 @@ async fn test_replicated_kvs_service() {
     let kvs_cluster =
         ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::create_deployment(
             &flow,
-            kvs_zoo::interception::RoundRobinRouter::new(),
+            kvs_zoo::dispatch::RoundRobinRouter::new(),
             kvs_zoo::maintain::NoReplication::new(),
         );
     let client_port = ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
         kvs_zoo::maintain::NoReplication::new(),
     );
 
@@ -212,9 +212,9 @@ async fn test_sharded_kvs_service() {
     // Create sharded KVS server
     let shard_deployments = ShardedKVSServer::<LocalKVSServer<String>>::create_deployment(
         &flow,
-        kvs_zoo::interception::Pipeline::new(
-            kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::SingleNodeRouter::new(),
+        kvs_zoo::dispatch::Pipeline::new(
+            kvs_zoo::dispatch::ShardedRouter::new(3),
+            kvs_zoo::dispatch::SingleNodeRouter::new(),
         ),
         (),
     );
@@ -222,9 +222,9 @@ async fn test_sharded_kvs_service() {
         &proxy,
         &shard_deployments,
         &client_external,
-        kvs_zoo::interception::Pipeline::new(
-            kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::SingleNodeRouter::new(),
+        kvs_zoo::dispatch::Pipeline::new(
+            kvs_zoo::dispatch::ShardedRouter::new(3),
+            kvs_zoo::dispatch::SingleNodeRouter::new(),
         ),
         (),
     );
@@ -250,7 +250,7 @@ async fn test_sharded_kvs_service() {
     // Let's verify which shards these keys map to
     println!("🔍 Shard mapping verification:");
     for key in &["shard_key_0", "shard_key_1", "nonexistent"] {
-        let shard = kvs_zoo::interception::ShardedRouter::calculate_shard_id(key, 3);
+        let shard = kvs_zoo::dispatch::ShardedRouter::calculate_shard_id(key, 3);
         println!("  {} -> shard {}", key, shard);
     }
 
@@ -342,9 +342,9 @@ async fn test_sharded_replicated_kvs_service() {
         ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>,
     >::create_deployment(
         &flow,
-        kvs_zoo::interception::Pipeline::new(
-            kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::Pipeline::new(
+            kvs_zoo::dispatch::ShardedRouter::new(3),
+            kvs_zoo::dispatch::RoundRobinRouter::new(),
         ),
         kvs_zoo::maintain::NoReplication::new(),
     );
@@ -354,9 +354,9 @@ async fn test_sharded_replicated_kvs_service() {
         &proxy,
         &shard_deployments,
         &client_external,
-        kvs_zoo::interception::Pipeline::new(
-            kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::RoundRobinRouter::new(),
+        kvs_zoo::dispatch::Pipeline::new(
+            kvs_zoo::dispatch::ShardedRouter::new(3),
+            kvs_zoo::dispatch::RoundRobinRouter::new(),
         ),
         kvs_zoo::maintain::NoReplication::new(),
     );
