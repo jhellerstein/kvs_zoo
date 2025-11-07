@@ -55,7 +55,10 @@ impl<V> OpIntercept<V> for SingleNodeRouter {
         // Route all operations to a single local member (member 0)
         // This avoids broadcast and acts as a no-op in single-node clusters.
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
             .demux_bincode(cluster)
     }

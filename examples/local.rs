@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // to do things like order or route the inbound operations.
     // It might also have a replication strategy like Broadcast or Epidemic Gossip.
     // But here we'll just create no-ops for each!
-    let op_pipeline = kvs_zoo::interception::LocalRouter::new();
+    let op_pipeline = kvs_zoo::interception::SingleNodeRouter::new();
     let replication = (); // No replication for single node
 
     // Create a deployment using the server API

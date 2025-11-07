@@ -42,14 +42,14 @@ async fn test_local_kvs_service() {
     // Create local KVS server
     let kvs_cluster = LocalKVSServer::<String>::create_deployment(
         &flow,
-        kvs_zoo::interception::LocalRouter::new(),
+        kvs_zoo::interception::SingleNodeRouter::new(),
         (),
     );
     let client_port = LocalKVSServer::<String>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
-        kvs_zoo::interception::LocalRouter::new(),
+        kvs_zoo::interception::SingleNodeRouter::new(),
         (),
     );
 
@@ -214,7 +214,7 @@ async fn test_sharded_kvs_service() {
         &flow,
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::LocalRouter::new(),
+            kvs_zoo::interception::SingleNodeRouter::new(),
         ),
         (),
     );
@@ -224,7 +224,7 @@ async fn test_sharded_kvs_service() {
         &client_external,
         kvs_zoo::interception::Pipeline::new(
             kvs_zoo::interception::ShardedRouter::new(3),
-            kvs_zoo::interception::LocalRouter::new(),
+            kvs_zoo::interception::SingleNodeRouter::new(),
         ),
         (),
     );

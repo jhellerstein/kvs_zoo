@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     type ShardedLocal = ShardedKVSServer<LocalKVSServer<String>>;
     let pipeline1 = kvs_zoo::interception::Pipeline::new(
         kvs_zoo::interception::ShardedRouter::new(3),
-        kvs_zoo::interception::LocalRouter::new(),
+        kvs_zoo::interception::SingleNodeRouter::new(),
     );
     let replication1 = ();
 
