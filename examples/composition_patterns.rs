@@ -41,10 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 Pattern 4: Linearizable KVS (Paxos consensus for strongest consistency)");
     type LinearizableComposition = LinearizableKVSServer<
         CausalWrapper<String>,
-        kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>
+        kvs_zoo::replication::LogBased<kvs_zoo::replication::BroadcastReplication<CausalWrapper<String>>>
     >;
-    println!("   ✅ LinearizableKVSServer<CausalWrapper<String>, BroadcastReplication<CausalWrapper<String>>>");
-    println!("   📖 Paxos consensus provides linearizability - strongest consistency model");
+    println!("   ✅ LinearizableKVSServer<CausalWrapper<String>, LogBased<BroadcastReplication<CausalWrapper<String>>>>");
+    println!("   📖 Paxos provides global ordering, LogBased ensures sequential application with gap-filling");
     
     println!();
     println!("🎓 Educational Value Analysis:");
