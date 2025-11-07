@@ -5,7 +5,7 @@
 //! faster convergence than gossip protocols at the cost of higher message overhead.
 
 use crate::core::KVSNode;
-use crate::replication::ReplicationStrategy;
+use crate::maintain::ReplicationStrategy;
 use hydro_lang::prelude::*;
 use lattices::Merge;
 use serde::{Deserialize, Serialize};
@@ -305,7 +305,7 @@ mod tests {
             crate::values::CausalString,
         >::new());
         _accepts_replication_strategy::<crate::values::CausalString>(
-            crate::replication::EpidemicGossip::<crate::values::CausalString>::new(),
+            crate::maintain::EpidemicGossip::<crate::values::CausalString>::new(),
         );
     }
 

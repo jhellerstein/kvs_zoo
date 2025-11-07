@@ -8,7 +8,7 @@ pub mod linearizable;
 pub mod lww;
 pub mod protocol;
 pub mod replicated;
-pub mod replication;
+pub mod maintain;
 pub mod sequencing;
 pub mod sequential;
 pub mod server;

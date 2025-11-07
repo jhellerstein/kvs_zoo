@@ -96,12 +96,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Symmetric composition: more complex nesting
     type ShardedReplicated =
-        ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::replication::NoReplication>>;
+        ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>>;
     let pipeline2 = kvs_zoo::interception::Pipeline::new(
         kvs_zoo::interception::ShardedRouter::new(3),
         kvs_zoo::interception::RoundRobinRouter::new(),
     );
-    let replication2 = kvs_zoo::replication::NoReplication::new();
+    let replication2 = kvs_zoo::maintain::NoReplication::new();
 
     let deployment2 =
         ShardedReplicated::create_deployment(&flow2, pipeline2.clone(), replication2.clone());

@@ -22,7 +22,7 @@
 use crate::core::KVSNode;
 use crate::interception::OpIntercept;
 use crate::protocol::KVSOperation;
-use crate::replication::ReplicationStrategy;
+use crate::maintain::ReplicationStrategy;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ where
     ///
     /// Defines how data is synchronized between nodes in the background.
     /// Examples: (), NoReplication, EpidemicGossip, BroadcastReplication
-    type ReplicationStrategy: crate::replication::ReplicationStrategy<V>;
+    type ReplicationStrategy: crate::maintain::ReplicationStrategy<V>;
 
     /// The deployment unit for this service (could be a single process or cluster)
     type Deployment<'a>;
@@ -191,7 +191,7 @@ where
 }
 
 /// Replicated KVS server with configurable replication strategy
-pub struct ReplicatedKVSServer<V, R = crate::replication::NoReplication> {
+pub struct ReplicatedKVSServer<V, R = crate::maintain::NoReplication> {
     #[allow(dead_code)] // TODO: Use this field to make cluster size configurable
     cluster_size: usize,
     _phantom: std::marker::PhantomData<(V, R)>,
@@ -219,7 +219,7 @@ where
         + Send
         + Sync
         + 'static,
-    R: crate::replication::ReplicationStrategy<V>,
+    R: crate::maintain::ReplicationStrategy<V>,
 {
     type OpPipeline = crate::interception::RoundRobinRouter;
     type ReplicationStrategy = R;
@@ -436,7 +436,7 @@ where
 pub mod compositions {
     use super::*;
     // Import replication strategies to avoid crate:: path issues in staged code
-    use crate::replication::{BroadcastReplication, EpidemicGossip, NoReplication};
+    use crate::maintain::{BroadcastReplication, EpidemicGossip, NoReplication};
 
     /// Local KVS with inferred value type
     pub type Local<V> = LocalKVSServer<V>;
@@ -473,11 +473,11 @@ mod tests {
         let _local = LocalKVSServer::<String>::new();
         let _replicated: ReplicatedKVSServer<
             crate::values::CausalString,
-            crate::replication::NoReplication,
+            crate::maintain::NoReplication,
         > = ReplicatedKVSServer::new(3);
         let _sharded_local = ShardedKVSServer::<LocalKVSServer<String>>::new(3);
         let _sharded_replicated = ShardedKVSServer::<
-            ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
         >::new(3);
 
         println!("✅ Server types compile!");
@@ -491,10 +491,10 @@ mod tests {
         );
 
         let replicated_pipeline = crate::interception::RoundRobinRouter::new();
-        let replicated_replication = crate::replication::NoReplication::new();
+        let replicated_replication = crate::maintain::NoReplication::new();
         println!(
             "   ReplicatedKVS size: {}",
-            <ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication> as KVSServer<
+            <ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication> as KVSServer<
                 crate::values::CausalString,
             >>::size(replicated_pipeline, replicated_replication)
         );
@@ -516,11 +516,11 @@ mod tests {
             crate::interception::ShardedRouter::new(3),
             crate::interception::RoundRobinRouter::new(),
         );
-        let sharded_replicated_replication = crate::replication::NoReplication::new();
+        let sharded_replicated_replication = crate::maintain::NoReplication::new();
         println!(
             "   ShardedReplicatedKVS size: {}",
             <ShardedKVSServer<
-                ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication>,
+                ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
             > as KVSServer<crate::values::CausalString>>::size(
                 sharded_replicated_pipeline,
                 sharded_replicated_replication
@@ -542,10 +542,10 @@ mod tests {
         );
 
         let replicated_pipeline = crate::interception::RoundRobinRouter::new();
-        let replicated_replication = crate::replication::NoReplication::new();
+        let replicated_replication = crate::maintain::NoReplication::new();
         let _replicated_deployment = <ReplicatedKVSServer<
             crate::values::CausalString,
-            crate::replication::NoReplication,
+            crate::maintain::NoReplication,
         > as KVSServer<crate::values::CausalString>>::create_deployment(
             &flow,
             replicated_pipeline,
@@ -567,9 +567,9 @@ mod tests {
             crate::interception::ShardedRouter::new(3),
             crate::interception::RoundRobinRouter::new(),
         );
-        let sharded_replicated_replication = crate::replication::NoReplication::new();
+        let sharded_replicated_replication = crate::maintain::NoReplication::new();
         let _sharded_replicated_deployments = <ShardedKVSServer<
-            ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
         > as KVSServer<crate::values::CausalString>>::create_deployment(
             &flow,
             sharded_replicated_pipeline,
@@ -597,7 +597,7 @@ mod tests {
 
         // ReplicatedKVSServer should use RoundRobinRouter and configurable replication
         type ReplicatedServer =
-            ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication>;
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>;
         type ReplicatedPipeline =
             <ReplicatedServer as KVSServer<crate::values::CausalString>>::OpPipeline;
         type ReplicatedReplication =
@@ -605,7 +605,7 @@ mod tests {
 
         let _replicated_pipeline: ReplicatedPipeline = crate::interception::RoundRobinRouter::new();
         let _replicated_replication: ReplicatedReplication =
-            crate::replication::NoReplication::new();
+            crate::maintain::NoReplication::new();
 
         // ShardedKVSServer should use Pipeline<ShardedRouter, Inner::OpPipeline>
         type ShardedLocalServer = ShardedKVSServer<LocalKVSServer<String>>;
@@ -626,7 +626,7 @@ mod tests {
     async fn test_pipeline_composition_matches_server_composition() {
         // Test that ShardedKVSServer<ReplicatedKVSServer> has the expected pipeline type
         type ShardedReplicatedServer = ShardedKVSServer<
-            ReplicatedKVSServer<crate::values::CausalString, crate::replication::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
         >;
         type ExpectedPipeline = crate::interception::Pipeline<
             crate::interception::ShardedRouter,
@@ -641,7 +641,7 @@ mod tests {
 
         // Test that we can use this pipeline with the server
         let flow = FlowBuilder::new();
-        let replication = crate::replication::NoReplication::new();
+        let replication = crate::maintain::NoReplication::new();
         let _deployment =
             <ShardedReplicatedServer as KVSServer<crate::values::CausalString>>::create_deployment(
                 &flow,

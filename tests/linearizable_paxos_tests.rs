@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::interception::PaxosInterceptor;
 use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::replication::LogBased;
+use kvs_zoo::maintain::LogBased;
 use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
 
@@ -34,11 +34,11 @@ async fn test_paxos_provides_global_ordering() {
     // Create linearizable KVS with LogBased replication
     type TestKVS = LinearizableKVSServer<
         LwwWrapper<String>,
-        LogBased<kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>>,
+        LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let op_pipeline = PaxosInterceptor::new();
-    let replication = LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
+    let replication = LogBased::new(kvs_zoo::maintain::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =
         TestKVS::create_deployment(&flow, op_pipeline.clone(), replication.clone());
@@ -140,11 +140,11 @@ async fn test_linearizable_reads_see_writes() {
 
     type TestKVS = LinearizableKVSServer<
         LwwWrapper<String>,
-        LogBased<kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>>,
+        LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let op_pipeline = PaxosInterceptor::new();
-    let replication = LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
+    let replication = LogBased::new(kvs_zoo::maintain::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =
         TestKVS::create_deployment(&flow, op_pipeline.clone(), replication.clone());
@@ -230,11 +230,11 @@ async fn test_concurrent_operations_are_linearized() {
 
     type TestKVS = LinearizableKVSServer<
         LwwWrapper<String>,
-        LogBased<kvs_zoo::replication::BroadcastReplication<LwwWrapper<String>>>,
+        LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let op_pipeline = PaxosInterceptor::new();
-    let replication = LogBased::new(kvs_zoo::replication::BroadcastReplication::new());
+    let replication = LogBased::new(kvs_zoo::maintain::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =
         TestKVS::create_deployment(&flow, op_pipeline.clone(), replication.clone());
