@@ -5,8 +5,8 @@
 //! for participating in linearizability guarantees. It also defines the KVSNode marker
 //! type used for Hydro clusters.
 
-use hydro_lang::prelude::*;
 use hydro_lang::live_collections::stream::TotalOrder;
+use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::KVSOperation;
@@ -57,9 +57,11 @@ impl KVSCore {
                         // Use lattice merge semantics
                         state
                             .entry(key.clone())
-                            .and_modify(|existing| { lattices::Merge::merge(existing, value.clone()); })
+                            .and_modify(|existing| {
+                                lattices::Merge::merge(existing, value.clone());
+                            })
                             .or_insert(value);
-                    format!("PUT {} = OK", key)
+                        format!("PUT {} = OK", key)
                     }
                     KVSOperation::Get(key) => match state.get(&key) {
                         Some(value) => format!("GET {} = {}", key, value),
@@ -70,7 +72,6 @@ impl KVSCore {
             }),
         )
     }
-
 
     /// Process operations with selective responses (for replication)
     ///
@@ -111,20 +112,22 @@ impl KVSCore {
                             // Use lattice merge semantics
                             state
                                 .entry(key.clone())
-                                .and_modify(|existing| { lattices::Merge::merge(existing, value.clone()); })
+                                .and_modify(|existing| {
+                                    lattices::Merge::merge(existing, value.clone());
+                                })
                                 .or_insert(value);
                             if should_respond {
-                              Some(Some(format!("PUT {} = OK", key)))
+                                Some(Some(format!("PUT {} = OK", key)))
                             } else {
                                 Some(None) // No response for replicated PUTs
                             }
                         }
                         KVSOperation::Get(key) => {
                             // GETs are always local (we don't replicate reads)
-                                                        let response = match state.get(&key) {
-                                                                Some(value) => format!("GET {} = {}", key, value),
-                                                                None => format!("GET {} = NOT FOUND", key),
-                                                        };
+                            let response = match state.get(&key) {
+                                Some(value) => format!("GET {} = {}", key, value),
+                                None => format!("GET {} = NOT FOUND", key),
+                            };
                             Some(Some(response))
                         }
                     }
@@ -172,9 +175,9 @@ mod tests {
 
         // Verify the linearizable sequence
         assert_eq!(responses[0], "PUT x = OK");
-    assert!(responses[1].contains("1")); // GET sees first PUT
+        assert!(responses[1].contains("1")); // GET sees first PUT
         assert_eq!(responses[2], "PUT x = OK");
-    assert!(responses[3].contains("2")); // GET sees second PUT
+        assert!(responses[3].contains("2")); // GET sees second PUT
     }
 
     #[test]
@@ -230,8 +233,8 @@ mod tests {
         }
 
         // Sequential processing gives correct linearizable results
-    assert!(sequential_responses[1].contains("100")); // First GET sees 100
-    assert!(sequential_responses[3].contains("75")); // Second GET sees 75
+        assert!(sequential_responses[1].contains("100")); // First GET sees 100
+        assert!(sequential_responses[3].contains("75")); // Second GET sees 75
 
         // Split processing gives incorrect results (both GETs see final value)
         assert!(split_responses[1].contains("75")); // Wrong! Should see 100
@@ -279,10 +282,10 @@ mod tests {
         }
 
         // Verify linearizable transfer
-    assert!(responses[2].contains("100")); // Alice initially has 100
-    assert!(responses[3].contains("50")); // Bob initially has 50
-    assert!(responses[6].contains("75")); // Alice finally has 75
-    assert!(responses[7].contains("75")); // Bob finally has 75
+        assert!(responses[2].contains("100")); // Alice initially has 100
+        assert!(responses[3].contains("50")); // Bob initially has 50
+        assert!(responses[6].contains("75")); // Alice finally has 75
+        assert!(responses[7].contains("75")); // Bob finally has 75
 
         println!("Linearizable bank transfer: {:?}", responses);
     }

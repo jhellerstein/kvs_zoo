@@ -8,8 +8,8 @@ use super::VCWrapper;
 use lattices::{DomPair, Merge, set_union::SetUnionHashSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 /// Simple hasher for ordering purposes - much cheaper than DefaultHasher
 struct SimpleHasher<'a>(&'a mut u64);

@@ -6,8 +6,8 @@
 //! effectively an identity. In a multi-node cluster this pins all operations
 //! to member 0 and should generally be avoided.
 
-use crate::kvs_core::KVSNode;
 use crate::dispatch::OpIntercept;
+use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};

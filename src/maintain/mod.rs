@@ -11,6 +11,7 @@
 //! - **Unit type ()**: Alternative no-op implementation
 //! - **EpidemicGossip**: Gossip-based eventual consistency
 //! - **BroadcastReplication**: Broadcast-based strong consistency
+//! - **TombstoneCleanup**: Garbage collection for deleted entries (placeholder)
 //!
 //! ## Separation of Concerns
 //!
@@ -38,6 +39,7 @@
 pub mod broadcast;
 pub mod gossip;
 pub mod logbased;
+pub mod tombstone_cleanup;
 
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
@@ -47,6 +49,7 @@ use serde::{Deserialize, Serialize};
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
 pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
 pub use logbased::LogBased;
+pub use tombstone_cleanup::{TombstoneCleanup, TombstoneCleanupConfig};
 
 /// Core trait for replication strategies
 ///

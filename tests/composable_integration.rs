@@ -206,14 +206,15 @@ async fn test_sharded_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded KVS server
-    let shard_deployments = ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::create_deployment(
-        &flow,
-        kvs_zoo::dispatch::Pipeline::new(
-            kvs_zoo::dispatch::ShardedRouter::new(3),
-            kvs_zoo::dispatch::SingleNodeRouter::new(),
-        ),
-        (),
-    );
+    let shard_deployments =
+        ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::create_deployment(
+            &flow,
+            kvs_zoo::dispatch::Pipeline::new(
+                kvs_zoo::dispatch::ShardedRouter::new(3),
+                kvs_zoo::dispatch::SingleNodeRouter::new(),
+            ),
+            (),
+        );
     let client_port = ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::run(
         &proxy,
         &shard_deployments,
@@ -251,8 +252,14 @@ async fn test_sharded_kvs_service() {
     }
 
     let operations = vec![
-        KVSOperation::Put("shard_key_0".to_string(), LwwWrapper::new("value_0".to_string())),
-        KVSOperation::Put("shard_key_1".to_string(), LwwWrapper::new("value_1".to_string())),
+        KVSOperation::Put(
+            "shard_key_0".to_string(),
+            LwwWrapper::new("value_0".to_string()),
+        ),
+        KVSOperation::Put(
+            "shard_key_1".to_string(),
+            LwwWrapper::new("value_1".to_string()),
+        ),
         KVSOperation::Get("shard_key_0".to_string()),
         KVSOperation::Get("shard_key_1".to_string()),
         KVSOperation::Get("nonexistent".to_string()),
@@ -283,14 +290,12 @@ async fn test_sharded_kvs_service() {
                                 response
                             ),
                             2 => assert!(
-                                response.contains("shard_key_0")
-                                    && response.contains("value_0"),
+                                response.contains("shard_key_0") && response.contains("value_0"),
                                 "Expected shard_key_0 with value_0, got: {}",
                                 response
                             ),
                             3 => assert!(
-                                response.contains("shard_key_1")
-                                    && response.contains("value_1"),
+                                response.contains("shard_key_1") && response.contains("value_1"),
                                 "Expected shard_key_1 with value_1, got: {}",
                                 response
                             ),

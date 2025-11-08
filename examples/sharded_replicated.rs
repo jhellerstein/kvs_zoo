@@ -1,144 +1,79 @@
-//! Advanced sharded + replicated KVS demonstrating full composition
-//! Shows ShardedKVSServer<ReplicatedKVSServer> with symmetric pipeline composition
+//! Sharded + Replicated KVS Example
+//!
+//! **Configuration:**
+//! - Architecture: `ShardedKVSServer<ReplicatedKVSServer<CausalString, BroadcastReplication>>`
+//! - Routing: `Pipeline<ShardedRouter, RoundRobinRouter>` (first by shard, then by replica)
+//! - Replication: `BroadcastReplication` (within each shard)
+//! - Nodes: 3 shards × 3 replicas each = 9 total nodes
+//! - Consistency: Per-shard causal (via vector clocks), no cross-shard coordination
+//!
+//! **What it achieves:**
+//! A "best of both" architecture combining data scalability (sharding) with
+//! request scalability and fault tolerance (replication). Keys are hash-partitioned
+//! across 3 shards, and each shard has 3 replicas synchronized via broadcast replication. This provides
+//! cloud-scale capacity (through sharding) and high availability (through replication).
+//! Within each shard, causal consistency ensures concurrent writes are preserved
+//! via vector clock ordering. Ideal for large-scale production systems requiring
+//! both performance and reliability.
 
-use futures::{SinkExt, StreamExt};
+// futures traits are used by the shared driver
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer, ShardedKVSServer};
-use kvs_zoo::values::{CausalString, VCWrapper};
+use kvs_zoo::values::CausalString;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Advanced Sharded + Replicated KVS Demo");
-    println!("🎯 Full composition: ShardedKVSServer<ReplicatedKVSServer>");
-    println!("⚡ Pipeline: ShardedRouter.then(RoundRobinRouter)");
-    println!();
+    println!("🚀 Sharded + Replicated KVS Demo (broadcast)");
 
-    // Set up deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
-
-    // Create Hydro flow
     let flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Full composition: ShardedKVSServer<ReplicatedKVSServer> (educational structure preserved)
-    type FullComposition = ShardedKVSServer<
-        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::BroadcastReplication<CausalString>>,
-    >;
-
-    // Symmetric pipeline composition: ShardedRouter.then(RoundRobinRouter)
+    type Inner =
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::BroadcastReplication<CausalString>>;
+    type Server = ShardedKVSServer<Inner>;
     let pipeline = kvs_zoo::dispatch::Pipeline::new(
-        kvs_zoo::dispatch::ShardedRouter::new(3), // 3 shards
-        kvs_zoo::dispatch::RoundRobinRouter::new(), // Round-robin within each shard
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
     );
+    let replication = kvs_zoo::maintain::BroadcastReplication::<CausalString>::default();
 
-    // Use broadcast replication for strong consistency within shards
-    let replication = kvs_zoo::maintain::BroadcastReplication::default();
+    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
+    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
 
-    println!("📋 Configuration:");
-    println!("   • 3 shards (hash-based partitioning)");
-    println!("   • 3 replicas per shard (broadcast replication)");
-    println!("   • Total: 9 nodes (3×3)");
-    println!("   • Pipeline: ShardedRouter → RoundRobinRouter");
-    println!();
-
-    let deployment_cluster =
-        FullComposition::create_deployment(&flow, pipeline.clone(), replication.clone());
-
-    let client_port = FullComposition::run(
-        &proxy,
-        &deployment_cluster,
-        &client_external,
-        pipeline,
-        replication,
-    );
-
-    // Deploy to localhost cluster (9 nodes total)
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&deployment_cluster, vec![localhost.clone(); 9])
+        .with_cluster(&cluster, vec![localhost.clone(); 3])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
     deployment.deploy().await?;
-    let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
+    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-
-    println!("📤 Sending operations across shards...");
-
-    // Operations designed to hit different shards
-    let operations = vec![
-        // Shard 0 operations
-        KVSOperation::Put(
-            "user:alice".to_string(),
-            CausalString::new(VCWrapper::new(), "Alice Smith".to_string()),
-        ),
-        KVSOperation::Put(
-            "user:bob".to_string(),
-            CausalString::new(VCWrapper::new(), "Bob Jones".to_string()),
-        ),
-        // Shard 1 operations
-        KVSOperation::Put(
-            "config:timeout".to_string(),
-            CausalString::new(VCWrapper::new(), "30s".to_string()),
-        ),
-        KVSOperation::Put(
-            "config:retries".to_string(),
-            CausalString::new(VCWrapper::new(), "3".to_string()),
-        ),
-        // Shard 2 operations
-        KVSOperation::Put(
-            "data:metrics".to_string(),
-            CausalString::new(VCWrapper::new(), "enabled".to_string()),
-        ),
-        KVSOperation::Put(
-            "data:logs".to_string(),
-            CausalString::new(VCWrapper::new(), "debug".to_string()),
-        ),
-        // Read operations across all shards
-        KVSOperation::Get("user:alice".to_string()),
-        KVSOperation::Get("config:timeout".to_string()),
-        KVSOperation::Get("data:metrics".to_string()),
-        KVSOperation::Get("nonexistent".to_string()),
-    ];
-
-    for (i, op) in operations.into_iter().enumerate() {
-        // Show which shard this operation targets
-        let shard_info = match &op {
-            KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
-                let hash = std::collections::hash_map::DefaultHasher::new();
-                use std::hash::{Hash, Hasher};
-                let mut hasher = hash;
-                key.hash(&mut hasher);
-                let shard_id = hasher.finish() % 3;
-                format!("→ shard {}", shard_id)
-            }
-        };
-
-        println!("  {} {:?} {}", i + 1, op, shard_info);
-
-        if let Err(e) = client_in.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
+    let ops = kvs_zoo::demo_driver::ops_sharded_replicated_broadcast();
+    for op in &ops {
+        if let Some(info) = shard_info(op, 3) {
+            println!("   {}", info);
         }
-
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(800), client_out.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     ← {}", response);
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     }
+    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
 
-    println!("✅ Demo completed");
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
+    println!("✅ Sharded+Replicated (broadcast) demo complete");
     Ok(())
+}
+
+fn shard_info(op: &KVSOperation<CausalString>, shards: u64) -> Option<String> {
+    match op {
+        KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            key.hash(&mut hasher);
+            let shard_id = hasher.finish() % shards;
+            Some(format!("→ shard {} for '{}'", shard_id, key))
+        }
+    }
 }

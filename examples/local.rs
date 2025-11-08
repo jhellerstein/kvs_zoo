@@ -1,94 +1,52 @@
-//! Local KVS example
-//! Single-node KVS with LocalRouter and no replication
+//! Local KVS Example
+//!
+//! **Configuration:**
+//! - Architecture: `LocalKVSServer<LwwWrapper<String>>`
+//! - Routing: `SingleNodeRouter` (direct to single node)
+//! - Replication: None
+//! - Nodes: 1 (single process)
+//! - Consistency: Strong (deterministic single-threaded ordering)
+//!
+//! **What it achieves:**
+//! This is the simplest KVS architecture, serving as a baseline for the composable
+//! server framework. All operations execute on a single node with last-write-wins
+//! semantics. No networking or replication overhead, making it suitable for
+//! development, testing, and simple single-machine applications.
 
-use futures::{SinkExt, StreamExt};
-use kvs_zoo::protocol::KVSOperation;
+// futures traits are used by the driver; not needed here directly
 use kvs_zoo::server::{KVSServer, LocalKVSServer};
+use kvs_zoo::values::LwwWrapper;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Local KVS Demo");
-    println!("📋 Single process, no networking, strong consistency");
-    println!();
+    println!("🚀 Local KVS Demo (single node)");
 
-    // Set up deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
-
-    // Create Hydro flow
     let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    // Currently, External clients cannot talk to a Cluster, so we set up a proxy Process.
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // A more sophisticated KVS might have a pipeline of traffic "interceptors"
-    // to do things like order or route the inbound operations.
-    // It might also have a replication strategy like Broadcast or Epidemic Gossip.
-    // But here we'll just create no-ops for each!
-    let op_pipeline = kvs_zoo::dispatch::SingleNodeRouter::new();
-    let replication = (); // No replication for single node
+    type Server = LocalKVSServer<LwwWrapper<String>>;
+    let pipeline = kvs_zoo::dispatch::SingleNodeRouter::new();
+    let replication = (); // none
+    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication);
+    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
 
-    // Create a deployment using the server API
-    let kvs_cluster =
-        LocalKVSServer::<String>::create_deployment(&flow, op_pipeline.clone(), replication);
-
-    // Set up the server
-    let client_port = LocalKVSServer::<String>::run(
-        &proxy,
-        &kvs_cluster,
-        &client_external,
-        op_pipeline,
-        replication,
-    );
-
-    // Deploy to localhost
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); 1])
+        .with_cluster(&cluster, vec![localhost.clone(); 1])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
     deployment.deploy().await?;
-    let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
+    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 
-    // give it a chance to launch
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let ops = kvs_zoo::demo_driver::ops_local();
+    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
 
-    println!("📤 Sending operations...");
-
-    // Demo operations
-    let operations = vec![
-        KVSOperation::Put("key1".to_string(), "value1".to_string()),
-        KVSOperation::Put("key2".to_string(), "value2".to_string()),
-        KVSOperation::Get("key1".to_string()),
-        KVSOperation::Get("nonexistent".to_string()),
-        KVSOperation::Put("key1".to_string(), "updated_value1".to_string()),
-        KVSOperation::Get("key1".to_string()),
-    ];
-
-    for (i, op) in operations.into_iter().enumerate() {
-        println!("  {} {:?}", i + 1, op);
-
-        if let Err(e) = client_in.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
-        }
-
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(500), client_out.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     → {}", response);
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    }
-
-    println!("✅ Demo completed");
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
+    println!("✅ Local demo complete");
     Ok(())
 }

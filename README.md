@@ -2,7 +2,8 @@
 
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
-The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a **composable architecture** that separates operation interception from data replication, progressing from simple local stores to sophisticated sharded and replicated architectures with causal consistency.
+The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a **composable server architecture** that allows mixing and matching
+message dispatch strategies, data maintenance strategies, and value semantics to create sophisticated distributed key-value stores from reusable components.
 
 ## 📚 Background
 
@@ -15,64 +16,128 @@ The implementations showcase Hydro's approach to building distributed systems: e
 
 ## 🏗️ Architecture
 
-The zoo includes several KVS variants, each building on the previous:
+The zoo showcases a **composable server architecture** where server types, dispatch strategies, maintenance strategies, and value semantics can be mixed and matched:
 
-### 1. **Local KVS** (`local.rs`)
+### Core Abstractions
 
-A single-node key-value store with last-writer-wins semantics.
+- **`KVSServer<V>`**: Trait defining how to deploy and run a KVS architecture
+- **Routing Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosInterceptor`
+- **Replication Strategies**: `NoReplication`, `EpidemicGossip`, `BroadcastReplication`, `LogBased`
+- **Value Types**: `LwwWrapper<T>` (last-write-wins), `CausalWrapper<T>` (causal with vector clocks)
 
-- **Example**: `examples/local.rs`
+### Example Architectures
+
+### 1. **Local KVS** (`examples/local.rs`)
+
+Single-node key-value store with last-writer-wins semantics.
+
+- **Server**: `LocalKVSServer<LwwWrapper<String>>`
+- **Routing**: `SingleNodeRouter`
+- **Replication**: None
+- **Nodes**: 1
 - **Concepts**: Basic Hydro dataflow, external interfaces, process/cluster abstraction
 
-### 2. **Replicated KVS** (`replicated.rs`)
+### 2. **Replicated KVS** (`examples/replicated.rs`)
 
-Multi-node replication with causal consistency, using Demers-style rumor-mongering gossip protocol and lattice wrappers.
+Multi-node replication with selectable consistency model.
 
-- **Example**: `examples/replicated.rs`
+- **Server**: `ReplicatedKVSServer<V, EpidemicGossip<V>>`
+- **Routing**: `RoundRobinRouter`
+- **Replication**: `EpidemicGossip` (epidemic rumor-mongering)
+- **Value Types**:
+  - `CausalString` (default) - causal consistency with vector clocks
+  - `LwwWrapper<String>` (via `--lattice lww`) - last-write-wins
+- **Nodes**: 3 replicas
 - **Concepts**: Gossip protocols, eventual consistency, lattice-based merge semantics
 - **Features**:
   - Periodic gossip with configurable intervals
   - Probabilistic tombstoning for rumor cleanup
-  - Separation of rumor metadata and lattice-merged values
-  - Uses `LatticeKVSCore` for coordination-free convergence
+  - Runtime selection of consistency model via CLI flag
 
-### 3. **Sharded KVS** (`sharded.rs`)
+### 3. **Sharded KVS** (`examples/sharded.rs`)
 
 Horizontal partitioning via consistent hashing for scalability.
 
-- **Example**: `examples/sharded.rs`
+- **Server**: `ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>`
+- **Routing**: `Pipeline<ShardedRouter, SingleNodeRouter>`
+- **Replication**: None (per-shard)
+- **Nodes**: 3 shards
 - **Concepts**: Data partitioning, hash-based routing, independent shards
 - **Features**:
   - Consistent key-to-shard mapping
   - Proxy-based routing with unicast to specific shards
   - No cross-shard communication (independent operation)
 
-### 4. **Sharded + Replicated KVS** (`sharded_replicated.rs`)
+### 4. **Sharded + Replicated KVS** (`examples/sharded_replicated.rs`)
 
 Combines sharding and replication for both scalability and fault tolerance.
 
-- **Example**: `examples/sharded_replicated.rs`
-- **Concepts**: Hybrid architecture, multi-cluster coordination
+- **Server**: `ShardedKVSServer<ReplicatedKVSServer<CausalString, BroadcastReplication>>`
+- **Routing**: `Pipeline<ShardedRouter, RoundRobinRouter>`
+- **Replication**: `BroadcastReplication` (within each shard)
+- **Nodes**: 3 shards × 3 replicas = 9 total nodes
+- **Concepts**: Hybrid architecture, multi-level composition
 - **Features**:
   - Multiple shard clusters, each with internal replication
-  - Gossip within each shard for consistency
+  - Broadcast replication within each shard for consistency
   - Partitioning across shards for capacity
 
+### 5. **Linearizable KVS** (`examples/linearizable.rs`)
 
+Strong consistency via Paxos consensus with write-ahead logging.
+
+- **Server**: `LinearizableKVSServer<LwwWrapper<String>, LogBased<BroadcastReplication>>`
+- **Routing**: `PaxosInterceptor` (total order before execution)
+- **Replication**: `LogBased<BroadcastReplication>` (replicated write-ahead log)
+- **Nodes**: 3 Paxos acceptors + 3 log replicas + 3 KVS replicas = 9 total
+- **Concepts**: Consensus, linearizability, write-ahead logging
+- **Features**:
+  - Paxos ensures total order of all operations
+  - Replicated log for durability
+  - Strong consistency guarantees
 
 ## 🧪 Core Components
 
-### Lattice-Based Semantics
+### Composable Server Framework (`src/server.rs`)
 
-- **`lattice_core.rs`**: Coordination-free KVS using lattice merge operations
-- **`vector_clock.rs`**: Vector clocks for causal ordering
-- **Causal Values**: `DomPair<VCWrapper, SetUnion<T>>` for causally-consistent multi-values
+The `KVSServer<V>` trait enables architectural composition:
 
-### Supporting Infrastructure
+```rust
+pub trait KVSServer<V> {
+    type Deployment<'a>;
+    fn create_deployment<'a>(flow: &FlowBuilder<'a>, ...) -> Self::Deployment<'a>;
+    fn run<'a>(...) -> ServerPorts<V>;
+    fn size() -> usize;
+}
+```
 
-- **`protocol.rs`**: Common KVS operations (Get/Put)
-- **`core.rs`**: Traditional last-write-wins KVS core
-- **`examples_support.rs`**: Shared demo helpers for causal operations
+Implementations include:
+
+- `LocalKVSServer<V>` - Single node
+- `ReplicatedKVSServer<V, R>` - Multiple replicas with replication strategy `R`
+- `ShardedKVSServer<S>` - Sharding wrapper over inner server type `S`
+- `LinearizableKVSServer<V, R>` - Paxos consensus with replication strategy `R`
+
+### Value Semantics (`src/values/`)
+
+- **`LwwWrapper<T>`**: Last-writer-wins (simple overwrite)
+- **`CausalWrapper<T>`**: Causal consistency using `DomPair<VCWrapper, SetUnionHashSet<T>>`
+- **`VCWrapper`**: Vector clock primitive for causality tracking
+
+### Replication Strategies (`src/maintain/`)
+
+- **`NoReplication`**: No background synchronization
+- **`EpidemicGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
+- **`BroadcastReplication<V>`**: Eager broadcast of all updates
+- **`LogBased<R>`**: Write-ahead log wrapper over another replication strategy
+
+### Routing Strategies (`src/dispatch/`)
+
+- **`SingleNodeRouter`**: Direct to single node
+- **`RoundRobinRouter`**: Load balance across replicas
+- **`ShardedRouter`**: Hash-based key partitioning
+- **`PaxosInterceptor`**: Total order via Paxos consensus
+- **`Pipeline<R1, R2>`**: Compose two routing strategies
 
 ## 🚀 Getting Started
 
@@ -106,109 +171,123 @@ Each example demonstrates a different KVS architecture:
 cargo run --example local
 
 # Replicated KVS with 3-node gossip cluster
-cargo run --example replicated
+cargo run --example replicated                      # Causal consistency (default)
+cargo run --example replicated -- --lattice causal  # Explicit causal
+cargo run --example replicated -- --lattice lww     # Last-write-wins
 
 # Sharded KVS with 3 independent shards
 cargo run --example sharded
 
-# Sharded + Replicated (3 shard clusters, each with 3 replicas)
+# Sharded + Replicated (3 shards × 3 replicas = 9 nodes)
 cargo run --example sharded_replicated
 
-
+# Linearizable KVS with Paxos consensus
+cargo run --example linearizable
 ```
 
-Most examples use **causal consistency** with vector-clock-timestamped values that merge via set union.
+See `examples/README.md` for detailed documentation on each architecture.
 
 ## 📖 Example Walkthrough
 
-Here's what happens when you run the replicated example:
+Here's what happens when you run the replicated example with causal consistency:
 
-```rust
-use kvs_zoo::replicated::ReplicatedKVSServer;
-use kvs_zoo::examples_support::{CausalString, generate_causal_operations, log_operation};
-
-// Set up a 3-node replicated cluster
-let (client_input_port, _, _) =
-    ReplicatedKVSServer::<CausalString>::run_replicated_kvs(
-        &proxy, &kvs_cluster, &client_external
-    );
-
-// Generate operations with vector-clock timestamps
-// PUT "alpha" => {"a1"} @ VC[node1: 1]
-// PUT "alpha" => {"a2"} @ VC[node2: 1]  (concurrent!)
-// PUT "beta"  => {"b1"} @ VC[node3: 1]
-let operations = generate_causal_operations();
-
-// Send operations through the client interface
-for op in operations {
-    log_operation(&op);
-    client_sink.send(op).await?;
-}
+```bash
+cargo run --example replicated -- --lattice causal
 ```
 
-**Output** shows:
+The example:
 
-- Operations distributed across replicas
-- Gossip propagation between nodes
-- Concurrent writes merging via set union (both "a1" and "a2" retained)
+1. **Deploys** a 3-node replicated cluster with `EpidemicGossip`
+2. **Sends** operations with causal values (vector clock + value):
+   ```rust
+   PUT "doc" => CausalString { vc: {node1: 1}, val: "v1" }
+   PUT "doc" => CausalString { vc: {node2: 1}, val: "v2" }  // Concurrent!
+   GET "doc"
+   ```
+3. **Gossips** updates between replicas periodically
+4. **Merges** concurrent writes via set union (both "v1" and "v2" retained)
+5. **Prints** responses showing the merged causal value
+
+**Output** demonstrates:
+
+- Operations routed round-robin across replicas
 - Causal ordering preserved by vector clocks
+- Concurrent writes converging via lattice merge
+- Eventual consistency through gossip propagation
 
 ## 🧬 Key Design Patterns
 
-### 1. **Lattice Merge Semantics**
+### 1. **Composable Architecture**
 
-Values implement the `Merge` trait, allowing coordination-free convergence:
+Servers, routing, replication, and values are independent dimensions:
 
 ```rust
-impl<V: Merge<V>> LatticeKVSCore {
-    pub fn put(operations: Stream<KVSOperation<V>, ...>)
-        -> (KeyedSingleton<String, V, ...>, Stream<String, ...>)
+// Mix and match components
+type MyServer = ShardedKVSServer<
+    ReplicatedKVSServer<CausalString, EpidemicGossip<CausalString>>
+>;
+
+let routing = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
+let replication = EpidemicGossip::default();
+```
+
+### 2. **Lattice Merge Semantics**
+
+Values implement the `Merge` trait for coordination-free convergence:
+
+```rust
+impl<V: Merge<V>> KVSCore<V> {
+    // Concurrent writes automatically merge via lattice join
+    fn put(&mut self, key: String, value: V) {
+        self.store.merge_with(key, value);
+    }
 }
 ```
 
-### 2. **Gossip with Rumor Store**
+### 3. **Gossip with Rumor Store**
 
-Demers-style gossip separates metadata from values:
+Epidemic gossip separates metadata from values:
 
-- **Rumor Store**: Tracks which keys have been updated (using `MapUnionWithTombstones`)
+- **Rumor Store**: Tracks which keys have been updated (metadata only)
 - **Lattice Store**: Holds actual merged values
-- **Optimization**: Only gossip keys, fetch values from local lattice store
+- **Optimization**: Only gossip keys, fetch values from local store
 
-### 3. **Proxy-Based Routing**
+### 4. **Pipeline Routing**
 
-Sharding uses a specialized proxy for deterministic routing:
+Compose routing strategies for multi-level architectures:
 
 ```rust
-operations
-    .map(|op| {
-        let shard_id = hash(key) % shard_count;
-        (MemberId::from_raw(shard_id), op)
-    })
-    .into_keyed()
-    .demux_bincode(cluster)
+// First route by shard, then by replica within shard
+let pipeline = Pipeline::new(
+    ShardedRouter::new(num_shards),
+    RoundRobinRouter::new()
+);
 ```
-
-
 
 ## 📊 Consistency Spectrum
 
 The KVS Zoo demonstrates the spectrum of consistency models:
 
-| Variant            | Consistency      | Coordination        | Latency    | Fault Tolerance  |
-| ------------------ | ---------------- | ------------------- | ---------- | ---------------- |
-| Local              | N/A              | None                | Lowest     | None             |
-| Replicated         | Eventual         | Gossip              | Low        | High             |
-| Sharded            | Per-Key          | Hash routing        | Low        | Medium           |
-| Sharded+Replicated | Causal           | Gossip+Hash         | Medium     | High             |
+| Variant             | Consistency      | Coordination    | Latency | Fault Tolerance | Nodes |
+| ------------------- | ---------------- | --------------- | ------- | --------------- | ----- |
+| Local               | Strong           | None            | Lowest  | None            | 1     |
+| Replicated (LWW)    | Eventual         | Gossip          | Low     | High            | 3     |
+| Replicated (Causal) | Causal           | Gossip          | Low     | High            | 3     |
+| Sharded             | Per-shard strong | Hash routing    | Low     | Medium          | 3     |
+| Sharded+Replicated  | Per-shard causal | Gossip + Hash   | Medium  | Very High       | 9     |
+| Linearizable        | Linearizable     | Paxos consensus | Higher  | High            | 9     |
 
 ## 🧪 Testing
 
-The test suite includes:
+The test suite includes comprehensive validation:
 
-- **Protocol tests**: Basic Get/Put operations
-- **Vector clock tests**: Causality tracking, concurrent updates, merge semantics
-- **Causal consistency tests**: Happens-before relationships, convergence
-- **Sharding tests**: Key distribution, shard independence
+- **Protocol tests**: Basic Get/Put operations (`tests/protocol_tests.rs`)
+- **Vector clock tests**: Causality tracking, concurrent updates (`tests/vector_clock_tests.rs`)
+- **Causal consistency tests**: Happens-before relationships, convergence (`tests/causal_consistency_tests.rs`)
+- **Sharding tests**: Key distribution, shard independence (`tests/sharding_tests.rs`)
+- **Replication tests**: Gossip protocol, convergence (`tests/replication_strategy_tests.rs`)
+- **Linearizability tests**: Paxos consensus, total order (`tests/linearizability_tests.rs`)
+- **Composability tests**: Server trait implementations (`tests/composable_integration.rs`)
 
 ```bash
 # Run all tests
@@ -217,6 +296,9 @@ cargo test
 # Run with nextest for better output
 cargo install cargo-nextest
 cargo nextest run
+
+# Run specific test suite
+cargo test causal_consistency
 ```
 
 ## 🤝 Contributing

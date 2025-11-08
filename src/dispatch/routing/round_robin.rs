@@ -4,8 +4,8 @@
 //! round-robin load balancing, ensuring even distribution of work across
 //! all available replicas.
 
-use crate::kvs_core::KVSNode;
 use crate::dispatch::OpIntercept;
+use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};

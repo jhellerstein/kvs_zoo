@@ -180,14 +180,15 @@ impl<R> LogBased<R> {
         let (next_slot_complete, next_slot) = tick.cycle_with_initial(tick.singleton(q!(0usize)));
 
         // Find the highest contiguous slot we can process
-        let next_slot_after_processing = sorted_ops.clone().cross_singleton(next_slot.clone()).fold(
-            q!(|| 0usize),
-            q!(|new_next_slot, ((slot, _key, _value), next_slot)| {
-                if slot == std::cmp::max(*new_next_slot, next_slot) {
-                    *new_next_slot = slot + 1;
-                }
-            }),
-        );
+        let next_slot_after_processing =
+            sorted_ops.clone().cross_singleton(next_slot.clone()).fold(
+                q!(|| 0usize),
+                q!(|new_next_slot, ((slot, _key, _value), next_slot)| {
+                    if slot == std::cmp::max(*new_next_slot, next_slot) {
+                        *new_next_slot = slot + 1;
+                    }
+                }),
+            );
 
         // Split operations into processable and buffered
         let processable_ops = sorted_ops

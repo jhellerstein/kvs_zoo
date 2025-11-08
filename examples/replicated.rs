@@ -1,133 +1,126 @@
-//! Replicated KVS example showing different replication strategies
-//! Demonstrates gossip vs broadcast replication with incremental complexity
+//! Replicated KVS Example
+//!
+//! **Configuration:**
+//! - Architecture: `ReplicatedKVSServer<V, EpidemicGossip<V>>`
+//! - Routing: `RoundRobinRouter` (load balance across replicas)
+//! - Replication: `EpidemicGossip` (Demers-style rumor-mongering)
+//! - Value Types:
+//!   - `CausalString` (default) - causal consistency with vector clocks
+//!   - `LwwWrapper<String>` (--lattice lww) - last-write-wins semantics
+//! - Nodes: 3 replicas
+//! - Consistency: Eventual (gossip convergence) with causal ordering or LWW merge
+//!
+//! **What it achieves:**
+//! Demonstrates fault-tolerant replication with selectable consistency models.
+//! Uses epidemic gossip to propagate updates between replicas in the background.
+//! With causal consistency, concurrent writes are preserved via set union; with
+//! LWW, the last write wins. Shows how value semantics change system behavior
+//! while using the same replication infrastructure.
+//!
+//! **Usage:**
+//!   cargo run --example replicated               # default: causal
+//!   cargo run --example replicated -- --lattice causal
+//!   cargo run --example replicated -- --lattice lww
 
-use futures::{SinkExt, StreamExt};
-use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer};
-use kvs_zoo::values::{CausalString, VCWrapper};
+
+fn parse_lattice_type() -> String {
+    let mut args = std::env::args().skip_while(|a| a != "--lattice");
+    let lattice_flag = args.next();
+    if lattice_flag.is_none() {
+        return "causal".to_string();
+    }
+    args.next().unwrap_or_else(|| "causal".to_string())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Replicated KVS Demo");
-    println!("🔄 RoundRobin routing + configurable replication");
-    println!();
+    let lattice = parse_lattice_type();
+    println!("🚀 Replicated KVS Demo (gossip, lattice={})", lattice);
 
-    // Set up deployment
+    match lattice.as_str() {
+        "causal" => run_causal().await?,
+        "lww" => run_lww().await?,
+        other => {
+            eprintln!(
+                "❌ Unknown lattice type '{}'. Use 'causal' or 'lww'.",
+                other
+            );
+            std::process::exit(1);
+        }
+    }
+
+    println!("✅ Replicated (gossip) demo complete");
+    Ok(())
+}
+
+async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
+    use kvs_zoo::values::CausalString;
+
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
-
-    // Create Hydro flow
     let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    // Currently, External clients cannot talk to a Cluster, so we set up a proxy Process.
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    println!("📋 Example: Gossip Replication");
-
-    // The intercept's job for KVSReplicated is just to load-balance requests across the cluster.
-    // We use RoundRobinRouter to achieve that.
-    let op_pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
-    // The ReplicatedKVSServer needs to be set up with a replication protocol.
-    // As an example, we'll use async background Gossip replication (suitable for large clusters)
-    // We could have chosen Broadcast replication instead, which can run synchronously
-    // or in the background.
-    // Use small_cluster config for faster gossip (500ms interval instead of 1s)
-    let gossip_replication = kvs_zoo::maintain::EpidemicGossip::with_config(
+    type Server =
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::EpidemicGossip<CausalString>>;
+    let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
+    let replication = kvs_zoo::maintain::EpidemicGossip::with_config(
         kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
     );
 
-    let kvs_cluster = ReplicatedKVSServer::<CausalString, _>::create_deployment(
-        &flow,
-        op_pipeline.clone(),
-        gossip_replication.clone(),
-    );
+    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
+    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
 
-    let client_port = ReplicatedKVSServer::<CausalString, _>::run(
-        &proxy,
-        &kvs_cluster,
-        &client_external,
-        op_pipeline,
-        gossip_replication,
-    );
-
-    // Deploy to localhost cluster
-    let cluster_size = 3;
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); cluster_size])
-        .with_external(&client_external, localhost.clone())
+        .with_cluster(&cluster, vec![localhost.clone(); 3])
+        .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
     deployment.deploy().await?;
-    let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
+    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
-
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    println!("📤 Sending operations with gossip replication...");
+    kvs_zoo::demo_driver::run_ops(out, input, kvs_zoo::demo_driver::ops_replicated_gossip())
+        .await?;
+    Ok(())
+}
 
-    // Demo operations
-    let put_operations = vec![
-        KVSOperation::Put(
-            "user:1".to_string(),
-            CausalString::new(VCWrapper::new(), "Alice".to_string()),
-        ),
-        KVSOperation::Put(
-            "user:2".to_string(),
-            CausalString::new(VCWrapper::new(), "Bob".to_string()),
-        ),
-        KVSOperation::Put(
-            "user:1".to_string(),
-            CausalString::new(VCWrapper::new(), "Alice Updated".to_string()),
-        ),
-    ];
-    let get_operations = vec![
-        KVSOperation::Get("user:1".to_string()),
-        KVSOperation::Get("user:1".to_string()),
-        KVSOperation::Get("user:2".to_string()),
-    ];
+async fn run_lww() -> Result<(), Box<dyn std::error::Error>> {
+    use kvs_zoo::values::LwwWrapper;
 
-    for (i, op) in put_operations.into_iter().enumerate() {
-        println!("  {} {:?}", i + 1, op);
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
 
-        if let Err(e) = client_in.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
-        }
+    type Server = ReplicatedKVSServer<
+        LwwWrapper<String>,
+        kvs_zoo::maintain::EpidemicGossip<LwwWrapper<String>>,
+    >;
+    let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
+    let replication = kvs_zoo::maintain::EpidemicGossip::with_config(
+        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
+    );
 
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(1200), client_out.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     → {}", response);
-        }
-    }
+    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
+    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
 
-    // Wait for gossip replication (small_cluster config: 500ms interval, wait 6x)
-    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(&cluster, vec![localhost.clone(); 3])
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
 
-    for (i, op) in get_operations.into_iter().enumerate() {
-        println!("  {} {:?}", i + 1, op);
+    deployment.deploy().await?;
+    let (out, input) = nodes.connect_bincode(port).await;
+    deployment.start().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-        if let Err(e) = client_in.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
-        }
-
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(1200), client_out.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     → {}", response);
-        }
-    }
-
-    println!("✅ Demo completed");
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
+    kvs_zoo::demo_driver::run_ops(out, input, kvs_zoo::demo_driver::ops_local()).await?;
     Ok(())
 }

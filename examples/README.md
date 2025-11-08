@@ -9,18 +9,24 @@ All examples use the **composable server architecture** from `kvs_zoo::server`, 
 ### Core Server Types
 
 - **`local.rs`** - LocalKVSServer (Single Node)
+
   - **Architecture**: Single process, no networking
   - **Nodes**: 1
   - **Consistency**: Strong (deterministic)
   - **Use case**: Development, testing, simple applications
 
 - **`replicated.rs`** - ReplicatedKVSServer (Replicated Cluster)
+
   - **Architecture**: Multiple replicas with epidemic gossip
   - **Nodes**: 3 replicas
-  - **Consistency**: Causal (with vector clocks)
+  - **Consistency**: Causal (default) or LWW (with `--lattice` flag)
   - **Use case**: High availability, fault tolerance
+  - **Flags**:
+    - `--lattice causal` - Uses CausalString with vector clock (default)
+    - `--lattice lww` - Uses LwwWrapper with last-write-wins semantics
 
 - **`sharded.rs`** - ShardedKVSServer<LocalKVSServer> (Sharded)
+
   - **Architecture**: Hash-based key partitioning
   - **Nodes**: 3 shards (3 total nodes)
   - **Consistency**: Per-shard strong, global eventual
@@ -47,8 +53,6 @@ pub trait KVSServer<V> {
 
 This enables architectural composability, where any server can be used as a building block for more complex architectures.
 
-
-
 ## Running Examples
 
 ```bash
@@ -56,19 +60,22 @@ This enables architectural composability, where any server can be used as a buil
 cargo run --example local
 
 # Distributed architectures
-cargo run --example replicated
+cargo run --example replicated                      # Uses causal consistency by default
+cargo run --example replicated -- --lattice causal  # Explicit causal with vector clocks
+cargo run --example replicated -- --lattice lww     # Last-write-wins semantics
+
 cargo run --example sharded
 cargo run --example sharded_replicated
 ```
 
 ## Architecture Comparison
 
-| Example              | Server Type                                    | Nodes | Consistency Model    | Scalability | Fault Tolerance |
-|---------------------|-----------------------------------------------|-------|---------------------|-------------|-----------------|
-| `local.rs`          | `LocalKVSServer<String>`                      | 1     | Strong              | Low         | None            |
-| `replicated.rs`     | `ReplicatedKVSServer<CausalString>`           | 3     | Causal              | Medium      | High            |
-| `sharded.rs`        | `ShardedKVSServer<LocalKVSServer<String>>`    | 3     | Per-shard strong    | High        | Low             |
-| `sharded_replicated.rs` | `ShardedKVSServer<ReplicatedKVSServer<CausalString>>` | 9 | Per-shard causal | Very High   | Very High       |
+| Example                 | Server Type                                           | Nodes | Consistency Model | Scalability | Fault Tolerance |
+| ----------------------- | ----------------------------------------------------- | ----- | ----------------- | ----------- | --------------- |
+| `local.rs`              | `LocalKVSServer<String>`                              | 1     | Strong            | Low         | None            |
+| `replicated.rs`         | `ReplicatedKVSServer<CausalString>` or `<LwwWrapper>` | 3     | Causal or LWW     | Medium      | High            |
+| `sharded.rs`            | `ShardedKVSServer<LocalKVSServer<String>>`            | 3     | Per-shard strong  | High        | Low             |
+| `sharded_replicated.rs` | `ShardedKVSServer<ReplicatedKVSServer<CausalString>>` | 9     | Per-shard causal  | Very High   | Very High       |
 
 ## Key Benefits
 

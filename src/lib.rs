@@ -1,8 +1,8 @@
 stageleft::stageleft_no_entry_crate!();
 
+pub mod demo_driver;
 pub mod dispatch;
 pub mod kvs_core;
-pub mod linearizable;
 pub mod maintain;
 pub mod protocol;
 pub mod server;

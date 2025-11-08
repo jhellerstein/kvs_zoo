@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 /// lww1.merge(lww2); // lww1 now contains "second"
 /// assert_eq!(lww1.get(), "second");
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Hash)]
 pub struct LwwWrapper<T>(pub T);
 
 impl<T> LwwWrapper<T> {

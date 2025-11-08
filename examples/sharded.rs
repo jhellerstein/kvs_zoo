@@ -1,164 +1,78 @@
-//! Sharded KVS examples demonstrating symmetric composition
-//! Shows flexible ordering: ShardedRouter.then(RoundRobinRouter) vs alternatives
+//! Sharded KVS Example
+//!
+//! **Configuration:**
+//! - Architecture: `ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>`
+//! - Routing: `Pipeline<ShardedRouter, SingleNodeRouter>` (hash-based partitioning)
+//! - Replication: None (each shard is a single local node)
+//! - Nodes: 3 shards × 1 node each = 3 total nodes
+//! - Consistency: Per-shard strong (deterministic), no cross-shard coordination
+//!
+//! **What it achieves:**
+//! Demonstrates horizontal data scalability through hash-based key partitioning. Each
+//! key is deterministically routed to one of 3 shards based on its hash, allowing
+//! the system to handle larger datasets by distributing load. Shards operate
+//! independently with no cross-shard communication, making this a pure partitioning
+//! architecture suitable for high-throughput, low-latency workloads where keys are accessed
+//! independently.
 
-use futures::{SinkExt, StreamExt};
+// futures traits are used by the shared driver
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::{KVSServer, LocalKVSServer, ReplicatedKVSServer, ShardedKVSServer};
-use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
+use kvs_zoo::server::{KVSServer, LocalKVSServer, ShardedKVSServer};
+use kvs_zoo::values::LwwWrapper;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Sharded KVS Demo");
-    println!("🔀 Demonstrating symmetric composition patterns");
-    println!();
+    println!("🚀 Sharded Local KVS Demo");
 
-    // Set up deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
 
-    // Example 1: Sharded + Local (ShardedRouter.then(LocalRouter))
-    println!("📋 Example 1: Sharded Local KVS");
-    println!("   Server: ShardedKVSServer<LocalKVSServer>");
-    println!("   Pipeline: ShardedRouter.then(LocalRouter)");
-
-    let flow1 = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy1 = flow1.process::<()>();
-    let client_external1 = flow1.external::<()>();
-
-    // A sharded KVS is just a set of independent local KVSs, with a
-    // ShardedRouter interceptor to route operations to the appropriate shard,
-    // where they are handled locally.
-    // There is no replication in this example, it's simply sharded.
-    type ShardedLocal = ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>;
-    let pipeline1 = kvs_zoo::dispatch::Pipeline::new(
+    type Inner = LocalKVSServer<LwwWrapper<String>>;
+    type Server = ShardedKVSServer<Inner>;
+    let pipeline = kvs_zoo::dispatch::Pipeline::new(
         kvs_zoo::dispatch::ShardedRouter::new(3),
         kvs_zoo::dispatch::SingleNodeRouter::new(),
     );
-    let replication1 = ();
+    let replication = ();
 
-    let deployment1 = ShardedLocal::create_deployment(&flow1, pipeline1.clone(), replication1);
-    let client_port1 = ShardedLocal::run(
-        &proxy1,
-        &deployment1,
-        &client_external1,
-        pipeline1,
-        replication1,
-    );
+    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication);
+    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
 
-    let nodes1 = flow1
-        .with_process(&proxy1, localhost.clone())
-        .with_cluster(&deployment1, vec![localhost.clone(); 3])
-        .with_external(&client_external1, localhost.clone())
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(&cluster, vec![localhost.clone(); 3])
+        .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
     deployment.deploy().await?;
-    let (mut client_out1, mut client_in1) = nodes1.connect_bincode(client_port1).await;
+    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
-
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    println!("📤 Sending operations to sharded local KVS...");
-    let ops1 = vec![
-        KVSOperation::Put("shard1_key".to_string(), LwwWrapper::new("value1".to_string())),
-        KVSOperation::Put("shard2_key".to_string(), LwwWrapper::new("value2".to_string())),
-        KVSOperation::Get("shard1_key".to_string()),
-        KVSOperation::Get("shard2_key".to_string()),
-    ];
-
-    for (i, op) in ops1.into_iter().enumerate() {
-        println!("  {} {:?}", i + 1, op);
-        if let Err(e) = client_in1.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
+    let ops = kvs_zoo::demo_driver::ops_sharded_local();
+    // print shard mapping for clarity
+    for op in &ops {
+        if let Some(info) = shard_info(op, 3) {
+            println!("   {}", info);
         }
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(500), client_out1.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     → {}", response);
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
+    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
 
-    println!("✅ Demo 1 completed");
-    println!();
-
-    // Example 2: Sharded + Replicated (ShardedRouter.then(RoundRobinRouter))
-    println!("📋 Example 2: Sharded Replicated KVS");
-    println!("   Server: ShardedKVSServer<ReplicatedKVSServer>");
-    println!("   Pipeline: ShardedRouter.then(RoundRobinRouter)");
-
-    let flow2 = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy2 = flow2.process::<()>();
-    let client_external2 = flow2.external::<()>();
-
-    // Symmetric composition: more complex nesting
-    type ShardedReplicated =
-        ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>>;
-    let pipeline2 = kvs_zoo::dispatch::Pipeline::new(
-        kvs_zoo::dispatch::ShardedRouter::new(3),
-        kvs_zoo::dispatch::RoundRobinRouter::new(),
-    );
-    let replication2 = kvs_zoo::maintain::NoReplication::new();
-
-    let deployment2 =
-        ShardedReplicated::create_deployment(&flow2, pipeline2.clone(), replication2.clone());
-    let client_port2 = ShardedReplicated::run(
-        &proxy2,
-        &deployment2,
-        &client_external2,
-        pipeline2,
-        replication2,
-    );
-
-    let nodes2 = flow2
-        .with_process(&proxy2, localhost.clone())
-        .with_cluster(&deployment2, vec![localhost.clone(); 9]) // 3 shards × 3 replicas
-        .with_external(&client_external2, localhost.clone())
-        .deploy(&mut deployment);
-
-    let (mut client_out2, mut client_in2) = nodes2.connect_bincode(client_port2).await;
-
-    println!("📤 Sending operations to sharded replicated KVS...");
-    let ops2 = vec![
-        KVSOperation::Put(
-            "user:1".to_string(),
-            CausalString::new(VCWrapper::new(), "Alice".to_string()),
-        ),
-        KVSOperation::Put(
-            "user:2".to_string(),
-            CausalString::new(VCWrapper::new(), "Bob".to_string()),
-        ),
-        KVSOperation::Put(
-            "user:3".to_string(),
-            CausalString::new(VCWrapper::new(), "Charlie".to_string()),
-        ),
-        KVSOperation::Get("user:1".to_string()),
-        KVSOperation::Get("user:2".to_string()),
-        KVSOperation::Get("user:3".to_string()),
-    ];
-
-    for (i, op) in ops2.into_iter().enumerate() {
-        println!("  {} {:?}", i + 1, op);
-        if let Err(e) = client_in2.send(op).await {
-            eprintln!("❌ Error: {}", e);
-            break;
-        }
-        if let Some(response) =
-            tokio::time::timeout(std::time::Duration::from_millis(500), client_out2.next())
-                .await
-                .ok()
-                .flatten()
-        {
-            println!("     → {}", response);
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-    }
-
-    println!("✅ Demo 2 completed");
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
+    println!("✅ Sharded local demo complete");
     Ok(())
+}
+
+fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
+    match op {
+        KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            key.hash(&mut hasher);
+            let shard_id = hasher.finish() % shards;
+            Some(format!("→ shard {} for '{}'", shard_id, key))
+        }
+    }
 }

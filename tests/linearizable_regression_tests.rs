@@ -5,9 +5,8 @@
 //! guarantees are preserved.
 
 use kvs_zoo::dispatch::PaxosInterceptor;
-use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::KVSServer;
+use kvs_zoo::server::{KVSServer, LinearizableKVSServer};
 use kvs_zoo::values::LwwWrapper;
 
 /// Test that linearizable KVS processes operations in Paxos-determined order
