@@ -13,8 +13,8 @@
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::interception::{IdentityIntercept, Pipeline};
-//! use kvs_zoo::interception::{ShardedRouter, RoundRobinRouter};
+//! use kvs_zoo::dispatch::{IdentityIntercept, Pipeline};
+//! use kvs_zoo::dispatch::{ShardedRouter, RoundRobinRouter};
 //!
 //! // Create interceptors
 //! let sharded = ShardedRouter::new(3);
@@ -25,7 +25,7 @@
 //! let pipeline = Pipeline::new(sharded, round_robin);
 //! ```
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -145,7 +145,7 @@ impl<V> OpIntercept<V> for IdentityIntercept {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
+    use crate::dispatch::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 
     #[test]
     fn test_identity_intercept_creation() {

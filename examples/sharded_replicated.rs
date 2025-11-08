@@ -28,9 +28,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     >;
 
     // Symmetric pipeline composition: ShardedRouter.then(RoundRobinRouter)
-    let pipeline = kvs_zoo::interception::Pipeline::new(
-        kvs_zoo::interception::ShardedRouter::new(3), // 3 shards
-        kvs_zoo::interception::RoundRobinRouter::new(), // Round-robin within each shard
+    let pipeline = kvs_zoo::dispatch::Pipeline::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3), // 3 shards
+        kvs_zoo::dispatch::RoundRobinRouter::new(), // Round-robin within each shard
     );
 
     // Use broadcast replication for strong consistency within shards

@@ -4,7 +4,7 @@
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, LocalKVSServer, ReplicatedKVSServer, ShardedKVSServer};
-use kvs_zoo::values::{CausalString, VCWrapper};
+use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,10 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ShardedRouter interceptor to route operations to the appropriate shard,
     // where they are handled locally.
     // There is no replication in this example, it's simply sharded.
-    type ShardedLocal = ShardedKVSServer<LocalKVSServer<String>>;
-    let pipeline1 = kvs_zoo::interception::Pipeline::new(
-        kvs_zoo::interception::ShardedRouter::new(3),
-        kvs_zoo::interception::SingleNodeRouter::new(),
+    type ShardedLocal = ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>;
+    let pipeline1 = kvs_zoo::dispatch::Pipeline::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::dispatch::SingleNodeRouter::new(),
     );
     let replication1 = ();
 
@@ -59,8 +59,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("📤 Sending operations to sharded local KVS...");
     let ops1 = vec![
-        KVSOperation::Put("shard1_key".to_string(), "value1".to_string()),
-        KVSOperation::Put("shard2_key".to_string(), "value2".to_string()),
+        KVSOperation::Put("shard1_key".to_string(), LwwWrapper::new("value1".to_string())),
+        KVSOperation::Put("shard2_key".to_string(), LwwWrapper::new("value2".to_string())),
         KVSOperation::Get("shard1_key".to_string()),
         KVSOperation::Get("shard2_key".to_string()),
     ];
@@ -97,9 +97,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Symmetric composition: more complex nesting
     type ShardedReplicated =
         ShardedKVSServer<ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>>;
-    let pipeline2 = kvs_zoo::interception::Pipeline::new(
-        kvs_zoo::interception::ShardedRouter::new(3),
-        kvs_zoo::interception::RoundRobinRouter::new(),
+    let pipeline2 = kvs_zoo::dispatch::Pipeline::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::dispatch::RoundRobinRouter::new(),
     );
     let replication2 = kvs_zoo::maintain::NoReplication::new();
 

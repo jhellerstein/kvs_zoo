@@ -4,8 +4,8 @@
 //! round-robin load balancing, ensuring even distribution of work across
 //! all available replicas.
 
-use crate::core::KVSNode;
-use crate::interception::OpIntercept;
+use crate::kvs_core::KVSNode;
+use crate::dispatch::OpIntercept;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 /// ## Usage
 ///
 /// ```rust
-/// use kvs_zoo::interception::routing::RoundRobinRouter;
-/// use kvs_zoo::interception::OpIntercept;
+/// use kvs_zoo::dispatch::routing::RoundRobinRouter;
+/// use kvs_zoo::dispatch::OpIntercept;
 ///
 /// let router = RoundRobinRouter::new();
 /// // Operations will be distributed round-robin across all replica nodes
@@ -65,7 +65,7 @@ impl<V> OpIntercept<V> for RoundRobinRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::OpInterceptExt;
+    use crate::dispatch::OpInterceptExt;
 
     #[test]
     fn test_round_robin_router_creation() {

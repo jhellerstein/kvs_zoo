@@ -17,7 +17,7 @@
 //! path of each operation.
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::interception::PaxosConfig;
+use kvs_zoo::dispatch::PaxosConfig;
 use kvs_zoo::linearizable::LinearizableKVSServer;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::KVSServer;
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         kvs_zoo::maintain::LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
-    let op_pipeline = kvs_zoo::interception::PaxosInterceptor::with_config(paxos_config);
+    let op_pipeline = kvs_zoo::dispatch::PaxosInterceptor::with_config(paxos_config);
     let replication =
         kvs_zoo::maintain::LogBased::new(kvs_zoo::maintain::BroadcastReplication::new());
 
@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Deploy to localhost (3 nodes for Paxos consensus)
     let cluster_size = LinearizableKVS::size(
-        kvs_zoo::interception::PaxosInterceptor::new(),
+        kvs_zoo::dispatch::PaxosInterceptor::new(),
         kvs_zoo::maintain::LogBased::new(kvs_zoo::maintain::BroadcastReplication::new()),
     );
 

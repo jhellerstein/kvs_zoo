@@ -9,6 +9,7 @@ use lattices::{DomPair, Merge, set_union::SetUnionHashSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
+use std::fmt;
 
 /// Simple hasher for ordering purposes - much cheaper than DefaultHasher
 struct SimpleHasher<'a>(&'a mut u64);
@@ -164,3 +165,40 @@ where
 
 /// Type alias for causal strings (commonly used in examples)
 pub type CausalString = CausalWrapper<String>;
+
+impl<T> fmt::Display for CausalWrapper<T>
+where
+    T: Clone + Hash + Eq + std::fmt::Debug + fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let values = self.values();
+        if values.len() == 1 {
+            // Fast path: print the single value directly
+            if let Some(v) = values.iter().next() {
+                return write!(f, "{}", v);
+            }
+        }
+
+        // Deterministic order for multi-value sets (use simple hash ordering like in Hash impl)
+        let mut items_with_hashes: Vec<_> = values
+            .iter()
+            .map(|item| {
+                let mut simple_hash = 0u64;
+                item.hash(&mut SimpleHasher(&mut simple_hash));
+                (simple_hash, item)
+            })
+            .collect();
+        items_with_hashes.sort_by_key(|(hash_val, _)| *hash_val);
+
+        let mut first = true;
+        write!(f, "{{")?;
+        for (_, item) in items_with_hashes {
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", item)?;
+            first = false;
+        }
+        write!(f, "}}")
+    }
+}

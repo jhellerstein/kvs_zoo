@@ -4,8 +4,8 @@
 //! across cluster nodes for horizontal scaling. Each key is consistently
 //! routed to the same shard based on its hash value.
 
-use crate::core::KVSNode;
-use crate::interception::OpIntercept;
+use crate::kvs_core::KVSNode;
+use crate::dispatch::OpIntercept;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,8 @@ use std::hash::{Hash, Hasher};
 /// ## Usage
 ///
 /// ```rust
-/// use kvs_zoo::interception::routing::ShardedRouter;
-/// use kvs_zoo::interception::OpIntercept;
+/// use kvs_zoo::dispatch::routing::ShardedRouter;
+/// use kvs_zoo::dispatch::OpIntercept;
 ///
 /// let router = ShardedRouter::new(3);
 /// // Operations will be routed to shards based on key hash
@@ -108,7 +108,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interception::OpInterceptExt;
+    use crate::dispatch::OpInterceptExt;
 
     #[test]
     fn test_sharded_router_creation() {

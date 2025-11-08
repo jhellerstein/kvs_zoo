@@ -4,7 +4,7 @@
 //! All updates are deterministically broadcast to all cluster nodes, providing
 //! faster convergence than gossip protocols at the cost of higher message overhead.
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::maintain::ReplicationStrategy;
 use hydro_lang::prelude::*;
 use lattices::Merge;

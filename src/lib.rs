@@ -1,18 +1,12 @@
 stageleft::stageleft_no_entry_crate!();
 
-pub mod config;
-pub mod core;
-pub mod interception;
+pub mod dispatch;
+pub mod kvs_core;
 pub mod kvs_types;
 pub mod linearizable;
-pub mod lww;
 pub mod maintain;
 pub mod protocol;
-pub mod replicated;
-pub mod sequencing;
-pub mod sequential;
 pub mod server;
-pub mod sharded;
 pub mod values;
 
 #[cfg(test)]

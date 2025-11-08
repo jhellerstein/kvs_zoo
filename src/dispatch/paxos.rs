@@ -11,7 +11,7 @@ use super::{
     OpIntercept,
     paxos_core::{Acceptor, PaxosConfig, PaxosPayload, Proposer, paxos_core},
 };
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
 /// Paxos interceptor that provides total ordering of operations

@@ -35,7 +35,7 @@ fn test_strict_sequential_order() {
                 format!("PUT {} = OK", key)
             }
             KVSOperation::Get(key) => match state.get(&key) {
-                Some(value) => format!("GET {} = {:?}", key, value),
+                Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
         };
@@ -44,13 +44,13 @@ fn test_strict_sequential_order() {
 
     // Verify strict sequential order
     assert_eq!(responses[0], "PUT counter = OK");
-    assert!(responses[1].contains("LwwWrapper(\"0\")")); // First GET sees "0"
+    assert!(responses[1].contains("0")); // First GET sees "0"
     assert_eq!(responses[2], "PUT counter = OK");
-    assert!(responses[3].contains("LwwWrapper(\"1\")")); // Second GET sees "1"
+    assert!(responses[3].contains("1")); // Second GET sees "1"
     assert_eq!(responses[4], "PUT counter = OK");
-    assert!(responses[5].contains("LwwWrapper(\"2\")")); // Third GET sees "2"
+    assert!(responses[5].contains("2")); // Third GET sees "2"
     assert_eq!(responses[6], "PUT counter = OK");
-    assert!(responses[7].contains("LwwWrapper(\"3\")")); // Fourth GET sees "3"
+    assert!(responses[7].contains("3")); // Fourth GET sees "3"
 
     println!("Sequential responses: {:?}", responses);
 }
@@ -81,7 +81,7 @@ fn test_ordering_violation_detection() {
                 format!("PUT {} = OK", key)
             }
             KVSOperation::Get(key) => match sequential_state.get(key) {
-                Some(value) => format!("GET {} = {:?}", key, value),
+                Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
         };

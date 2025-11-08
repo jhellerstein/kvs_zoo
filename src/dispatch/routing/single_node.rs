@@ -6,8 +6,8 @@
 //! effectively an identity. In a multi-node cluster this pins all operations
 //! to member 0 and should generally be avoided.
 
-use crate::core::KVSNode;
-use crate::interception::OpIntercept;
+use crate::kvs_core::KVSNode;
+use crate::dispatch::OpIntercept;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 /// ## Usage
 ///
 /// ```rust
-/// use kvs_zoo::interception::routing::SingleNodeRouter;
-/// use kvs_zoo::interception::OpIntercept;
+/// use kvs_zoo::dispatch::routing::SingleNodeRouter;
+/// use kvs_zoo::dispatch::OpIntercept;
 ///
 /// let router = SingleNodeRouter::new();
 /// // Operations will be routed to member 0 (no broadcast or load-balancing)
