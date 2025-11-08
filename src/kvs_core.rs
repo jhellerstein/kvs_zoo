@@ -1,48 +1,38 @@
-//! Sequential KVS implementation for linearizable operations
+//! Core KVS implementation and node marker type
 //!
-//! This module provides a KVS implementation that processes all operations
+//! This module provides the core per-node KVS implementation. It processes all operations
 //! (both reads and writes) in a single sequential order, which is essential
-//! for linearizability guarantees.
-//!
-//! ## Key Difference from Core KVS
-//!
-//! Unlike `KVSCore` which splits operations into separate PUT and GET streams,
-//! this implementation processes all operations in their original order:
-//!
-//! ```text
-//! Input:  PUT(X,1) → GET(X) → PUT(X,2) → GET(X)
-//! Output: OK     → "1"    → OK      → "2"
-//! ```
-//!
-//! This ensures that reads see the exact state at their position in the
-//! total order, which is required for linearizability.
+//! for participating in linearizability guarantees. It also defines the KVSNode marker
+//! type used for Hydro clusters.
 
 use hydro_lang::prelude::*;
+use hydro_lang::live_collections::stream::TotalOrder;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::KVSOperation;
 
-/// Sequential KVS that processes operations in order
+/// Represents an individual KVS node in the cluster
 ///
-/// This implementation maintains linearizability by processing all operations
-/// sequentially without splitting reads and writes into separate streams.
-pub struct KVSSequential;
+/// This is a marker type used with Hydro's `Cluster<KVSNode>` to identify
+/// collections of nodes that form a KVS deployment.
+pub struct KVSNode {}
 
-impl KVSSequential {
-    /// Process operations sequentially, maintaining linearizable semantics
-    ///
+/// Core KVS that processes operations in order
+pub struct KVSCore;
+
+impl KVSCore {
     /// This function takes a stream of operations and processes them one by one
     /// in order, ensuring that each read sees the exact state at its position
-    /// in the sequence.
+    /// in the sequence. Uses lattice merge semantics for combining values.
     ///
     /// ## Parameters
-    /// - `operations`: Stream of operations in total order (from Paxos)
+    /// - `operations`: Stream of operations in total order
     ///
     /// ## Returns
     /// Stream of responses in the same order as operations
-    pub fn process_sequential<'a, V>(
-        operations: Stream<KVSOperation<V>, Cluster<'a, crate::core::KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, crate::core::KVSNode>, Unbounded>
+    pub fn process<'a, V, L>(
+        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
+    ) -> Stream<String, L, Unbounded, TotalOrder>
     where
         V: Clone
             + Serialize
@@ -51,29 +41,96 @@ impl KVSSequential {
             + Eq
             + Default
             + std::fmt::Debug
+            + std::fmt::Display
             + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
+        L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
         // Use scan to maintain state and emit responses for each operation
-        // Use Default::default() to avoid generic type issues in Hydro closures
         operations.scan(
             q!(|| std::collections::HashMap::new()),
             q!(|state, op| {
                 let response = match op {
                     KVSOperation::Put(key, value) => {
-                        state.insert(key.clone(), value);
-                        format!("PUT {} = OK [SEQUENTIAL]", key)
+                        // Use lattice merge semantics
+                        state
+                            .entry(key.clone())
+                            .and_modify(|existing| { lattices::Merge::merge(existing, value.clone()); })
+                            .or_insert(value);
+                    format!("PUT {} = OK", key)
                     }
                     KVSOperation::Get(key) => match state.get(&key) {
-                        Some(value) => format!("GET {} = {:?} [SEQUENTIAL]", key, value),
-                        None => format!("GET {} = NOT FOUND [SEQUENTIAL]", key),
+                        Some(value) => format!("GET {} = {}", key, value),
+                        None => format!("GET {} = NOT FOUND", key),
                     },
                 };
                 Some(response) // Always emit the response
             }),
         )
+    }
+
+
+    /// Process operations with selective responses (for replication)
+    ///
+    /// Takes tagged operations where the boolean indicates whether to generate
+    /// a response. This allows distinguishing local operations (respond) from
+    /// replicated operations (don't respond).
+    ///
+    /// ## Parameters
+    /// - `tagged_operations`: Stream of (should_respond, operation) pairs
+    ///
+    /// ## Returns
+    /// Stream of responses only for operations marked with should_respond=true
+    pub fn process_with_responses<'a, V, L>(
+        tagged_operations: Stream<(bool, KVSOperation<V>), L, Unbounded, TotalOrder>,
+    ) -> Stream<String, L, Unbounded, TotalOrder>
+    where
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + Clone + 'a,
+    {
+        // Use scan to maintain state and conditionally emit responses
+        tagged_operations
+            .scan(
+                q!(|| std::collections::HashMap::new()),
+                q!(|state, (should_respond, op)| {
+                    match op {
+                        KVSOperation::Put(key, value) => {
+                            // Use lattice merge semantics
+                            state
+                                .entry(key.clone())
+                                .and_modify(|existing| { lattices::Merge::merge(existing, value.clone()); })
+                                .or_insert(value);
+                            if should_respond {
+                              Some(Some(format!("PUT {} = OK", key)))
+                            } else {
+                                Some(None) // No response for replicated PUTs
+                            }
+                        }
+                        KVSOperation::Get(key) => {
+                            // GETs are always local (we don't replicate reads)
+                                                        let response = match state.get(&key) {
+                                                                Some(value) => format!("GET {} = {}", key, value),
+                                                                None => format!("GET {} = NOT FOUND", key),
+                                                        };
+                            Some(Some(response))
+                        }
+                    }
+                }),
+            )
+            .filter_map(q!(|opt| opt)) // Remove None responses
     }
 }
 
@@ -115,9 +172,9 @@ mod tests {
 
         // Verify the linearizable sequence
         assert_eq!(responses[0], "PUT x = OK");
-        assert!(responses[1].contains("LwwWrapper(\"1\")")); // GET sees first PUT
+    assert!(responses[1].contains("1")); // GET sees first PUT
         assert_eq!(responses[2], "PUT x = OK");
-        assert!(responses[3].contains("LwwWrapper(\"2\")")); // GET sees second PUT
+    assert!(responses[3].contains("2")); // GET sees second PUT
     }
 
     #[test]
@@ -173,8 +230,8 @@ mod tests {
         }
 
         // Sequential processing gives correct linearizable results
-        assert!(sequential_responses[1].contains("100")); // First GET sees 100
-        assert!(sequential_responses[3].contains("75")); // Second GET sees 75
+    assert!(sequential_responses[1].contains("100")); // First GET sees 100
+    assert!(sequential_responses[3].contains("75")); // Second GET sees 75
 
         // Split processing gives incorrect results (both GETs see final value)
         assert!(split_responses[1].contains("75")); // Wrong! Should see 100
@@ -222,10 +279,10 @@ mod tests {
         }
 
         // Verify linearizable transfer
-        assert!(responses[2].contains("100")); // Alice initially has 100
-        assert!(responses[3].contains("50")); // Bob initially has 50
-        assert!(responses[6].contains("75")); // Alice finally has 75
-        assert!(responses[7].contains("75")); // Bob finally has 75
+    assert!(responses[2].contains("100")); // Alice initially has 100
+    assert!(responses[3].contains("50")); // Bob initially has 50
+    assert!(responses[6].contains("75")); // Alice finally has 75
+    assert!(responses[7].contains("75")); // Bob finally has 75
 
         println!("Linearizable bank transfer: {:?}", responses);
     }

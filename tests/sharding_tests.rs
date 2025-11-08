@@ -1,5 +1,5 @@
 /// Tests for sharding hash calculation consistency
-use kvs_zoo::sharded::calculate_shard_id;
+use kvs_zoo::dispatch::ShardedRouter;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -9,9 +9,9 @@ fn test_shard_calculation_consistency() {
     let key = "test_key";
     let num_shards = 5;
 
-    let shard1 = calculate_shard_id(key, num_shards);
-    let shard2 = calculate_shard_id(key, num_shards);
-    let shard3 = calculate_shard_id(key, num_shards);
+    let shard1 = ShardedRouter::calculate_shard_id(key, num_shards);
+    let shard2 = ShardedRouter::calculate_shard_id(key, num_shards);
+    let shard3 = ShardedRouter::calculate_shard_id(key, num_shards);
 
     assert_eq!(shard1, shard2);
     assert_eq!(shard2, shard3);
@@ -29,7 +29,7 @@ fn test_shard_distribution() {
     let mut shard_counts = vec![0; num_shards];
 
     for key in keys {
-        let shard = calculate_shard_id(key, num_shards);
+        let shard = ShardedRouter::calculate_shard_id(key, num_shards);
         assert!(shard < num_shards as u32);
         shard_counts[shard as usize] += 1;
     }
@@ -45,23 +45,23 @@ fn test_shard_distribution() {
 #[test]
 fn test_shard_boundary_conditions() {
     // Test with 1 shard (all keys go to shard 0)
-    assert_eq!(calculate_shard_id("any_key", 1), 0);
+    assert_eq!(ShardedRouter::calculate_shard_id("any_key", 1), 0);
 
     // Test with 2 shards
     let key = "test";
-    let shard = calculate_shard_id(key, 2);
+    let shard = ShardedRouter::calculate_shard_id(key, 2);
     assert!(shard < 2);
 
     // Test with large number of shards
     let large_shards = 1000;
-    let shard = calculate_shard_id("test", large_shards);
+    let shard = ShardedRouter::calculate_shard_id("test", large_shards);
     assert!(shard < large_shards as u32);
 }
 
 #[test]
 fn test_hash_function_properties() {
     // Test that the hash function used is DefaultHasher
-    // This ensures consistency with the calculate_shard_id implementation
+    // This ensures consistency with the ShardedRouter::calculate_shard_id implementation
 
     let key = "test_key";
 
@@ -71,7 +71,7 @@ fn test_hash_function_properties() {
 
     let num_shards = 10;
     let expected_shard = (hash % num_shards as u64) as u32;
-    let actual_shard = calculate_shard_id(key, num_shards);
+    let actual_shard = ShardedRouter::calculate_shard_id(key, num_shards);
 
     assert_eq!(expected_shard, actual_shard);
 }
@@ -80,11 +80,11 @@ fn test_hash_function_properties() {
 fn test_empty_string_sharding() {
     // Test that empty string can be sharded
     let num_shards = 5;
-    let shard = calculate_shard_id("", num_shards);
+    let shard = ShardedRouter::calculate_shard_id("", num_shards);
     assert!(shard < num_shards as u32);
 
     // Should be consistent
-    assert_eq!(shard, calculate_shard_id("", num_shards));
+    assert_eq!(shard, ShardedRouter::calculate_shard_id("", num_shards));
 }
 
 #[test]
@@ -94,10 +94,10 @@ fn test_unicode_key_sharding() {
     let keys = vec!["hello", "こんにちは", "你好", "مرحبا", "🚀"];
 
     for key in keys {
-        let shard = calculate_shard_id(key, num_shards);
+        let shard = ShardedRouter::calculate_shard_id(key, num_shards);
         assert!(shard < num_shards as u32);
         // Consistency check
-        assert_eq!(shard, calculate_shard_id(key, num_shards));
+        assert_eq!(shard, ShardedRouter::calculate_shard_id(key, num_shards));
     }
 }
 
@@ -111,9 +111,9 @@ fn test_similar_keys_different_shards() {
     let key2 = "user_124";
     let key3 = "user_125";
 
-    let shard1 = calculate_shard_id(key1, num_shards);
-    let shard2 = calculate_shard_id(key2, num_shards);
-    let shard3 = calculate_shard_id(key3, num_shards);
+    let shard1 = ShardedRouter::calculate_shard_id(key1, num_shards);
+    let shard2 = ShardedRouter::calculate_shard_id(key2, num_shards);
+    let shard3 = ShardedRouter::calculate_shard_id(key3, num_shards);
 
     // All should be valid shards
     assert!(shard1 < num_shards as u32);

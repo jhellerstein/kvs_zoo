@@ -19,8 +19,8 @@
 //!
 //! Features added to any server type automatically inherit at all composition levels.
 
-use crate::core::KVSNode;
 use crate::dispatch::OpIntercept;
+use crate::kvs_core::KVSNode;
 use crate::maintain::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
@@ -109,6 +109,7 @@ where
         + Eq
         + Default
         + std::fmt::Debug
+        + std::fmt::Display
         + Send
         + Sync
         + 'static,
@@ -149,28 +150,21 @@ where
             deployment,
         );
 
-        // Demux operations into puts and gets
-        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
+        // For local KVS, use sequential processing with LWW semantics.
+        // Wrap values with LwwWrapper so merges use last-writer-wins.
+        let routed_operations_lww = routed_operations.map(q!(|op| match op {
+            KVSOperation::Put(key, value) => {
+                KVSOperation::Put(key, crate::values::LwwWrapper::new(value))
+            }
+            KVSOperation::Get(key) => KVSOperation::Get(key),
+        }));
 
-        // Execute operations using LWW storage
-        let kvs_state = crate::lww::KVSLww::put(put_tuples);
+        // Process operations sequentially and generate responses for both PUT and GET
+        let responses = crate::kvs_core::KVSCore::process(routed_operations_lww);
 
-        // Handle GET operations
-        let ticker = deployment.tick();
-        let get_results = crate::lww::KVSLww::get(
-            get_keys.batch(&ticker, nondet!(/** batch gets */)),
-            kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
-        );
-
-        // Send results back through proxy to external
-        let proxy_responses = get_results
-            .all_ticks()
-            .map(q!(|(key, result)| {
-                match result {
-                    Some(value) => format!("GET {} = {:?}", key, value),
-                    None => format!("GET {} = NOT FOUND", key),
-                }
-            }))
+        // Optionally label responses for local server
+        let proxy_responses = responses
+            .map(q!(|resp| format!("{} [LOCAL]", resp)))
             .send_bincode(proxy);
 
         // Complete the bidirectional connection
@@ -215,6 +209,7 @@ where
         + Eq
         + Default
         + std::fmt::Debug
+        + std::fmt::Display
         + lattices::Merge<V>
         + Send
         + Sync
@@ -256,34 +251,30 @@ where
             deployment,
         );
 
-        // Demux operations into puts and gets
-        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
+        // Tag local operations (respond = true)
+        let local_tagged = routed_operations.clone().map(q!(|op| (true, op)));
 
-        // Use the provided replication strategy for data synchronization
-        let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
+        // Extract local PUTs for replication
+        let local_puts = routed_operations.filter_map(q!(|op| match op {
+            KVSOperation::Put(k, v) => Some((k, v)),
+            KVSOperation::Get(_) => None,
+        }));
 
-        // Combine local and replicated data
-        let all_put_tuples = put_tuples.interleave(replicated_data);
+        // Replicate PUTs to other nodes (respond = false)
+        let replicated_puts = replication.replicate_data(deployment, local_puts);
+        let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
 
-        // Execute operations using core KVS storage
-        let kvs_state = crate::core::KVSCore::put(all_put_tuples);
+        // Merge local and replicated operations
+        // Assume total order for sequential processing - each node processes its operations
+        // in the order they arrive (round-robin ensures non-overlapping operations per node)
+        let all_tagged = local_tagged
+            .interleave(replicated_tagged)
+            .assume_ordering(nondet!(/** Sequential processing requires total order */));
+        let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
 
-        // Handle GET operations
-        let ticker = deployment.tick();
-        let get_results = crate::core::KVSCore::get(
-            get_keys.batch(&ticker, nondet!(/** batch gets for efficiency */)),
-            kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
-        );
-
-        // Send results back through proxy to external
-        let proxy_responses = get_results
-            .all_ticks()
-            .map(q!(|(key, result)| {
-                match result {
-                    Some(value) => format!("GET {} = {:?}", key, value),
-                    None => format!("GET {} = NOT FOUND", key),
-                }
-            }))
+        // Label responses and send back to clients
+        let proxy_responses = responses
+            .map(q!(|resp| format!("{} [REPLICATED]", resp)))
             .send_bincode(proxy);
 
         // Complete the bidirectional connection
@@ -332,6 +323,8 @@ where
         + Eq
         + Default
         + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -383,32 +376,30 @@ where
         // Apply the complete pipeline (sharded + inner routing)
         let routed_operations = op_pipeline.intercept_operations(operations, deployment);
 
-        // Demux operations into puts and gets
-        let (put_tuples, get_keys) = crate::core::KVSCore::demux_ops(routed_operations);
+        // Tag local operations (respond = true)
+        let local_tagged = routed_operations.clone().map(q!(|op| (true, op)));
 
-        // Use replication strategy for data synchronization
-        let replicated_data = replication.replicate_data(deployment, put_tuples.clone());
-        let all_put_tuples = put_tuples.interleave(replicated_data);
+        // Extract local PUTs for replication
+        let local_puts = routed_operations.filter_map(q!(|op| match op {
+            KVSOperation::Put(k, v) => Some((k, v)),
+            KVSOperation::Get(_) => None,
+        }));
 
-        // Execute operations using LWW storage (works with any V type)
-        let kvs_state = crate::lww::KVSLww::put(all_put_tuples);
+        // Replicate PUTs to other nodes (respond = false)
+        let replicated_puts = replication.replicate_data(deployment, local_puts);
+        let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
 
-        // Handle GET operations
-        let ticker = deployment.tick();
-        let get_results = crate::lww::KVSLww::get(
-            get_keys.batch(&ticker, nondet!(/** batch gets */)),
-            kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
-        );
+        // Merge local and replicated operations
+        // Assume total order for sequential processing - sharded routing ensures
+        // each shard processes its keys in order
+        let all_tagged = local_tagged
+            .interleave(replicated_tagged)
+            .assume_ordering(nondet!(/** Sequential processing requires total order */));
+        let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
 
-        // Send results back through proxy to external
-        let proxy_responses = get_results
-            .all_ticks()
-            .map(q!(|(key, result)| {
-                match result {
-                    Some(value) => format!("GET {} = {:?}", key, value),
-                    None => format!("GET {} = NOT FOUND", key),
-                }
-            }))
+        // Label responses and send back to clients
+        let proxy_responses = responses
+            .map(q!(|resp| format!("{} [SHARDED]", resp)))
             .send_bincode(proxy);
 
         // Complete the bidirectional connection
@@ -470,12 +461,12 @@ mod tests {
     #[tokio::test]
     async fn test_server_types_compile() {
         // Just test that the types can be constructed
-        let _local = LocalKVSServer::<String>::new();
+        let _local = LocalKVSServer::<crate::values::LwwWrapper<String>>::new();
         let _replicated: ReplicatedKVSServer<
             crate::values::CausalString,
             crate::maintain::NoReplication,
         > = ReplicatedKVSServer::new(3);
-        let _sharded_local = ShardedKVSServer::<LocalKVSServer<String>>::new(3);
+        let _sharded_local = ShardedKVSServer::<LocalKVSServer<crate::values::LwwWrapper<String>>>::new(3);
         let _sharded_replicated = ShardedKVSServer::<
             ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
         >::new(3);
@@ -487,7 +478,7 @@ mod tests {
         let local_replication = ();
         println!(
             "   LocalKVS size: {}",
-            <LocalKVSServer<String> as KVSServer<String>>::size(local_pipeline, local_replication)
+            <LocalKVSServer<crate::values::LwwWrapper<String>> as KVSServer<crate::values::LwwWrapper<String>>>::size(local_pipeline, local_replication)
         );
 
         let replicated_pipeline = crate::dispatch::RoundRobinRouter::new();
@@ -506,7 +497,7 @@ mod tests {
         let sharded_local_replication = ();
         println!(
             "   ShardedLocalKVS size: {}",
-            <ShardedKVSServer<LocalKVSServer<String>> as KVSServer<String>>::size(
+            <ShardedKVSServer<LocalKVSServer<crate::values::LwwWrapper<String>>> as KVSServer<crate::values::LwwWrapper<String>>>::size(
                 sharded_local_pipeline,
                 sharded_local_replication
             )
@@ -535,7 +526,7 @@ mod tests {
         // Test that deployments can be created with new trait signature
         let local_pipeline = crate::dispatch::SingleNodeRouter::new();
         let local_replication = ();
-        let _local_deployment = <LocalKVSServer<String> as KVSServer<String>>::create_deployment(
+        let _local_deployment = <LocalKVSServer<crate::values::LwwWrapper<String>> as KVSServer<crate::values::LwwWrapper<String>>>::create_deployment(
             &flow,
             local_pipeline,
             local_replication,
@@ -557,8 +548,8 @@ mod tests {
             crate::dispatch::SingleNodeRouter::new(),
         );
         let sharded_local_replication = ();
-        let _sharded_local_deployments = <ShardedKVSServer<LocalKVSServer<String>> as KVSServer<
-            String,
+        let _sharded_local_deployments = <ShardedKVSServer<LocalKVSServer<crate::values::LwwWrapper<String>>> as KVSServer<
+            crate::values::LwwWrapper<String>,
         >>::create_deployment(
             &flow, sharded_local_pipeline, sharded_local_replication
         );
@@ -587,9 +578,9 @@ mod tests {
         // Test that server composition matches pipeline composition structure
 
         // LocalKVSServer should use LocalRouter and no replication
-        type LocalServer = LocalKVSServer<String>;
-        type LocalPipeline = <LocalServer as KVSServer<String>>::OpPipeline;
-        type LocalReplication = <LocalServer as KVSServer<String>>::ReplicationStrategy;
+        type LocalServer = LocalKVSServer<crate::values::LwwWrapper<String>>;
+        type LocalPipeline = <LocalServer as KVSServer<crate::values::LwwWrapper<String>>>::OpPipeline;
+        type LocalReplication = <LocalServer as KVSServer<crate::values::LwwWrapper<String>>>::ReplicationStrategy;
 
         // Verify types match expected structure
         let _local_pipeline: LocalPipeline = crate::dispatch::SingleNodeRouter::new();
@@ -607,10 +598,10 @@ mod tests {
         let _replicated_replication: ReplicatedReplication = crate::maintain::NoReplication::new();
 
         // ShardedKVSServer should use Pipeline<ShardedRouter, Inner::OpPipeline>
-        type ShardedLocalServer = ShardedKVSServer<LocalKVSServer<String>>;
-        type ShardedLocalPipeline = <ShardedLocalServer as KVSServer<String>>::OpPipeline;
+        type ShardedLocalServer = ShardedKVSServer<LocalKVSServer<crate::values::LwwWrapper<String>>>;
+        type ShardedLocalPipeline = <ShardedLocalServer as KVSServer<crate::values::LwwWrapper<String>>>::OpPipeline;
         type ShardedLocalReplication =
-            <ShardedLocalServer as KVSServer<String>>::ReplicationStrategy;
+            <ShardedLocalServer as KVSServer<crate::values::LwwWrapper<String>>>::ReplicationStrategy;
 
         let _sharded_local_pipeline: ShardedLocalPipeline = crate::dispatch::Pipeline::new(
             crate::dispatch::ShardedRouter::new(3),

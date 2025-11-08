@@ -5,7 +5,7 @@
 //! updates through the network using probabilistic forwarding and rumor
 //! termination.
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::maintain::ReplicationStrategy;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::location::MemberId;
@@ -261,7 +261,13 @@ where
         )));
 
         // Build the rumor store from insertions (tombstones will be added later via periodic updates)
-        let rumor_store = crate::core::KVSCore::put(rumor_insertions);
+        // Inline fold_commutative for rumor tracking (no need for KVSCore)
+        let rumor_store = rumor_insertions.into_keyed().fold_commutative(
+            q!(|| Default::default()),
+            q!(|acc: &mut MapUnionHashMapWithTombstoneHashSet<(), ()>, i| {
+                lattices::Merge::merge(acc, i);
+            }),
+        );
 
         // Step 4: Periodic gossip rounds - extract hot keys
         let rumor_snapshot =

@@ -46,7 +46,7 @@
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::dispatch::{PaxosConfig, PaxosInterceptor};
 use crate::maintain::ReplicationStrategy;
 use crate::protocol::KVSOperation;
@@ -108,6 +108,7 @@ where
         + Eq
         + Default
         + std::fmt::Debug
+        + std::fmt::Display
         + lattices::Merge<V>
         + Send
         + Sync
@@ -184,60 +185,50 @@ where
                 );
             }));
 
-        // Demux operations into PUTs and GETs for proper handling
-        let put_tuples_slotted =
-            slotted_operations_with_slots
-                .clone()
-                .filter_map(q!(|(slot, op)| match op {
-                    KVSOperation::Put(key, value) => Some((slot, key, value)),
-                    KVSOperation::Get(_) => None,
-                }));
+        // Tag local operations (respond = true)
+        let local_tagged = slotted_operations_with_slots
+            .clone()
+            .map(q!(|(slot, op)| (slot, true, op)));
 
-        let get_keys_slotted =
-            slotted_operations_with_slots.filter_map(q!(|(slot, op)| match op {
-                KVSOperation::Put(_, _) => None,
-                KVSOperation::Get(key) => Some((slot, key)),
-            }));
+        // Extract local PUTs for replication
+        let local_puts_slotted = slotted_operations_with_slots.filter_map(q!(|(slot, op)| match op {
+            KVSOperation::Put(key, value) => Some((slot, key, value)),
+            KVSOperation::Get(_) => None,
+        }));
 
         // Use replication strategy for PUT operations with slot numbers
-        let replicated_data_slotted =
-            replication.replicate_slotted_data(kvs_cluster, put_tuples_slotted.clone());
+        let replicated_puts_slotted =
+            replication.replicate_slotted_data(kvs_cluster, local_puts_slotted.clone());
 
-        // Combine local and replicated PUTs (all slotted)
-        let all_put_tuples_slotted = put_tuples_slotted
-            .clone()
-            .interleave(replicated_data_slotted);
+        // Tag replicated operations (respond = false)
+        let replicated_tagged = replicated_puts_slotted
+            .map(q!(|(slot, k, v)| (slot, false, KVSOperation::Put(k, v))));
 
-        // Strip slots for storage (storage doesn't need slots)
-        let all_put_tuples = all_put_tuples_slotted.map(q!(|(_slot, key, value)| (key, value)));
+        // Combine local and replicated operations, preserving slots
+        let all_tagged_slotted = local_tagged.interleave(replicated_tagged);
 
-        // Execute PUT operations using LWW storage
-        let kvs_state = crate::lww::KVSLww::put(all_put_tuples);
+        // Strip slots but keep (should_respond, op) tags
+        // Wrap values with LwwWrapper for LWW semantics
+        let all_tagged = all_tagged_slotted.map(q!(|(_slot, should_respond, op)| {
+            let op_lww = match op {
+                KVSOperation::Put(k, v) => {
+                    KVSOperation::Put(k, crate::values::LwwWrapper::new(v))
+                }
+                KVSOperation::Get(k) => KVSOperation::Get(k),
+            };
+            (should_respond, op_lww)
+        }));
 
-        // Handle GET operations (strip slots)
-        let get_keys = get_keys_slotted.map(q!(|(_slot, key)| key));
-        let ticker = kvs_cluster.tick();
-        let get_results = crate::lww::KVSLww::get(
-            get_keys.batch(&ticker, nondet!(/** batch gets */)),
-            kvs_state.snapshot(&ticker, nondet!(/** snapshot for gets */)),
+        // Process sequentially with selective responses
+        // Paxos guarantees total order, so operations are already ordered
+        let responses = crate::kvs_core::KVSCore::process_with_responses(
+            all_tagged.assume_ordering(nondet!(/** Paxos provides total order */)),
         );
 
-        // Format responses (strip slots from PUTs)
-        let put_responses = put_tuples_slotted.map(q!(|(_slot, key, _value)| format!(
-            "PUT {} = OK [LINEARIZABLE]",
-            key
-        )));
-        let get_responses = get_results.map(q!(|(key, value)| format!(
-            "GET {} = {:?} [LINEARIZABLE]",
-            key, value
-        )));
-
-        // Combine all responses
-        let responses = put_responses.interleave(get_responses.all_ticks());
-
-        // Send results back through proxy to external
-        // Each node only receives operations via round-robin, so no duplicate responses
-        let proxy_responses = responses.send_bincode(proxy);
+        // Label responses and send back
+        let proxy_responses = responses
+            .map(q!(|resp| format!("{} [LINEARIZABLE]", resp)))
+            .send_bincode(proxy);
 
         // Complete the bidirectional connection
         complete_sink.complete(

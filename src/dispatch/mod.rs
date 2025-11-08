@@ -25,7 +25,7 @@
 //! let pipeline = Pipeline::new(sharded, round_robin);
 //! ```
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};

@@ -49,16 +49,12 @@
 
 pub mod causal;
 pub mod lww;
-pub mod utils;
 pub mod vector_clock;
 
 // Re-export main types for convenience
 pub use causal::{CausalString, CausalWrapper};
 pub use lww::LwwWrapper;
 pub use vector_clock::VCWrapper;
-
-// Re-export utility functions for convenience
-pub use utils::{generate_causal_operations, log_operation};
 
 // Re-export lattice traits for convenience
 pub use lattices::Merge;

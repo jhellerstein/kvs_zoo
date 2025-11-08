@@ -39,7 +39,7 @@ pub mod broadcast;
 pub mod gossip;
 pub mod logbased;
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 

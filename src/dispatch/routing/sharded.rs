@@ -4,7 +4,7 @@
 //! across cluster nodes for horizontal scaling. Each key is consistently
 //! routed to the same shard based on its hash value.
 
-use crate::core::KVSNode;
+use crate::kvs_core::KVSNode;
 use crate::dispatch::OpIntercept;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;

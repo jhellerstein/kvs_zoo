@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, LocalKVSServer, ReplicatedKVSServer, ShardedKVSServer};
-use kvs_zoo::values::{CausalString, VCWrapper};
+use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
 use std::collections::HashSet;
 use tokio::time::{Duration, timeout};
 
@@ -77,11 +77,11 @@ async fn test_local_kvs_service() {
     ];
 
     let expected_responses = [
-        None, // PUT operations don't return responses
-        Some("GET key1 = \"value1\"".to_string()),
-        None, // PUT operations don't return responses
-        Some("GET key1 = \"updated_value1\"".to_string()),
-        Some("GET nonexistent = NOT FOUND".to_string()),
+        Some("PUT key1 = OK [LOCAL]".to_string()), // PUTs now return responses
+        Some("GET key1 = value1 [LOCAL]".to_string()),
+        Some("PUT key1 = OK [LOCAL]".to_string()),
+        Some("GET key1 = updated_value1 [LOCAL]".to_string()),
+        Some("GET nonexistent = NOT FOUND [LOCAL]".to_string()),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -95,10 +95,6 @@ async fn test_local_kvs_service() {
 
             assert_eq!(response, *expected, "Response mismatch for operation {}", i);
             println!("✅ Operation {}: {}", i, response);
-        } else {
-            // For PUT operations, we don't expect a response, but wait a bit
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            println!("✅ Operation {}: PUT completed", i);
         }
     }
 
@@ -210,7 +206,7 @@ async fn test_sharded_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded KVS server
-    let shard_deployments = ShardedKVSServer::<LocalKVSServer<String>>::create_deployment(
+    let shard_deployments = ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::create_deployment(
         &flow,
         kvs_zoo::dispatch::Pipeline::new(
             kvs_zoo::dispatch::ShardedRouter::new(3),
@@ -218,7 +214,7 @@ async fn test_sharded_kvs_service() {
         ),
         (),
     );
-    let client_port = ShardedKVSServer::<LocalKVSServer<String>>::run(
+    let client_port = ShardedKVSServer::<LocalKVSServer<LwwWrapper<String>>>::run(
         &proxy,
         &shard_deployments,
         &client_external,
@@ -255,8 +251,8 @@ async fn test_sharded_kvs_service() {
     }
 
     let operations = vec![
-        KVSOperation::Put("shard_key_0".to_string(), "value_0".to_string()),
-        KVSOperation::Put("shard_key_1".to_string(), "value_1".to_string()),
+        KVSOperation::Put("shard_key_0".to_string(), LwwWrapper::new("value_0".to_string())),
+        KVSOperation::Put("shard_key_1".to_string(), LwwWrapper::new("value_1".to_string())),
         KVSOperation::Get("shard_key_0".to_string()),
         KVSOperation::Get("shard_key_1".to_string()),
         KVSOperation::Get("nonexistent".to_string()),
@@ -269,44 +265,53 @@ async fn test_sharded_kvs_service() {
             Ok(_) => {
                 println!("✅ Operation {} sent successfully", i);
 
-                // For GET operations, try to get a response
-                if i >= 2 {
-                    // Give more time for sharded operations to complete
-                    match timeout(Duration::from_millis(2000), client_out.next()).await {
-                        Ok(Some(response)) => {
-                            println!("✅ Operation {}: {}", i, response);
+                // All operations now return responses
+                match timeout(Duration::from_millis(2000), client_out.next()).await {
+                    Ok(Some(response)) => {
+                        println!("✅ Operation {}: {}", i, response);
 
-                            // Validate expected responses
-                            match i {
-                                2 => assert!(
-                                    response.contains("shard_key_0")
-                                        && response.contains("value_0"),
-                                    "Expected shard_key_0 with value_0, got: {}",
-                                    response
-                                ),
-                                3 => assert!(
-                                    response.contains("shard_key_1")
-                                        && response.contains("value_1"),
-                                    "Expected shard_key_1 with value_1, got: {}",
-                                    response
-                                ),
-                                4 => assert_eq!(response, "GET nonexistent = NOT FOUND"),
-                                _ => {}
-                            }
-                        }
-                        Ok(None) => {
-                            println!("⚠️  Operation {}: No response (connection closed)", i)
-                        }
-                        Err(_) => {
-                            println!(
-                                "⚠️  Operation {}: Timeout - this might indicate a sharding issue",
-                                i
-                            );
-                            // Don't fail the test on timeout for now, just log it
+                        // Validate expected responses
+                        match i {
+                            0 => assert!(
+                                response.contains("PUT") && response.contains("shard_key_0"),
+                                "Expected PUT response for shard_key_0, got: {}",
+                                response
+                            ),
+                            1 => assert!(
+                                response.contains("PUT") && response.contains("shard_key_1"),
+                                "Expected PUT response for shard_key_1, got: {}",
+                                response
+                            ),
+                            2 => assert!(
+                                response.contains("shard_key_0")
+                                    && response.contains("value_0"),
+                                "Expected shard_key_0 with value_0, got: {}",
+                                response
+                            ),
+                            3 => assert!(
+                                response.contains("shard_key_1")
+                                    && response.contains("value_1"),
+                                "Expected shard_key_1 with value_1, got: {}",
+                                response
+                            ),
+                            4 => assert!(
+                                response.contains("GET nonexistent = NOT FOUND"),
+                                "Expected nonexistent key not found, got: {}",
+                                response
+                            ),
+                            _ => {}
                         }
                     }
-                } else {
-                    println!("✅ Operation {}: PUT completed", i);
+                    Ok(None) => {
+                        println!("⚠️  Operation {}: No response (connection closed)", i)
+                    }
+                    Err(_) => {
+                        println!(
+                            "⚠️  Operation {}: Timeout - this might indicate a sharding issue",
+                            i
+                        );
+                        // Don't fail the test on timeout for now, just log it
+                    }
                 }
 
                 // Wait between all operations to ensure proper sequencing
