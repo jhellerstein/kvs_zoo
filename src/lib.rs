@@ -2,7 +2,6 @@ stageleft::stageleft_no_entry_crate!();
 
 pub mod dispatch;
 pub mod kvs_core;
-pub mod kvs_types;
 pub mod linearizable;
 pub mod maintain;
 pub mod protocol;
