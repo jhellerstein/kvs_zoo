@@ -11,7 +11,7 @@
 //! - Consistency: Eventual (gossip convergence) with causal ordering or LWW merge
 //!
 //! **What it achieves:**
-//! Demonstrates fault-tolerant replication with selectable consistency models.
+//! Demonstrates fault-tolerant replication with selectable consistency models like Anna KVS.
 //! Uses epidemic gossip to propagate updates between replicas in the background.
 //! With causal consistency, concurrent writes are preserved via set union; with
 //! LWW, the last write wins. Shows how value semantics change system behavior
@@ -42,10 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "causal" => run_causal().await?,
         "lww" => run_lww().await?,
         other => {
-            eprintln!(
-                "❌ Unknown lattice type '{}'. Use 'causal' or 'lww'.",
-                other
-            );
+            eprintln!("❌ Unknown lattice type '{}'. Use 'causal' or 'lww'.", other);
             std::process::exit(1);
         }
     }
@@ -63,8 +60,10 @@ async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    type Server =
-        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::EpidemicGossip<CausalString>>;
+    type Server = ReplicatedKVSServer<
+        CausalString,
+        kvs_zoo::maintain::EpidemicGossip<CausalString>,
+    >;
     let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
     let replication = kvs_zoo::maintain::EpidemicGossip::with_config(
         kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
@@ -84,8 +83,7 @@ async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
     deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    kvs_zoo::demo_driver::run_ops(out, input, kvs_zoo::demo_driver::ops_replicated_gossip())
-        .await?;
+    kvs_zoo::demo_driver::run_ops(out, input, kvs_zoo::demo_driver::ops_replicated_gossip()).await?;
     Ok(())
 }
 

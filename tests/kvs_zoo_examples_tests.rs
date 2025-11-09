@@ -64,6 +64,8 @@ async fn example_local_lww() {
             .unwrap();
         assert!(resp.contains("[LOCAL]"));
     }
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -141,6 +143,8 @@ async fn example_replicated_none() {
             && r3.contains("doc")
             && (r3.contains("NOT FOUND") || r3.contains("x") || r3.contains("y"))
     );
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -197,6 +201,8 @@ async fn example_replicated_broadcast() {
         .unwrap()
         .unwrap();
     assert!(r.contains("[REPLICATED]") && r.contains("b"));
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -255,6 +261,8 @@ async fn example_sharded_local() {
         .unwrap()
         .unwrap();
     assert!(r.contains("[SHARDED]") && r.contains("user:1"));
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -292,11 +300,30 @@ async fn example_linearizable_paxos_lww() {
         .with_cluster(&cluster.2, vec![localhost.clone(); 3])
         .with_external(&external, localhost)
         .deploy(&mut deployment);
-
-    deployment.deploy().await.unwrap();
+    // Small retry to mitigate transient dylib/link/startup races in suite runs
+    let mut first_err: Option<String> = None;
+    for attempt in 1..=2 {
+        match deployment.deploy().await {
+            Ok(()) => break,
+            Err(e) if attempt == 1 => {
+                first_err = Some(format!("{e:?}"));
+                // brief backoff before retry
+                sleep(Duration::from_millis(300)).await;
+            }
+            Err(e) => {
+                let prev = first_err.unwrap_or_else(|| "<none>".to_string());
+                panic!(
+                    "Linearizable Paxos deployment failed twice.\n  First error: {prev}\n  Second error: {e:?}\n\nTroubleshooting steps:\n  1. Re-run with environment: RUST_LOG=info RUST_BACKTRACE=full cargo nextest run example_linearizable_paxos_lww --tests\n  2. Inspect per-node startup logs for a panic before readiness. (A 'channel closed' usually means a node process exited.)\n  3. Check for port collisions: leftover processes from previous runs may prevent binding. Kill stray processes (e.g. lsof -iTCP -sTCP:LISTEN | grep kvs_zoo).\n  4. Increase leader election grace period: try sleep 2500ms before first request.\n  5. The suite may be cleaning trybuild artifacts concurrently; a retry usually sidesteps transient dylib/link issues."
+                );
+            }
+        }
+    }
     let (mut out, mut input) = nodes.connect_bincode(port).await;
-    deployment.start().await.unwrap();
-    sleep(Duration::from_millis(500)).await;
+    deployment
+        .start()
+        .await
+        .expect("Failed to start deployment processes. This usually indicates a crash on boot. Check the spawned process logs.");
+    sleep(Duration::from_millis(1500)).await; // Wait for Paxos leader election
 
     input
         .send(KVSOperation::Put(
@@ -304,17 +331,33 @@ async fn example_linearizable_paxos_lww() {
             LwwWrapper::new("100".into()),
         ))
         .await
-        .unwrap();
-    let _ = timeout(Duration::from_secs(2), out.next())
+        .expect("Failed to send PUT(acct, 100): output channel closed. This implies the server side exited early. Review logs for a panic or configuration error.");
+    let _first_resp = match timeout(Duration::from_secs(2), out.next()).await {
+        Ok(Some(r)) => r,
+        Ok(None) => panic!(
+            "Server closed the response stream after PUT(acct, 100) without sending a response. Likely crash after request handling."
+        ),
+        Err(_) => panic!(
+            "Timed out (2s) waiting for response to PUT(acct, 100). Possible causes: Paxos leader not elected yet or slow startup. Try increasing the initial sleep or timeout."
+        ),
+    };
+
+    input
+        .send(KVSOperation::Get("acct".into()))
         .await
-        .unwrap()
-        .unwrap();
-    input.send(KVSOperation::Get("acct".into())).await.unwrap();
-    let r = timeout(Duration::from_secs(3), out.next())
-        .await
-        .unwrap()
-        .unwrap();
+        .expect("Failed to send GET(acct): output channel closed. This implies the server side exited early. Review logs for a panic or configuration error.");
+    let r = match timeout(Duration::from_secs(3), out.next()).await {
+        Ok(Some(r)) => r,
+        Ok(None) => panic!(
+            "Server closed the response stream before replying to GET(acct). Likely crash during or after Paxos commit."
+        ),
+        Err(_) => panic!(
+            "Timed out (3s) waiting for response to GET(acct). Leader election or log replication may not have completed. Consider increasing the wait-for-leader delay or timeout."
+        ),
+    };
     assert!(r.contains("[LINEARIZABLE]") && r.contains("acct"));
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 // Gossip-based tests can be flaky due to timing; include but ignore by default.
@@ -373,4 +416,6 @@ async fn example_replicated_gossip() {
         .unwrap()
         .unwrap();
     assert!(r.contains("[REPLICATED]") && r.contains("g"));
+    // Ensure we clean up processes to avoid interference with other tests
+    deployment.stop().await.unwrap();
 }

@@ -99,6 +99,8 @@ async fn test_local_kvs_service() {
     }
 
     println!("✅ LocalKVSServer test passed!");
+    // Clean up processes to avoid cross-test interference
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -190,6 +192,8 @@ async fn test_replicated_kvs_service() {
     }
 
     println!("✅ ReplicatedKVSServer test passed!");
+    // Clean up processes to avoid cross-test interference
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -332,6 +336,8 @@ async fn test_sharded_kvs_service() {
     println!(
         "✅ ShardedKVSServer test completed (partial functionality due to simplified implementation)"
     );
+    // Clean up processes to avoid cross-test interference
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -435,4 +441,6 @@ async fn test_sharded_replicated_kvs_service() {
     println!(
         "🎯 Demonstrated: True composable server architecture with 9 total nodes (3 shards × 3 replicas)"
     );
+    // Clean up processes to avoid cross-test interference
+    deployment.stop().await.unwrap();
 }

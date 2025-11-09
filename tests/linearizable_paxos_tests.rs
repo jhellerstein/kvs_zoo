@@ -62,9 +62,9 @@ async fn test_paxos_provides_global_ordering() {
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
-    deployment.deploy().await.unwrap();
+    deployment.deploy().await.expect("Failed to deploy Paxos test. Check for concurrent trybuild artifact conflicts or leftover processes.");
     let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
-    deployment.start().await.unwrap();
+    deployment.start().await.expect("Failed to start deployment processes. Check spawned process logs for crashes.");
 
     // Allow time for Paxos leader election
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
@@ -124,6 +124,9 @@ async fn test_paxos_provides_global_ordering() {
     );
 
     println!("✅ Test passed: Paxos consensus is working and all nodes see global slot numbers");
+    
+    // Clean up to prevent interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -168,9 +171,9 @@ async fn test_linearizable_reads_see_writes() {
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
-    deployment.deploy().await.unwrap();
+    deployment.deploy().await.expect("Failed to deploy linearizable reads test. Check for concurrent trybuild artifact conflicts.");
     let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
-    deployment.start().await.unwrap();
+    deployment.start().await.expect("Failed to start deployment. Check logs for crashes.");
 
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 
@@ -214,6 +217,9 @@ async fn test_linearizable_reads_see_writes() {
     }
 
     println!("✅ Test passed: Write-read sequence completed");
+    
+    // Clean up to prevent interference with other tests
+    deployment.stop().await.unwrap();
 }
 
 #[tokio::test]
@@ -258,9 +264,9 @@ async fn test_concurrent_operations_are_linearized() {
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
-    deployment.deploy().await.unwrap();
+    deployment.deploy().await.expect("Failed to deploy concurrent operations test. Check for concurrent trybuild artifact conflicts.");
     let (mut client_out, mut client_in) = nodes.connect_bincode(client_port).await;
-    deployment.start().await.unwrap();
+    deployment.start().await.expect("Failed to start deployment. Check logs for crashes.");
 
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
 
@@ -298,4 +304,7 @@ async fn test_concurrent_operations_are_linearized() {
     }
 
     println!("✅ Test passed: Concurrent operations were linearized");
+    
+    // Clean up to prevent interference with other tests
+    deployment.stop().await.unwrap();
 }
