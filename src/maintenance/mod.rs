@@ -22,7 +22,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::maintain::{ReplicationStrategy, NoReplication, EpidemicGossip, BroadcastReplication};
+//! use kvs_zoo::maintenance::{ReplicationStrategy, NoReplication, EpidemicGossip, BroadcastReplication};
 //!
 //! // Single-node system (no replication needed)
 //! let replication = NoReplication::new();

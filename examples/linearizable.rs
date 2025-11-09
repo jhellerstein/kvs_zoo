@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     type Server = LinearizableKVSServer<
         LwwWrapper<String>,
-        kvs_zoo::maintain::LogBased<kvs_zoo::maintain::BroadcastReplication<LwwWrapper<String>>>,
+        kvs_zoo::maintenance::LogBased<kvs_zoo::maintenance::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
     let paxos_cfg = kvs_zoo::dispatch::PaxosConfig {
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         i_am_leader_check_timeout_delay_multiplier: 1,
     };
 
-    let replication = kvs_zoo::maintain::LogBased::new(kvs_zoo::maintain::BroadcastReplication::<
+    let replication = kvs_zoo::maintenance::LogBased::new(kvs_zoo::maintenance::BroadcastReplication::<
         LwwWrapper<String>,
     >::default());
     let paxos = kvs_zoo::dispatch::PaxosInterceptor::<LwwWrapper<String>>::with_config(paxos_cfg);

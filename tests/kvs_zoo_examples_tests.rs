@@ -9,7 +9,7 @@ use kvs_zoo::server::{KVSServer, LocalKVSServer, ReplicatedKVSServer, ShardedKVS
 use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
 
 // Replication strategies
-use kvs_zoo::maintain::{BroadcastReplication, EpidemicGossip, LogBased, NoReplication};
+use kvs_zoo::maintenance::{BroadcastReplication, EpidemicGossip, LogBased, NoReplication};
 
 // Op interceptors / pipelines
 use kvs_zoo::dispatch::{

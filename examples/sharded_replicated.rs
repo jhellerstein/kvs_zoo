@@ -32,13 +32,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     type Inner =
-        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::BroadcastReplication<CausalString>>;
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintenance::BroadcastReplication<CausalString>>;
     type Server = ShardedKVSServer<Inner>;
     let pipeline = kvs_zoo::dispatch::Pipeline::new(
         kvs_zoo::dispatch::ShardedRouter::new(3),
         kvs_zoo::dispatch::RoundRobinRouter::new(),
     );
-    let replication = kvs_zoo::maintain::BroadcastReplication::<CausalString>::default();
+    let replication = kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default();
 
     let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
     let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);

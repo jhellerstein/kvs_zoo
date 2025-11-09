@@ -21,7 +21,7 @@
 //! ## Usage Example
 //!
 //! ```rust,ignore
-//! use kvs_zoo::maintain::{TombstoneCleanup, TombstoneCleanupConfig};
+//! use kvs_zoo::maintenance::{TombstoneCleanup, TombstoneCleanupConfig};
 //!
 //! let config = TombstoneCleanupConfig {
 //!     cleanup_interval_ms: 60_000,  // Check every minute
@@ -31,7 +31,7 @@
 //! ```
 
 use crate::kvs_core::KVSNode;
-use crate::maintain::ReplicationStrategy;
+use crate::maintenance::ReplicationStrategy;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 

@@ -4,7 +4,7 @@
 //! and their integration with the KVS servers.
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::maintain::{BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy};
+use kvs_zoo::maintenance::{BroadcastReplication, EpidemicGossip, NoReplication, ReplicationStrategy};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, ReplicatedKVSServer};
 use kvs_zoo::values::CausalString;
@@ -42,7 +42,7 @@ fn test_epidemic_gossip_strategy() {
 
     // Test configuration
     let gossip_with_config = EpidemicGossip::<CausalString>::with_config(
-        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
+        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
     );
     _accepts_replication_strategy::<CausalString>(gossip_with_config);
 }
@@ -58,7 +58,7 @@ fn test_broadcast_replication_strategy() {
 
     // Test configuration
     let broadcast_with_config = BroadcastReplication::<CausalString>::with_config(
-        kvs_zoo::maintain::BroadcastReplicationConfig::low_latency(),
+        kvs_zoo::maintenance::BroadcastReplicationConfig::low_latency(),
     );
     _accepts_replication_strategy::<CausalString>(broadcast_with_config);
 }
@@ -171,7 +171,7 @@ async fn test_replicated_kvs_with_epidemic_gossip() {
     let client_external = flow.external::<()>();
 
     // Create replicated KVS server with EpidemicGossip
-    let gossip_config = kvs_zoo::maintain::EpidemicGossipConfig::small_cluster();
+    let gossip_config = kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster();
     let kvs_cluster =
         ReplicatedKVSServer::<CausalString, EpidemicGossip<CausalString>>::create_deployment(
             &flow,
@@ -183,7 +183,7 @@ async fn test_replicated_kvs_with_epidemic_gossip() {
         &kvs_cluster,
         &client_external,
         kvs_zoo::dispatch::RoundRobinRouter::new(),
-        EpidemicGossip::with_config(kvs_zoo::maintain::EpidemicGossipConfig::small_cluster()),
+        EpidemicGossip::with_config(kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster()),
     );
 
     // Deploy with 3 replicas for gossip
@@ -251,7 +251,7 @@ async fn test_replicated_kvs_with_broadcast_replication() {
     let client_external = flow.external::<()>();
 
     // Create replicated KVS server with BroadcastReplication
-    let broadcast_config = kvs_zoo::maintain::BroadcastReplicationConfig::low_latency();
+    let broadcast_config = kvs_zoo::maintenance::BroadcastReplicationConfig::low_latency();
     let kvs_cluster =
         ReplicatedKVSServer::<CausalString, BroadcastReplication<CausalString>>::create_deployment(
             &flow,
@@ -264,7 +264,7 @@ async fn test_replicated_kvs_with_broadcast_replication() {
         &client_external,
         kvs_zoo::dispatch::RoundRobinRouter::new(),
         BroadcastReplication::with_config(
-            kvs_zoo::maintain::BroadcastReplicationConfig::low_latency(),
+            kvs_zoo::maintenance::BroadcastReplicationConfig::low_latency(),
         ),
     );
 
@@ -321,20 +321,20 @@ async fn test_replicated_kvs_with_broadcast_replication() {
 #[test]
 fn test_replication_strategy_configurations() {
     // Test EpidemicGossip configurations
-    let gossip_default = kvs_zoo::maintain::EpidemicGossipConfig::default();
-    let gossip_small = kvs_zoo::maintain::EpidemicGossipConfig::small_cluster();
-    let gossip_large = kvs_zoo::maintain::EpidemicGossipConfig::large_cluster();
+    let gossip_default = kvs_zoo::maintenance::EpidemicGossipConfig::default();
+    let gossip_small = kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster();
+    let gossip_large = kvs_zoo::maintenance::EpidemicGossipConfig::large_cluster();
 
     assert_eq!(gossip_default.gossip_fanout, 3);
     assert_eq!(gossip_small.gossip_fanout, 2);
     assert_eq!(gossip_large.gossip_fanout, 5);
 
     // Test BroadcastReplication configurations
-    let broadcast_default = kvs_zoo::maintain::BroadcastReplicationConfig::default();
-    let broadcast_low_latency = kvs_zoo::maintain::BroadcastReplicationConfig::low_latency();
+    let broadcast_default = kvs_zoo::maintenance::BroadcastReplicationConfig::default();
+    let broadcast_low_latency = kvs_zoo::maintenance::BroadcastReplicationConfig::low_latency();
     let broadcast_high_throughput =
-        kvs_zoo::maintain::BroadcastReplicationConfig::high_throughput();
-    let broadcast_sync = kvs_zoo::maintain::BroadcastReplicationConfig::synchronous();
+        kvs_zoo::maintenance::BroadcastReplicationConfig::high_throughput();
+    let broadcast_sync = kvs_zoo::maintenance::BroadcastReplicationConfig::synchronous();
 
     assert!(!broadcast_default.enable_batching);
     assert!(!broadcast_low_latency.enable_batching);
@@ -392,22 +392,22 @@ fn test_backward_compatibility() {
     let _gossip = EpidemicGossip::<CausalString>::new();
     let _gossip_default = EpidemicGossip::<CausalString>::default();
     let _gossip_with_config = EpidemicGossip::<CausalString>::with_config(
-        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
+        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
     );
 
     let _broadcast = BroadcastReplication::<CausalString>::new();
     let _broadcast_default = BroadcastReplication::<CausalString>::default();
     let _broadcast_with_config = BroadcastReplication::<CausalString>::with_config(
-        kvs_zoo::maintain::BroadcastReplicationConfig::low_latency(),
+        kvs_zoo::maintenance::BroadcastReplicationConfig::low_latency(),
     );
 
     // Test that configurations still work the same way
-    let gossip_config = kvs_zoo::maintain::EpidemicGossipConfig::default();
+    let gossip_config = kvs_zoo::maintenance::EpidemicGossipConfig::default();
     assert_eq!(gossip_config.gossip_fanout, 3);
     assert_eq!(gossip_config.tombstone_prob, 0.1);
     assert_eq!(gossip_config.infection_prob, 0.5);
 
-    let broadcast_config = kvs_zoo::maintain::BroadcastReplicationConfig::default();
+    let broadcast_config = kvs_zoo::maintenance::BroadcastReplicationConfig::default();
     assert!(!broadcast_config.enable_batching);
     assert_eq!(broadcast_config.max_batch_size, 50);
 }

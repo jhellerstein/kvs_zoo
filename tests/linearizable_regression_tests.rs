@@ -17,11 +17,11 @@ fn test_linearizable_kvs_sequential_processing() {
 
     // Create a linearizable KVS server
     type LinearizableKVS =
-        LinearizableKVSServer<LwwWrapper<String>, kvs_zoo::maintain::NoReplication>;
+        LinearizableKVSServer<LwwWrapper<String>, kvs_zoo::maintenance::NoReplication>;
 
     // Verify that it uses PaxosInterceptor for ordering
     let op_pipeline = PaxosInterceptor::new();
-    let replication = kvs_zoo::maintain::NoReplication::new();
+    let replication = kvs_zoo::maintenance::NoReplication::new();
 
     // Test that the server can be created and has correct properties
     let _kvs = LinearizableKVS::new(3);

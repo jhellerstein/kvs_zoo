@@ -119,17 +119,17 @@ async fn test_replicated_kvs_service() {
 
     // Create replicated KVS server
     let kvs_cluster =
-        ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::create_deployment(
+        ReplicatedKVSServer::<CausalString, kvs_zoo::maintenance::NoReplication>::create_deployment(
             &flow,
             kvs_zoo::dispatch::RoundRobinRouter::new(),
-            kvs_zoo::maintain::NoReplication::new(),
+            kvs_zoo::maintenance::NoReplication::new(),
         );
-    let client_port = ReplicatedKVSServer::<CausalString, kvs_zoo::maintain::NoReplication>::run(
+    let client_port = ReplicatedKVSServer::<CausalString, kvs_zoo::maintenance::NoReplication>::run(
         &proxy,
         &kvs_cluster,
         &client_external,
         kvs_zoo::dispatch::RoundRobinRouter::new(),
-        kvs_zoo::maintain::NoReplication::new(),
+        kvs_zoo::maintenance::NoReplication::new(),
     );
 
     // Deploy with 3 replicas
@@ -355,17 +355,17 @@ async fn test_sharded_replicated_kvs_service() {
 
     // Create sharded + replicated KVS server
     let shard_deployments = ShardedKVSServer::<
-        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>,
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintenance::NoReplication>,
     >::create_deployment(
         &flow,
         kvs_zoo::dispatch::Pipeline::new(
             kvs_zoo::dispatch::ShardedRouter::new(3),
             kvs_zoo::dispatch::RoundRobinRouter::new(),
         ),
-        kvs_zoo::maintain::NoReplication::new(),
+        kvs_zoo::maintenance::NoReplication::new(),
     );
     let client_port = ShardedKVSServer::<
-        ReplicatedKVSServer<CausalString, kvs_zoo::maintain::NoReplication>,
+        ReplicatedKVSServer<CausalString, kvs_zoo::maintenance::NoReplication>,
     >::run(
         &proxy,
         &shard_deployments,
@@ -374,7 +374,7 @@ async fn test_sharded_replicated_kvs_service() {
             kvs_zoo::dispatch::ShardedRouter::new(3),
             kvs_zoo::dispatch::RoundRobinRouter::new(),
         ),
-        kvs_zoo::maintain::NoReplication::new(),
+        kvs_zoo::maintenance::NoReplication::new(),
     );
 
     // Deploy with multiple shards (each shard has 3 replicas)

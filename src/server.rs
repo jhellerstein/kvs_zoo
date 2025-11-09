@@ -21,7 +21,7 @@
 
 use crate::dispatch::OpIntercept;
 use crate::kvs_core::KVSNode;
-use crate::maintain::ReplicationStrategy;
+use crate::maintenance::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
@@ -54,7 +54,7 @@ where
     ///
     /// Defines how data is synchronized between nodes in the background.
     /// Examples: (), NoReplication, EpidemicGossip, BroadcastReplication
-    type ReplicationStrategy: crate::maintain::ReplicationStrategy<V>;
+    type ReplicationStrategy: crate::maintenance::ReplicationStrategy<V>;
 
     /// The deployment unit for this service (could be a single process or cluster)
     type Deployment<'a>;
@@ -185,7 +185,7 @@ where
 }
 
 /// Replicated KVS server with configurable replication strategy
-pub struct ReplicatedKVSServer<V, R = crate::maintain::NoReplication> {
+pub struct ReplicatedKVSServer<V, R = crate::maintenance::NoReplication> {
     #[allow(dead_code)] // TODO: Use this field to make cluster size configurable
     cluster_size: usize,
     _phantom: std::marker::PhantomData<(V, R)>,
@@ -214,7 +214,7 @@ where
         + Send
         + Sync
         + 'static,
-    R: crate::maintain::ReplicationStrategy<V>,
+    R: crate::maintenance::ReplicationStrategy<V>,
 {
     type OpPipeline = crate::dispatch::RoundRobinRouter;
     type ReplicationStrategy = R;
@@ -426,7 +426,7 @@ where
 pub mod compositions {
     use super::*;
     // Import replication strategies to avoid crate:: path issues in staged code
-    use crate::maintain::{BroadcastReplication, EpidemicGossip, NoReplication};
+    use crate::maintenance::{BroadcastReplication, EpidemicGossip, NoReplication};
 
     /// Local KVS with inferred value type
     pub type Local<V> = LocalKVSServer<V>;
@@ -509,12 +509,12 @@ pub mod compositions {
 /// ## Example
 /// ```rust
 /// use kvs_zoo::server::{KVSServer, LinearizableKVSServer};
-/// use kvs_zoo::maintain::BroadcastReplication;
+/// use kvs_zoo::maintenance::BroadcastReplication;
 /// use kvs_zoo::values::CausalString;
 ///
 /// type LinearizableKVS = LinearizableKVSServer<CausalString, BroadcastReplication<CausalString>>;
 /// ```
-pub struct LinearizableKVSServer<V, R = crate::maintain::NoReplication> {
+pub struct LinearizableKVSServer<V, R = crate::maintenance::NoReplication> {
     _phantom: std::marker::PhantomData<(V, R)>,
 }
 
@@ -703,12 +703,12 @@ mod tests {
         let _local = LocalKVSServer::<crate::values::LwwWrapper<String>>::new();
         let _replicated: ReplicatedKVSServer<
             crate::values::CausalString,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         > = ReplicatedKVSServer::new(3);
         let _sharded_local =
             ShardedKVSServer::<LocalKVSServer<crate::values::LwwWrapper<String>>>::new(3);
         let _sharded_replicated = ShardedKVSServer::<
-            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication>,
         >::new(3);
 
         println!("✅ Server types compile!");
@@ -724,10 +724,10 @@ mod tests {
         );
 
         let replicated_pipeline = crate::dispatch::RoundRobinRouter::new();
-        let replicated_replication = crate::maintain::NoReplication::new();
+        let replicated_replication = crate::maintenance::NoReplication::new();
         println!(
             "   ReplicatedKVS size: {}",
-            <ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication> as KVSServer<
+            <ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication> as KVSServer<
                 crate::values::CausalString,
             >>::size(replicated_pipeline, replicated_replication)
         );
@@ -748,11 +748,11 @@ mod tests {
             crate::dispatch::ShardedRouter::new(3),
             crate::dispatch::RoundRobinRouter::new(),
         );
-        let sharded_replicated_replication = crate::maintain::NoReplication::new();
+        let sharded_replicated_replication = crate::maintenance::NoReplication::new();
         println!(
             "   ShardedReplicatedKVS size: {}",
             <ShardedKVSServer<
-                ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
+                ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication>,
             > as KVSServer<crate::values::CausalString>>::size(
                 sharded_replicated_pipeline,
                 sharded_replicated_replication
@@ -773,10 +773,10 @@ mod tests {
             >>::create_deployment(&flow, local_pipeline, local_replication);
 
         let replicated_pipeline = crate::dispatch::RoundRobinRouter::new();
-        let replicated_replication = crate::maintain::NoReplication::new();
+        let replicated_replication = crate::maintenance::NoReplication::new();
         let _replicated_deployment = <ReplicatedKVSServer<
             crate::values::CausalString,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         > as KVSServer<crate::values::CausalString>>::create_deployment(
             &flow,
             replicated_pipeline,
@@ -799,9 +799,9 @@ mod tests {
             crate::dispatch::ShardedRouter::new(3),
             crate::dispatch::RoundRobinRouter::new(),
         );
-        let sharded_replicated_replication = crate::maintain::NoReplication::new();
+        let sharded_replicated_replication = crate::maintenance::NoReplication::new();
         let _sharded_replicated_deployments = <ShardedKVSServer<
-            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication>,
         > as KVSServer<crate::values::CausalString>>::create_deployment(
             &flow,
             sharded_replicated_pipeline,
@@ -831,14 +831,14 @@ mod tests {
 
         // ReplicatedKVSServer should use RoundRobinRouter and configurable replication
         type ReplicatedServer =
-            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>;
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication>;
         type ReplicatedPipeline =
             <ReplicatedServer as KVSServer<crate::values::CausalString>>::OpPipeline;
         type ReplicatedReplication =
             <ReplicatedServer as KVSServer<crate::values::CausalString>>::ReplicationStrategy;
 
         let _replicated_pipeline: ReplicatedPipeline = crate::dispatch::RoundRobinRouter::new();
-        let _replicated_replication: ReplicatedReplication = crate::maintain::NoReplication::new();
+        let _replicated_replication: ReplicatedReplication = crate::maintenance::NoReplication::new();
 
         // ShardedKVSServer should use Pipeline<ShardedRouter, Inner::OpPipeline>
         type ShardedLocalServer =
@@ -862,7 +862,7 @@ mod tests {
     async fn test_pipeline_composition_matches_server_composition() {
         // Test that ShardedKVSServer<ReplicatedKVSServer> has the expected pipeline type
         type ShardedReplicatedServer = ShardedKVSServer<
-            ReplicatedKVSServer<crate::values::CausalString, crate::maintain::NoReplication>,
+            ReplicatedKVSServer<crate::values::CausalString, crate::maintenance::NoReplication>,
         >;
         type ExpectedPipeline = crate::dispatch::Pipeline<
             crate::dispatch::ShardedRouter,
@@ -877,7 +877,7 @@ mod tests {
 
         // Test that we can use this pipeline with the server
         let flow = FlowBuilder::new();
-        let replication = crate::maintain::NoReplication::new();
+        let replication = crate::maintenance::NoReplication::new();
         let _deployment =
             <ShardedReplicatedServer as KVSServer<crate::values::CausalString>>::create_deployment(
                 &flow,
@@ -964,7 +964,7 @@ mod tests {
     fn test_linearizable_kvs_creation() {
         let _kvs = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::new(3);
 
         let custom_config = crate::dispatch::PaxosConfig {
@@ -975,12 +975,12 @@ mod tests {
         };
         let _kvs_custom = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::with_paxos_config(5, custom_config);
 
         let _kvs_fault_tolerant = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::with_fault_tolerance(5, 2);
 
         println!("✅ LinearizableKVSServer creation works!");
@@ -1008,7 +1008,7 @@ mod tests {
 
         let kvs = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::new(3);
         _test_kvs_server(kvs);
 
@@ -1018,11 +1018,11 @@ mod tests {
     #[test]
     fn test_linearizable_kvs_size() {
         let op_pipeline = crate::dispatch::PaxosInterceptor::new();
-        let replication = crate::maintain::NoReplication::new();
+        let replication = crate::maintenance::NoReplication::new();
 
         let size = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::size(op_pipeline, replication);
         assert_eq!(size, 3); // Minimum for Paxos consensus
 
@@ -1033,11 +1033,11 @@ mod tests {
     fn test_linearizable_kvs_deployment_creation() {
         let flow = FlowBuilder::new();
         let op_pipeline = crate::dispatch::PaxosInterceptor::new();
-        let replication = crate::maintain::NoReplication::new();
+        let replication = crate::maintenance::NoReplication::new();
 
         let _deployment = LinearizableKVSServer::<
             crate::values::LwwWrapper<String>,
-            crate::maintain::NoReplication,
+            crate::maintenance::NoReplication,
         >::create_deployment(&flow, op_pipeline, replication);
 
         // Finalize the flow to avoid panic

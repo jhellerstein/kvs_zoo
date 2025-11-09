@@ -62,11 +62,11 @@ async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
 
     type Server = ReplicatedKVSServer<
         CausalString,
-        kvs_zoo::maintain::EpidemicGossip<CausalString>,
+        kvs_zoo::maintenance::EpidemicGossip<CausalString>,
     >;
     let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
-    let replication = kvs_zoo::maintain::EpidemicGossip::with_config(
-        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
+    let replication = kvs_zoo::maintenance::EpidemicGossip::with_config(
+        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
     );
 
     let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
@@ -98,11 +98,11 @@ async fn run_lww() -> Result<(), Box<dyn std::error::Error>> {
 
     type Server = ReplicatedKVSServer<
         LwwWrapper<String>,
-        kvs_zoo::maintain::EpidemicGossip<LwwWrapper<String>>,
+        kvs_zoo::maintenance::EpidemicGossip<LwwWrapper<String>>,
     >;
     let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
-    let replication = kvs_zoo::maintain::EpidemicGossip::with_config(
-        kvs_zoo::maintain::EpidemicGossipConfig::small_cluster(),
+    let replication = kvs_zoo::maintenance::EpidemicGossip::with_config(
+        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
     );
 
     let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
