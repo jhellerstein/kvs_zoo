@@ -4,7 +4,7 @@
 //! across cluster nodes for horizontal scaling. Each key is consistently
 //! routed to the same shard based on its hash value.
 
-use crate::dispatch::OpIntercept;
+use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -69,39 +69,37 @@ impl ShardedRouter {
 
 impl<V> OpIntercept<V> for ShardedRouter
 where
-    V: std::fmt::Debug,
+    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {
+    type Deployment<'a> = Deployment<'a>;
+
+    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
+        Deployment::SingleCluster(flow.cluster::<KVSNode>())
+    }
+
     fn intercept_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        cluster: &Cluster<'a, KVSNode>,
+        deployment: &Self::Deployment<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
+        let cluster = deployment.kvs_cluster();
         let shard_count = self.shard_count;
-        let ops_to_be_sharded = operations
-            .inspect(q!(|op| {
-                match op {
-                    KVSOperation::Put(key, value) => {
-                        println!("🔀 Sharding: PUT {} = {:?}", key, value)
-                    }
-                    KVSOperation::Get(key) => println!("🔀 Sharding: GET {}", key),
-                }
-            }))
+
+        // Calculate shard ID for each operation based on its key
+        operations
             .map(q!(move |op| {
                 let key = match &op {
-                    KVSOperation::Put(key, _) => key,
-                    KVSOperation::Get(key) => key,
+                    KVSOperation::Get(k) => k,
+                    KVSOperation::Put(k, _) => k,
                 };
-                // Calculate shard ID using consistent hashing
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                std::hash::Hash::hash(key, &mut hasher);
-                let shard_id = (std::hash::Hasher::finish(&hasher) % shard_count as u64) as u32;
+                let shard_id = ShardedRouter::calculate_shard_id(key, shard_count);
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
-            }));
-
-        ops_to_be_sharded.into_keyed().demux_bincode(cluster)
+            }))
+            .into_keyed()
+            .demux_bincode(cluster)
     }
 }
 

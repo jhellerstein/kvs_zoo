@@ -14,33 +14,23 @@
 //! development, testing, and simple single-machine applications.
 
 // futures traits are used by the driver; not needed here directly
-use kvs_zoo::server::{KVSServer, LocalKVSServer};
+use kvs_zoo::dispatch::SingleNodeRouter;
+use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Local KVS Demo (single node)");
 
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process::<()>();
-    let client_external = flow.external::<()>();
+    // Server architecture: single node with LWW semantics
+    type Server = KVSServer<LwwWrapper<String>, SingleNodeRouter, ()>;
+    
+    // Build and deploy with minimal boilerplate
+    let (mut deployment, out, input) = Server::builder()
+        .with_cluster_size(1)
+        .build()
+        .await?;
 
-    type Server = LocalKVSServer<LwwWrapper<String>>;
-    let pipeline = kvs_zoo::dispatch::SingleNodeRouter::new();
-    let replication = (); // none
-    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication);
-    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
-
-    let nodes = flow
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(&cluster, vec![localhost.clone(); 1])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 

@@ -4,7 +4,7 @@
 //! round-robin load balancing, ensuring even distribution of work across
 //! all available replicas.
 
-use crate::dispatch::OpIntercept;
+use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -48,14 +48,21 @@ impl RoundRobinRouter {
 }
 
 impl<V> OpIntercept<V> for RoundRobinRouter {
+    type Deployment<'a> = Deployment<'a>;
+
+    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
+        Deployment::SingleCluster(flow.cluster::<KVSNode>())
+    }
+
     fn intercept_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        cluster: &Cluster<'a, KVSNode>,
+        deployment: &Self::Deployment<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
+        let cluster = deployment.kvs_cluster();
         // Distribute operations round-robin across all replica nodes
         // This provides load balancing while ensuring all nodes can handle operations
         operations.round_robin_bincode(cluster, nondet!(/** distribute operations round robin */))

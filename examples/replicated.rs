@@ -1,7 +1,7 @@
 //! Replicated KVS Example
 //!
 //! **Configuration:**
-//! - Architecture: `ReplicatedKVSServer<V, EpidemicGossip<V>>`
+//! - Architecture: Replicated KVS with configurable replication strategies
 //! - Routing: `RoundRobinRouter` (load balance across replicas)
 //! - Replication: `EpidemicGossip` (Demers-style rumor-mongering)
 //! - Value Types:
@@ -22,7 +22,9 @@
 //!   cargo run --example replicated -- --lattice causal
 //!   cargo run --example replicated -- --lattice lww
 
-use kvs_zoo::server::{KVSServer, ReplicatedKVSServer};
+use kvs_zoo::dispatch::RoundRobinRouter;
+use kvs_zoo::maintenance::EpidemicGossip;
+use kvs_zoo::server::KVSServer;
 
 fn parse_lattice_type() -> String {
     let mut args = std::env::args().skip_while(|a| a != "--lattice");
@@ -54,32 +56,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
     use kvs_zoo::values::CausalString;
 
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process::<()>();
-    let client_external = flow.external::<()>();
-
-    type Server = ReplicatedKVSServer<
+    // Server architecture: replicated with causal consistency and gossip
+    type Server = KVSServer<
         CausalString,
-        kvs_zoo::maintenance::EpidemicGossip<CausalString>,
+        RoundRobinRouter,
+        EpidemicGossip<CausalString>,
     >;
-    let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
-    let replication = kvs_zoo::maintenance::EpidemicGossip::with_config(
-        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
-    );
+    
+    let (mut deployment, out, input) = Server::builder()
+        .with_cluster_size(3)  // 3 replicas
+        .build()
+        .await?;
 
-    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
-    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
-
-    let nodes = flow
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(&cluster, vec![localhost.clone(); 3])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (out, input) = nodes.connect_bincode(port).await;
+    deployment.start().await?;
     deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
@@ -90,32 +79,18 @@ async fn run_causal() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_lww() -> Result<(), Box<dyn std::error::Error>> {
     use kvs_zoo::values::LwwWrapper;
 
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process::<()>();
-    let client_external = flow.external::<()>();
-
-    type Server = ReplicatedKVSServer<
+    // Server architecture: replicated with LWW semantics and gossip
+    type Server = KVSServer<
         LwwWrapper<String>,
-        kvs_zoo::maintenance::EpidemicGossip<LwwWrapper<String>>,
+        RoundRobinRouter,
+        EpidemicGossip<LwwWrapper<String>>,
     >;
-    let pipeline = kvs_zoo::dispatch::RoundRobinRouter::new();
-    let replication = kvs_zoo::maintenance::EpidemicGossip::with_config(
-        kvs_zoo::maintenance::EpidemicGossipConfig::small_cluster(),
-    );
+    
+    let (mut deployment, out, input) = Server::builder()
+        .with_cluster_size(3)  // 3 replicas
+        .build()
+        .await?;
 
-    let cluster = Server::create_deployment(&flow, pipeline.clone(), replication.clone());
-    let port = Server::run(&proxy, &cluster, &client_external, pipeline, replication);
-
-    let nodes = flow
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(&cluster, vec![localhost.clone(); 3])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (out, input) = nodes.connect_bincode(port).await;
     deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 

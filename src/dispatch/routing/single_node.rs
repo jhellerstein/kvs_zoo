@@ -6,7 +6,7 @@
 //! effectively an identity. In a multi-node cluster this pins all operations
 //! to member 0 and should generally be avoided.
 
-use crate::dispatch::OpIntercept;
+use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -44,14 +44,21 @@ impl SingleNodeRouter {
 }
 
 impl<V> OpIntercept<V> for SingleNodeRouter {
+    type Deployment<'a> = Deployment<'a>;
+
+    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
+        Deployment::SingleCluster(flow.cluster::<KVSNode>())
+    }
+
     fn intercept_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        cluster: &Cluster<'a, KVSNode>,
+        deployment: &Self::Deployment<'a>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
+        let cluster = deployment.kvs_cluster();
         // Route all operations to a single local member (member 0)
         // This avoids broadcast and acts as a no-op in single-node clusters.
         operations

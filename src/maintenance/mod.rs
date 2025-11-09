@@ -1,28 +1,35 @@
-//! Replication Strategies for KVS Systems
+//! Maintenance Strategies for KVS Systems
 //!
-//! This module provides background data synchronization strategies that operate
-//! independently of operation processing. Replication strategies handle concerns
-//! like eventual consistency, strong consistency, and anti-entropy repair.
+//! This module provides data maintenance strategies organized by scope:
+//! - **cluster**: Strategies that coordinate across multiple nodes (gossip, broadcast, log-based)
+//! - **node**: Strategies that operate on individual nodes (tombstone cleanup)
 //!
 //! ## Core Concepts
 //!
 //! - **ReplicationStrategy**: Trait for background data synchronization
 //! - **NoReplication**: No-op strategy for single-node systems
 //! - **Unit type ()**: Alternative no-op implementation
-//! - **EpidemicGossip**: Gossip-based eventual consistency
+//!
+//! ## Cluster-level strategies
+//! - **EpidemicGossip**: Gossip-based eventual consistency between replicas
 //! - **BroadcastReplication**: Broadcast-based strong consistency
-//! - **TombstoneCleanup**: Garbage collection for deleted entries (placeholder)
+//! - **LogBased**: Log-based replication (used with Paxos)
+//!
+//! ## Node-level strategies
+//! - **TombstoneCleanup**: Garbage collection for deleted entries
 //!
 //! ## Separation of Concerns
 //!
-//! Replication strategies are completely separate from operation interceptors:
-//! - Operation interceptors handle incoming operations (routing, consensus, auth)
-//! - Replication strategies handle background data sync between nodes
+//! Maintenance strategies are completely separate from operation dispatchers:
+//! - Operation dispatchers handle incoming operations (routing, ordering, filtering)
+//! - Maintenance strategies handle background data consistency
 //!
 //! ## Usage
 //!
 //! ```rust
-//! use kvs_zoo::maintenance::{ReplicationStrategy, NoReplication, EpidemicGossip, BroadcastReplication};
+//! use kvs_zoo::maintenance::{ReplicationStrategy, NoReplication};
+//! use kvs_zoo::maintenance::cluster::{EpidemicGossip, BroadcastReplication};
+//! use kvs_zoo::maintenance::node::TombstoneCleanup;
 //!
 //! // Single-node system (no replication needed)
 //! let replication = NoReplication::new();
@@ -36,20 +43,16 @@
 //! let replication: BroadcastReplication<String> = BroadcastReplication::default();
 //! ```
 
-pub mod broadcast;
-pub mod gossip;
-pub mod logbased;
-pub mod tombstone_cleanup;
+pub mod cluster;
+pub mod node;
 
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-// Re-export replication strategies for convenience
-pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
-pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
-pub use logbased::LogBased;
-pub use tombstone_cleanup::{TombstoneCleanup, TombstoneCleanupConfig};
+// Re-export commonly used strategies for convenience
+pub use cluster::{BroadcastReplication, BroadcastReplicationConfig, EpidemicGossip, EpidemicGossipConfig, LogBased};
+pub use node::{TombstoneCleanup, TombstoneCleanupConfig};
 
 /// Core trait for replication strategies
 ///
