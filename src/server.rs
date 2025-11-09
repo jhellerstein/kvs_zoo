@@ -36,6 +36,7 @@
 //! ```
 
 use crate::dispatch::{OpIntercept, KVSDeployment};
+use crate::cluster_spec::KVSCluster;
 use crate::maintenance::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
@@ -278,6 +279,25 @@ where
         }
     }
 
+    /// Create a builder from a cluster specification
+    /// 
+    /// This is the preferred API for unambiguous topology definition:
+    /// ```ignore
+    /// // 3 shards × 3 replicas = 9 nodes
+    /// let spec = KVSCluster::sharded_replicated(3, 3);
+    /// let builder = Server::from_spec(spec);
+    /// ```
+    pub fn from_spec(spec: KVSCluster) -> Self {
+        Self {
+            num_nodes: spec.total_nodes(),
+            num_aux1: None,
+            num_aux2: None,
+            dispatch: None,
+            maintenance: None,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
     /// Set the number of KVS cluster nodes to deploy
     /// 
     /// **Semantics depend on your dispatch strategy:**
@@ -411,6 +431,13 @@ where
     /// Create a builder for easy setup
     pub fn builder() -> KVSBuilder<V, D, M> {
         KVSBuilder::new()
+    }
+
+    /// Create a builder from a cluster specification
+    /// 
+    /// Preferred API for unambiguous topology definition.
+    pub fn from_spec(spec: KVSCluster) -> KVSBuilder<V, D, M> {
+        KVSBuilder::from_spec(spec)
     }
 }
 
