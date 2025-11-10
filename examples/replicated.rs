@@ -24,16 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Replicated KVS Demo (gossip)");
 
     // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster { // a cluster
-        count: 1,                                       // deploy only 1 such cluster
-        dispatch: RoundRobinRouter::new(),              // round-robin inbound messages across the members
-        maintenance: SimpleGossip::<LwwWrapper<String>>::new(100usize), // cluster maintenance: gossip replication (100ms interval)
-        each: KVSNode {                                 // each cluster member is a single KVSnode
+    let cluster_spec = KVSCluster::new(
+        RoundRobinRouter::new(),                        // round-robin inbound messages across the members
+        SimpleGossip::<LwwWrapper<String>>::new(100usize), // cluster maintenance: gossip replication (100ms interval)
+        1,                                              // deploy only 1 such cluster
+        KVSNode {                                       // each cluster member is a single KVSnode
             count: 3,                                       // three members
             dispatch: (),                                   // no further dispatch at the individual nodes
             maintenance: TombstoneCleanup::new(5_000usize), // node-level maintenance: local cleanup (5s interval)
         }
-    };
+    );
 
     // Build and start the server from the spec
     // This is where you specify your `merge`-able value type, which is how to control consistency of unordered KVSs.

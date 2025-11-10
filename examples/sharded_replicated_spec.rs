@@ -35,16 +35,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 Topology: 3 shards × 3 replicas = 9 nodes\n");
 
     // Define the cluster topology declaratively (3 shards × 3 replicas)
-    let cluster_spec = KVSCluster {
-        count: 3,                      // shards
-        dispatch: kvs_zoo::dispatch::ShardedRouter::new(3),
-    maintenance: kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default(), // replication strategy attached here
-        each: KVSNode {
+    let cluster_spec = KVSCluster::new(
+        kvs_zoo::dispatch::ShardedRouter::new(3),
+        kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default(), // replication strategy attached here
+        3,                             // shards
+        KVSNode {
             count: 3,                  // replicas per shard
             dispatch: kvs_zoo::dispatch::RoundRobinRouter::new(),
             maintenance: (),           // no additional per-replica maintenance
         },
-    };
+    );
 
     println!("Cluster specification:");
     println!("  Shards: {}", cluster_spec.shard_count());

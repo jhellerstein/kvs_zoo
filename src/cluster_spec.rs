@@ -88,9 +88,22 @@ pub struct KVSCluster<D, M, Child> {
     pub count: usize,
     pub each: Child,
     /// Optional auxiliary clusters (e.g., for Paxos proposers/acceptors)
-    /// These are deployed alongside but separate from the main cluster hierarchy
-    #[doc(hidden)]
-    pub aux_clusters: Option<AuxiliaryClusters>,
+    /// These are deployed alongside but separate from the main cluster hierarchy.
+    /// Use `.with_aux1()` and `.with_aux2()` to set these.
+    aux_clusters: Option<AuxiliaryClusters>,
+}
+
+impl<D, M, Child> KVSCluster<D, M, Child> {
+    /// Create a new cluster specification
+    pub fn new(dispatch: D, maintenance: M, count: usize, each: Child) -> Self {
+        Self {
+            dispatch,
+            maintenance,
+            count,
+            each,
+            aux_clusters: None,
+        }
+    }
 }
 
 /// Auxiliary clusters for protocols that need additional node groups

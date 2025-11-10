@@ -24,24 +24,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Total: 2 regions × 3 datacenters × 5 nodes = 30 nodes\n");
 
     // Define the 3-level cluster spec
-    let spec = KVSCluster {
+    let spec = KVSCluster::new(
         // Level 1: Route to region by key hash
-        dispatch: ShardedRouter::new(2),
-        maintenance: (), // No cross-region sync
-        count: 2, // 2 regions
-        each: KVSCluster {
+        ShardedRouter::new(2),
+        (), // No cross-region sync
+        2, // 2 regions
+        KVSCluster::new(
             // Level 2: Route to datacenter (round-robin for simplicity)
-            dispatch: ShardedRouter::new(3),
-            maintenance: SimpleGossip::<LwwWrapper<String>>::new(200), // Gossip between datacenters
-            count: 3, // 3 datacenters per region
-            each: KVSNode {
+            ShardedRouter::new(3),
+            SimpleGossip::<LwwWrapper<String>>::new(200), // Gossip between datacenters
+            3, // 3 datacenters per region
+            KVSNode {
                 // Level 3: Actual storage nodes
                 dispatch: SingleNodeRouter, // No routing at leaf
                 maintenance: TombstoneCleanup::new(5_000), // Local cleanup every 5s
                 count: 5, // 5 nodes per datacenter
             },
-        },
-    };
+        ),
+    );
 
     println!("📊 Spec stats:");
     println!("   Total nodes: {}", spec.total_nodes());

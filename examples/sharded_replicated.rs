@@ -24,16 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 Topology: 3 shards × 3 replicas = 9 nodes\n");
 
     // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster { // a cluster
-        count: 3,                               // deploy 3 shards at the cluster level
-        dispatch: ShardedRouter::new(3),        // cluster dispatch: route to shard by key
-        maintenance: BroadcastReplication::<CausalString>::default(), // cluster maintenance: replicate within each shard
-        each: KVSNode {                         // each shard contains a replicated node group
+    let cluster_spec = KVSCluster::new(
+        ShardedRouter::new(3),                  // cluster dispatch: route to shard by key
+        BroadcastReplication::<CausalString>::default(), // cluster maintenance: replicate within each shard
+        3,                                      // deploy 3 shards at the cluster level
+        KVSNode {                               // each shard contains a replicated node group
             count: 3,                               // three replicas per shard
             dispatch: RoundRobinRouter::new(),      // node-level dispatch: load-balance across replicas
             maintenance: (),                        // no node-level maintenance
         },
-    };
+    );
 
     println!("Cluster specification (tree structure):");
     println!("  Shards (cluster.count): {}", cluster_spec.count);

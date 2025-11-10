@@ -22,16 +22,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Local KVS Demo (single node)");
 
     // Define the cluster topology hierarchically
-    let cluster_spec = KVSCluster { // a cluster
-        count: 1,                               // deploy only 1 such cluster
-        dispatch: SingleNodeRouter,             // dispatch all messages to the first node in the cluster
-        maintenance: (),                        // no cluster maintenance defined
-        each: KVSNode {                         // each cluster member is a single node
+    let cluster_spec = KVSCluster::new(
+        SingleNodeRouter,                       // dispatch all messages to the first node in the cluster
+        (),                                     // no cluster maintenance defined
+        1,                                      // deploy only 1 such cluster
+        KVSNode {                               // each cluster member is a single node
             count: 1,                               // deploy only 1 node in this cluster
             dispatch: (),                           // no dispatch: messages pass through directly to the local KVS
             maintenance: (),                        // no per-node maintenance defined
         },
-    };
+    );
 
     // Build and start a server from the Spec, using a generic type argument that supports `merge`.
     // This trivial single-node example does not call `merge`, so we choose the simple LwwWrapper

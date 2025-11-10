@@ -25,16 +25,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sharded Local KVS Demo");
 
     // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster { // a cluster
-        count: 3,                               // deploy 3 shards at the cluster level
-        dispatch: ShardedRouter::new(3),        // cluster dispatch: route to shard by key hash
-        maintenance: (),                        // no cluster-level maintenance
-        each: KVSNode {                         // each shard is a single local node
+    let cluster_spec = KVSCluster::new(
+        ShardedRouter::new(3),                  // cluster dispatch: route to shard by key hash
+        (),                                     // no cluster-level maintenance
+        3,                                      // deploy 3 shards at the cluster level
+        KVSNode {                               // each shard is a single local node
             count: 1,                               // one node per shard (no replication)
             dispatch: (),                           // no dispatch at the leaf: messages pass through directly
             maintenance: (),                        // no per-node maintenance
         },
-    };
+    );
 
     // Build and start the server from the spec - no separate type declaration needed!
     let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;

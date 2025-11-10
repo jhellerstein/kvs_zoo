@@ -23,17 +23,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Define the cluster topology hierarchically
-    let cluster_spec = KVSCluster {
-        dispatch: PaxosDispatcher::with_config(paxos_cfg),
-        maintenance: LogBased::<BroadcastReplication<LwwWrapper<String>>>::default(),
-        count: 1, // 1 cluster
-        each: KVSNode {
+    let cluster_spec = KVSCluster::new(
+        PaxosDispatcher::with_config(paxos_cfg),
+        LogBased::<BroadcastReplication<LwwWrapper<String>>>::default(),
+        1, // 1 cluster
+        KVSNode {
             dispatch: (),
             maintenance: (),
             count: 3, // 3 KVS replicas
         },
-        aux_clusters: None, // Will add via with_aux1/with_aux2
-    }
+    )
     .with_aux1(3) // 3 Paxos proposers
     .with_aux2(3); // 3 Paxos acceptors
 
