@@ -108,12 +108,12 @@ impl<D, M, Child> KVSCluster<D, M, Child> {
 
 /// Auxiliary clusters for protocols that need additional node groups
 /// (e.g., Paxos needs proposers and acceptors in addition to storage replicas)
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct AuxiliaryClusters {
-    /// First auxiliary cluster (e.g., Paxos proposers)
-    pub aux1_count: Option<usize>,
-    /// Second auxiliary cluster (e.g., Paxos acceptors)
-    pub aux2_count: Option<usize>,
+    /// First auxiliary cluster with optional name
+    pub aux1: Option<(usize, Option<String>)>, // (count, name)
+    /// Second auxiliary cluster with optional name
+    pub aux2: Option<(usize, Option<String>)>, // (count, name)
 }
 
 impl AuxiliaryClusters {
@@ -121,13 +121,27 @@ impl AuxiliaryClusters {
         Self::default()
     }
     
+    /// Add first auxiliary cluster with count
     pub fn with_aux1(mut self, count: usize) -> Self {
-        self.aux1_count = Some(count);
+        self.aux1 = Some((count, None));
         self
     }
     
+    /// Add first auxiliary cluster with count and name
+    pub fn with_aux1_named(mut self, count: usize, name: impl Into<String>) -> Self {
+        self.aux1 = Some((count, Some(name.into())));
+        self
+    }
+    
+    /// Add second auxiliary cluster with count
     pub fn with_aux2(mut self, count: usize) -> Self {
-        self.aux2_count = Some(count);
+        self.aux2 = Some((count, None));
+        self
+    }
+    
+    /// Add second auxiliary cluster with count and name
+    pub fn with_aux2_named(mut self, count: usize, name: impl Into<String>) -> Self {
+        self.aux2 = Some((count, Some(name.into())));
         self
     }
 }
@@ -239,13 +253,25 @@ where
     
     /// Set first auxiliary cluster count (e.g., Paxos proposers)
     pub fn with_aux1(mut self, count: usize) -> Self {
-        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux1_count = Some(count);
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux1 = Some((count, None));
+        self
+    }
+    
+    /// Set first auxiliary cluster with count and name
+    pub fn with_aux1_named(mut self, count: usize, name: impl Into<String>) -> Self {
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux1 = Some((count, Some(name.into())));
         self
     }
     
     /// Set second auxiliary cluster count (e.g., Paxos acceptors)
     pub fn with_aux2(mut self, count: usize) -> Self {
-        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux2_count = Some(count);
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux2 = Some((count, None));
+        self
+    }
+    
+    /// Set second auxiliary cluster with count and name
+    pub fn with_aux2_named(mut self, count: usize, name: impl Into<String>) -> Self {
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux2 = Some((count, Some(name.into())));
         self
     }
 
@@ -283,8 +309,8 @@ where
 
         KVSBuilder {
             num_nodes: total,
-            num_aux1: aux_clusters.as_ref().and_then(|a| a.aux1_count),
-            num_aux2: aux_clusters.as_ref().and_then(|a| a.aux2_count),
+            num_aux1: aux_clusters.as_ref().and_then(|a| a.aux1.as_ref().map(|(count, _)| *count)),
+            num_aux2: aux_clusters.as_ref().and_then(|a| a.aux2.as_ref().map(|(count, _)| *count)),
             dispatch: Some(dispatch),
             maintenance: Some(maintenance),
             _phantom: std::marker::PhantomData,
@@ -345,5 +371,26 @@ impl<D: fmt::Debug, M: fmt::Debug> fmt::Debug for KVSNode<D, M> {
             .field("maintenance", &self.maintenance)
             .field("count", &self.count)
             .finish()
+    }
+}
+
+impl fmt::Debug for AuxiliaryClusters {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = f.debug_struct("AuxiliaryClusters");
+        if let Some((count, name)) = &self.aux1 {
+            if let Some(n) = name {
+                s.field("aux1", &format!("{} ({})", count, n));
+            } else {
+                s.field("aux1", count);
+            }
+        }
+        if let Some((count, name)) = &self.aux2 {
+            if let Some(n) = name {
+                s.field("aux2", &format!("{} ({})", count, n));
+            } else {
+                s.field("aux2", count);
+            }
+        }
+        s.finish()
     }
 }

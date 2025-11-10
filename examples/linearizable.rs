@@ -33,8 +33,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             count: 3, // 3 KVS replicas
         },
     )
-    .with_aux1(3) // 3 Paxos proposers
-    .with_aux2(3); // 3 Paxos acceptors
+    .with_aux1_named(3, "proposers") // 3 Paxos proposers
+    .with_aux2_named(3, "acceptors"); // 3 Paxos acceptors
 
     let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
 
