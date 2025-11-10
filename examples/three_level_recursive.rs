@@ -12,7 +12,7 @@
 //! - Maintenance chains: CombinedMaintenance<Zero, CombinedMaintenance<Gossip, Tombstone>>
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::cluster_spec_recursive::{KVSCluster, KVSNode};
+use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::dispatch::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::maintenance::{SimpleGossip, TombstoneCleanup};
 use kvs_zoo::values::LwwWrapper;

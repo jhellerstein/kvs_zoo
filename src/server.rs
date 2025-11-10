@@ -283,49 +283,6 @@ where
         }
     }
 
-    /// Create a builder from a cluster specification
-    ///
-    /// This is the preferred API for unambiguous topology definition:
-    /// ```ignore
-    /// // 3 shards × 3 replicas = 9 nodes
-    /// let cluster_spec = KVSCluster {
-    ///     dispatch: ShardedRouter::new(3),
-    ///     maintenance: (),
-    ///     count: 3,
-    ///     each: KVSNode {
-    ///         dispatch: RoundRobinRouter::new(),
-    ///         maintenance: BroadcastReplication::default(),
-    ///         count: 3
-    ///     }
-    /// };
-    /// let builder = KVSBuilder::<YourValueType, _, _>::from_spec(cluster_spec);
-    /// ```
-    pub fn from_spec<CD, ND, CM, NM>(
-        spec: crate::cluster_spec::KVSCluster<CD, ND, CM, NM>,
-    ) -> KVSBuilder<V, crate::dispatch::Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>
-    where
-        CD: crate::dispatch::OpDispatch<V> + crate::dispatch::ClusterLevelDispatch + Clone,
-        ND: crate::dispatch::OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V> + Clone,
-        NM: ReplicationStrategy<V> + Clone,
-        crate::dispatch::Pipeline<CD, ND>: crate::dispatch::OpDispatch<V>,
-    {
-        KVSBuilder {
-            num_nodes: spec.total_nodes(),
-            num_aux1: None,
-            num_aux2: None,
-            dispatch: Some(crate::dispatch::Pipeline::new(
-                spec.dispatch,
-                spec.each.dispatch,
-            )),
-            maintenance: Some(crate::maintenance::CombinedMaintenance::new(
-                spec.maintenance,
-                spec.each.maintenance,
-            )),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
     /// Set the number of KVS cluster nodes to deploy
     ///
     /// **Semantics depend on your dispatch strategy:**
@@ -563,30 +520,6 @@ where
     /// Create a builder for easy setup
     pub fn builder() -> KVSBuilder<V, D, M> {
         KVSBuilder::new()
-    }
-
-    /// Create a builder from a cluster specification
-    ///
-    /// Preferred API for unambiguous topology definition.
-    pub fn from_spec<CD, ND, CM, NM>(
-        spec: crate::cluster_spec::KVSCluster<CD, ND, CM, NM>,
-    ) -> KVSBuilder<
-        V,
-        crate::dispatch::Pipeline<CD, ND>,
-        crate::maintenance::CombinedMaintenance<CM, NM>,
-    >
-    where
-        CD: crate::dispatch::OpDispatch<V> + crate::dispatch::ClusterLevelDispatch + Clone,
-        ND: crate::dispatch::OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V> + Clone,
-        NM: ReplicationStrategy<V> + Clone,
-        crate::dispatch::Pipeline<CD, ND>: crate::dispatch::OpDispatch<V>,
-    {
-        KVSBuilder::<
-            V,
-            crate::dispatch::Pipeline<CD, ND>,
-            crate::maintenance::CombinedMaintenance<CM, NM>,
-        >::from_spec(spec)
     }
 }
 

@@ -1,79 +1,268 @@
-//! Declarative cluster specification with inline dispatch and maintenance
+//! Declarative cluster specification with recursive nesting support
 //!
-//! This module provides a clean, declarative API for specifying KVS cluster
-//! topologies with dispatch and maintenance strategies attached to the tree nodes.
+//! Supports arbitrary-depth nesting: Cluster → Cluster → ... → Node
 //!
-//! ## Design Philosophy
+//! ## Design
 //!
-//! The cluster specification is a tree where:
-//! - **Dispatch** strategies attach to each level (how to route at that level)
-//! - **Maintenance** strategies attach to each level (how to sync at that level)
-//! - **Count** defines the fanout at that level
-//! - **Each** defines the child configuration
+//! The specification allows arbitrary nesting of clusters:
+//! - `KVSCluster<D, M, Child>` where `Child` can be another `KVSCluster` or a `KVSNode`
+//! - `KVSNode<D, M>` is the leaf (actual storage replicas)
 //!
-//! Notes:
-//! - At leaf nodes (actual storage replicas), routing is often unnecessary.
-//!   To make that explicit and educative, you can write `dispatch: ()` for a
-//!   `KVSNode` to indicate “no routing here”. The unit type implements
-//!   `OpDispatch` as a trivial forwarder to the single member.
-//! - At the cluster level, we require a real dispatcher (e.g., sharding or
-//!   replica selection). Using `dispatch: ()` at the top is intentionally
-//!   disallowed by the `from_spec` API to avoid ambiguity.
+//! Dispatch and maintenance chains are built recursively:
+//! - **Dispatch**: `Pipeline<D1, Pipeline<D2, D3>>` for nested routing
+//! - **Maintenance**: `CombinedMaintenance<M1, CombinedMaintenance<M2, M3>>` for layered sync
 //!
-//! Example: Sharded + Replicated (3 shards × 3 replicas = 9 nodes)
+//! ## Examples
 //!
+//! ### Single node (1 level)
+//! ```ignore
+//! KVSNode {
+//!     dispatch: SingleNodeRouter,
+//!     maintenance: (),
+//!     count: 1
+//! }
+//! ```
+//!
+//! ### Replicated (2 levels)
 //! ```ignore
 //! KVSCluster {
-//!     dispatch: ShardedRouter::new(3),        // Route to shard by key
-//!     maintenance: ZeroMaintenance,           // No cross-shard sync
-//!     count: 3,                               // 3 shards
+//!     dispatch: RoundRobinRouter::new(),
+//!     maintenance: SimpleGossip::new(100),
+//!     count: 3,  // 3 replicas
 //!     each: KVSNode {
-//!         dispatch: RoundRobinRouter::new(),  // Round-robin within shard
-//!         maintenance: BroadcastReplication::default(),  // Sync replicas
-//!         count: 3                            // 3 replicas per shard
+//!         dispatch: SingleNodeRouter,
+//!         maintenance: TombstoneCleanup::new(5000),
+//!         count: 1
 //!     }
 //! }
 //! ```
+//!
+//! ### Sharded + Replicated (2 levels)
+//! ```ignore
+//! KVSCluster {
+//!     dispatch: ShardedRouter::new(3),
+//!     maintenance: (),  // No cross-shard sync
+//!     count: 3,  // 3 shards
+//!     each: KVSNode {
+//!         dispatch: RoundRobinRouter::new(),
+//!         maintenance: BroadcastReplication::default(),
+//!         count: 3  // 3 replicas per shard
+//!     }
+//! }
+//! ```
+//!
+//! ### Multi-region (3 levels)
+//! ```ignore
+//! KVSCluster {
+//!     dispatch: RegionRouter::new(3),
+//!     maintenance: (),
+//!     count: 3,  // 3 regions
+//!     each: KVSCluster {
+//!         dispatch: DatacenterRouter::new(),
+//!         maintenance: SimpleGossip::new(100),
+//!         count: 2,  // 2 datacenters per region
+//!         each: KVSNode {
+//!             dispatch: (),
+//!             maintenance: TombstoneCleanup::new(5000),
+//!             count: 5  // 5 nodes per datacenter
+//!         }
+//!     }
+//! }
+//! // Total: 3 × 2 × 5 = 30 nodes
+//! ```
 
 use std::fmt;
-use crate::dispatch::{OpDispatch, ClusterLevelDispatch, Pipeline};
-use crate::maintenance::ReplicationStrategy;
+use crate::dispatch::{OpDispatch, Pipeline};
+use crate::maintenance::{ReplicationStrategy, CombinedMaintenance};
 use crate::server::{KVSBuilder, BuiltKVS};
 
-/// Top-level cluster specification with dispatch and maintenance
+/// Cluster specification supporting recursive nesting
 ///
-/// - `CD`: Cluster-level dispatch type (e.g., ShardedRouter, SingleNodeRouter)
-/// - `ND`: Node-level dispatch type (e.g., RoundRobinRouter, SingleNodeRouter)
-/// - `CM`: Cluster-level maintenance type
-/// - `NM`: Node-level maintenance type
+/// - `D`: Dispatch at this level
+/// - `M`: Maintenance at this level
+/// - `Child`: Either another `KVSCluster` or `KVSNode` (leaf)
 #[derive(Clone)]
-pub struct KVSCluster<CD, ND, CM, NM> {
-    /// Dispatch strategy for routing between shards/clusters
-    pub dispatch: CD,
-    /// Maintenance strategy at cluster level (typically () for no cross-shard sync)
-    pub maintenance: CM,
-    /// Number of shards/clusters
+pub struct KVSCluster<D, M, Child> {
+    pub dispatch: D,
+    pub maintenance: M,
     pub count: usize,
-    /// Configuration for each shard/cluster
-    pub each: KVSNode<ND, NM>,
+    pub each: Child,
 }
 
-/// Node-level specification with dispatch and maintenance
-///
-/// - `D`: Dispatch type (e.g., RoundRobinRouter for replicas, SingleNodeRouter for single node)
-/// - `M`: Maintenance type (e.g., SimpleGossip, BroadcastReplication, ZeroMaintenance)
+/// Leaf node specification (storage replicas)
 #[derive(Clone)]
 pub struct KVSNode<D, M> {
-    /// Dispatch strategy within this node (e.g., round-robin across replicas)
     pub dispatch: D,
-    /// Maintenance strategy for this node (e.g., gossip between replicas)
     pub maintenance: M,
-    /// Number of replicas
     pub count: usize,
 }
 
+// =============================================================================
+// ClusterSpec trait - enables recursive operations on any nesting depth
+// =============================================================================
+
+/// Core trait for recursive cluster specifications
+///
+/// This trait allows both `KVSCluster` and `KVSNode` to be used interchangeably
+/// as children in recursive cluster definitions. It provides methods for
+/// calculating total nodes and building dispatch/maintenance chains recursively.
+pub trait ClusterSpec {
+    /// The type of the dispatch chain for this spec level and below
+    type DispatchChain;
+    
+    /// The type of the maintenance chain for this spec level and below
+    type MaintenanceChain;
+    
+    /// Total number of leaf nodes in this spec (recursive)
+    fn total_nodes(&self) -> usize;
+    
+    /// Build the dispatch chain recursively
+    fn build_dispatch_chain(self) -> Self::DispatchChain;
+    
+    /// Build the maintenance chain recursively
+    fn build_maintenance_chain(self) -> Self::MaintenanceChain;
+}
+
+// =============================================================================
+// Base case: KVSNode (leaf)
+// =============================================================================
+
+impl<D, M> ClusterSpec for KVSNode<D, M> {
+    type DispatchChain = D;
+    type MaintenanceChain = M;
+    
+    fn total_nodes(&self) -> usize {
+        self.count
+    }
+    
+    fn build_dispatch_chain(self) -> Self::DispatchChain {
+        self.dispatch
+    }
+    
+    fn build_maintenance_chain(self) -> Self::MaintenanceChain {
+        self.maintenance
+    }
+}
+
+// =============================================================================
+// Recursive case: KVSCluster<D, M, Child>
+// =============================================================================
+
+impl<D, M, Child> ClusterSpec for KVSCluster<D, M, Child>
+where
+    Child: ClusterSpec,
+{
+    /// Dispatch chain is Pipeline<D, Child::DispatchChain>
+    type DispatchChain = Pipeline<D, Child::DispatchChain>;
+    
+    /// Maintenance chain is CombinedMaintenance<M, Child::MaintenanceChain>
+    type MaintenanceChain = CombinedMaintenance<M, Child::MaintenanceChain>;
+    
+    fn total_nodes(&self) -> usize {
+        self.count * self.each.total_nodes()
+    }
+    
+    fn build_dispatch_chain(self) -> Self::DispatchChain {
+        Pipeline::new(self.dispatch, self.each.build_dispatch_chain())
+    }
+    
+    fn build_maintenance_chain(self) -> Self::MaintenanceChain {
+        CombinedMaintenance::new(self.maintenance, self.each.build_maintenance_chain())
+    }
+}
+
+// =============================================================================
+// Ergonomic builder methods for KVSCluster
+// =============================================================================
+
+impl<D, M, Child> KVSCluster<D, M, Child>
+where
+    Child: ClusterSpec,
+    Self: ClusterSpec,
+    D: Clone,
+    M: Clone,
+    Child: Clone,
+{
+    /// Total number of leaf nodes in the cluster (recursive)
+    pub fn total_nodes(&self) -> usize {
+        ClusterSpec::total_nodes(self)
+    }
+
+    /// Create a KVSBuilder from this spec, automatically building dispatch and maintenance chains.
+    ///
+    /// Supply only the value type `V`; the dispatch and maintenance types are inferred from the spec.
+    /// Works with any nesting depth - dispatch and maintenance are recursively composed.
+    pub fn builder_for<V>(
+        self,
+    ) -> KVSBuilder<
+        V,
+        <Self as ClusterSpec>::DispatchChain,
+        <Self as ClusterSpec>::MaintenanceChain,
+    >
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        <Self as ClusterSpec>::DispatchChain: OpDispatch<V> + Clone,
+        <Self as ClusterSpec>::MaintenanceChain: ReplicationStrategy<V> + Clone,
+    {
+        let total = self.total_nodes();
+        let dispatch = self.clone().build_dispatch_chain();
+        let maintenance = self.build_maintenance_chain();
+
+        KVSBuilder {
+            num_nodes: total,
+            num_aux1: None,
+            num_aux2: None,
+            dispatch: Some(dispatch),
+            maintenance: Some(maintenance),
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Build a server directly from this spec by specifying only the value type `V`.
+    ///
+    /// Works with any nesting depth - dispatch and maintenance are recursively composed.
+    pub async fn build_server<V>(
+        self,
+    ) -> Result<
+        BuiltKVS<V, <Self as ClusterSpec>::DispatchChain, <Self as ClusterSpec>::MaintenanceChain>,
+        Box<dyn std::error::Error>,
+    >
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        <Self as ClusterSpec>::DispatchChain: OpDispatch<V> + Clone,
+        <Self as ClusterSpec>::MaintenanceChain: ReplicationStrategy<V> + Clone,
+    {
+        self.builder_for::<V>().build().await
+    }
+}
+
+// =============================================================================
 // Debug implementations
-impl<CD: fmt::Debug, ND: fmt::Debug, CM: fmt::Debug, NM: fmt::Debug> fmt::Debug for KVSCluster<CD, ND, CM, NM> {
+// =============================================================================
+
+impl<D: fmt::Debug, M: fmt::Debug, Child: fmt::Debug> fmt::Debug for KVSCluster<D, M, Child> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("KVSCluster")
             .field("dispatch", &self.dispatch)
@@ -91,85 +280,5 @@ impl<D: fmt::Debug, M: fmt::Debug> fmt::Debug for KVSNode<D, M> {
             .field("maintenance", &self.maintenance)
             .field("count", &self.count)
             .finish()
-    }
-}
-
-// Helper methods
-impl<CD, ND, CM, NM> KVSCluster<CD, ND, CM, NM> {
-    /// Total number of nodes in the cluster (shards × replicas)
-    pub fn total_nodes(&self) -> usize {
-        self.count * self.each.count
-    }
-
-    /// Number of shards
-    pub fn shard_count(&self) -> usize {
-        self.count
-    }
-
-    /// Number of replicas per shard
-    pub fn replicas_per_shard(&self) -> usize {
-        self.each.count
-    }
-
-    /// Is this a sharded configuration?
-    pub fn is_sharded(&self) -> bool {
-        self.count > 1
-    }
-
-    /// Is this a replicated configuration?
-    pub fn is_replicated(&self) -> bool {
-        self.each.count > 1
-    }
-
-    /// Create a KVSBuilder from this spec, inferring dispatcher and maintenance types from the spec.
-    ///
-    /// Supply only the value type `V`; the dispatch and maintenance types are taken from the spec.
-    /// Maintenance attached at this level and at its children is combined automatically.
-    pub fn builder_for<V>(self) -> KVSBuilder<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>
-    where
-        V: Clone
-            + serde::Serialize
-            + for<'de> serde::Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
-        ND: OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V> + Clone,
-        NM: ReplicationStrategy<V> + Clone,
-        Pipeline<CD, ND>: OpDispatch<V>,
-    {
-    KVSBuilder::<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>::from_spec(self)
-    }
-
-    /// Build a server directly from this spec by specifying only the value type `V`.
-    /// Maintenance attached at this level and at its children is combined automatically.
-    pub async fn build_server<V>(self) -> Result<BuiltKVS<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>, Box<dyn std::error::Error>>
-    where
-        V: Clone
-            + serde::Serialize
-            + for<'de> serde::Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
-        ND: OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V> + Clone,
-        NM: ReplicationStrategy<V> + Clone,
-        Pipeline<CD, ND>: OpDispatch<V>,
-    {
-        self.builder_for::<V>().build().await
     }
 }
