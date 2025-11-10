@@ -302,11 +302,11 @@ where
     /// ```
     pub fn from_spec<CD, ND, CM, NM>(
         spec: crate::cluster_spec::KVSCluster<CD, ND, CM, NM>,
-    ) -> KVSBuilder<V, crate::dispatch::Pipeline<CD, ND>, NM>
+    ) -> KVSBuilder<V, crate::dispatch::Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>
     where
         CD: crate::dispatch::OpDispatch<V> + crate::dispatch::ClusterLevelDispatch + Clone,
         ND: crate::dispatch::OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V>,
+        CM: ReplicationStrategy<V> + Clone,
         NM: ReplicationStrategy<V> + Clone,
         crate::dispatch::Pipeline<CD, ND>: crate::dispatch::OpDispatch<V>,
     {
@@ -318,7 +318,10 @@ where
                 spec.dispatch,
                 spec.each.dispatch,
             )),
-            maintenance: Some(spec.each.maintenance),
+            maintenance: Some(crate::maintenance::CombinedMaintenance::new(
+                spec.maintenance,
+                spec.each.maintenance,
+            )),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -567,15 +570,23 @@ where
     /// Preferred API for unambiguous topology definition.
     pub fn from_spec<CD, ND, CM, NM>(
         spec: crate::cluster_spec::KVSCluster<CD, ND, CM, NM>,
-    ) -> KVSBuilder<V, crate::dispatch::Pipeline<CD, ND>, NM>
+    ) -> KVSBuilder<
+        V,
+        crate::dispatch::Pipeline<CD, ND>,
+        crate::maintenance::CombinedMaintenance<CM, NM>,
+    >
     where
         CD: crate::dispatch::OpDispatch<V> + crate::dispatch::ClusterLevelDispatch + Clone,
         ND: crate::dispatch::OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V>,
+        CM: ReplicationStrategy<V> + Clone,
         NM: ReplicationStrategy<V> + Clone,
         crate::dispatch::Pipeline<CD, ND>: crate::dispatch::OpDispatch<V>,
     {
-        KVSBuilder::<V, crate::dispatch::Pipeline<CD, ND>, NM>::from_spec(spec)
+        KVSBuilder::<
+            V,
+            crate::dispatch::Pipeline<CD, ND>,
+            crate::maintenance::CombinedMaintenance<CM, NM>,
+        >::from_spec(spec)
     }
 }
 

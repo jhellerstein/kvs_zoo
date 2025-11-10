@@ -3,8 +3,8 @@
 //! **Configuration:**
 //! - Architecture: Sharded + Replicated KVS
 //! - Topology: 3 shards × 3 replicas = 9 total nodes
-//! - Routing: `ShardedRouter` at cluster level, `RoundRobinRouter` at node level
-//! - Replication: `BroadcastReplication` within each shard
+//! - Routing: `ShardedRouter` (cluster) and `RoundRobinRouter` (within shard)
+//! - Replication: `BroadcastReplication` (attached to the shard level to sync replicas)
 //! - Consistency: Per-shard causal (via vector clocks), no cross-shard coordination
 //!
 //! **What it achieves:**
@@ -27,11 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cluster_spec = KVSCluster { // a cluster
         count: 3,                               // deploy 3 shards at the cluster level
         dispatch: ShardedRouter::new(3),        // cluster dispatch: route to shard by key
-        maintenance: (),                        // no cluster-level maintenance
+        maintenance: BroadcastReplication::<CausalString>::default(), // cluster maintenance: replicate within each shard
         each: KVSNode {                         // each shard contains a replicated node group
             count: 3,                               // three replicas per shard
             dispatch: RoundRobinRouter::new(),      // node-level dispatch: load-balance across replicas
-            maintenance: BroadcastReplication::<CausalString>::default(), // node-level maintenance: broadcast
+            maintenance: (),                        // no node-level maintenance
         },
     };
 

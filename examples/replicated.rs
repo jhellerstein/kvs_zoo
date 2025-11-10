@@ -4,23 +4,19 @@
 //! - Architecture: Replicated KVS with epidemic gossip
 //! - Topology: 1 cluster of 3 replicas
 //! - Cluster Dispatch: `RoundRobinRouter` (load balance across replicas)
-//! - Per-Node Maintenance: `SimpleGossip` + `TombstoneCleanup`
+//! - Maintenance: `SimpleGossip` for replica coordination (attached at cluster level)
+//!                and `TombstoneCleanup` for local housekeeping (attached to nodes)
 //! - Value Type: `LwwWrapper<String>` (last-writer-wins semantics)
 //! - Consistency: Eventual (gossip convergence with LWW merge)
 //!
 //! **What it achieves:**
-//! Demonstrates fault-tolerant replication with configurable maintenance strategies.
-//! Uses epidemic gossip to propagate updates between replicas in the background.
-//! Shows how to compose multiple maintenance strategies with independent intervals.
+//! Demonstrates fault-tolerant replication with maintenance attached at appropriate levels.
+//! Uses gossip to propagate updates between replicas and tombstone cleanup for local housekeeping.
 
 use futures::{SinkExt, StreamExt};
 use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::dispatch::RoundRobinRouter;
-use kvs_zoo::maintenance::{
-    SimpleGossip,
-    TombstoneCleanup,
-    CombinedMaintenance,
-};
+use kvs_zoo::maintenance::{SimpleGossip, TombstoneCleanup};
 use kvs_zoo::values::LwwWrapper;
 
 #[tokio::main]
@@ -31,17 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cluster_spec = KVSCluster { // a cluster
         count: 1,                                       // deploy only 1 such cluster
         dispatch: RoundRobinRouter::new(),              // round-robin inbound messages across the members
-        maintenance: (),                                // no cluster-level maintenance
+        maintenance: SimpleGossip::<LwwWrapper<String>>::new(100usize), // cluster maintenance: gossip replication (100ms interval)
         each: KVSNode {                                 // each cluster member is a single KVSnode
             count: 3,                                       // three members
             dispatch: (),                                   // no further dispatch at the individual nodes
-            // Compose two maintenance strategies with independent intervals:
-            // - Gossip replication (fires on events after interval elapses)
-            // - Tombstone cleanup (placeholder currently emits nothing)
-            maintenance: CombinedMaintenance::new(
-                SimpleGossip::<LwwWrapper<String>>::new(100usize), // 100ms gossip interval (fast for demo)
-                TombstoneCleanup::new(5_000usize), // 5s cleanup interval
-            ),
+            maintenance: TombstoneCleanup::new(5_000usize), // node-level maintenance: local cleanup (5s interval)
         }
     };
 

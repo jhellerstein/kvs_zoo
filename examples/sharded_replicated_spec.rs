@@ -31,18 +31,18 @@ use kvs_zoo::values::CausalString;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Sharded + Replicated KVS Demo (cluster spec API)");
+    println!("🚀 Sharded + Replicated KVS Demo (spec)");
     println!("📋 Topology: 3 shards × 3 replicas = 9 nodes\n");
 
     // Define the cluster topology declaratively (3 shards × 3 replicas)
     let cluster_spec = KVSCluster {
         count: 3,                      // shards
         dispatch: kvs_zoo::dispatch::ShardedRouter::new(3),
-        maintenance: (),               // no cross-shard maintenance
+    maintenance: kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default(), // replication strategy attached here
         each: KVSNode {
             count: 3,                  // replicas per shard
             dispatch: kvs_zoo::dispatch::RoundRobinRouter::new(),
-            maintenance: kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default(),
+            maintenance: (),           // no additional per-replica maintenance
         },
     };
 

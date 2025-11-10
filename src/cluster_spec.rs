@@ -124,7 +124,8 @@ impl<CD, ND, CM, NM> KVSCluster<CD, ND, CM, NM> {
     /// Create a KVSBuilder from this spec, inferring dispatcher and maintenance types from the spec.
     ///
     /// Supply only the value type `V`; the dispatch and maintenance types are taken from the spec.
-    pub fn builder_for<V>(self) -> KVSBuilder<V, Pipeline<CD, ND>, NM>
+    /// Maintenance attached at this level and at its children is combined automatically.
+    pub fn builder_for<V>(self) -> KVSBuilder<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>
     where
         V: Clone
             + serde::Serialize
@@ -140,15 +141,16 @@ impl<CD, ND, CM, NM> KVSCluster<CD, ND, CM, NM> {
             + 'static,
         CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
         ND: OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V>,
+        CM: ReplicationStrategy<V> + Clone,
         NM: ReplicationStrategy<V> + Clone,
         Pipeline<CD, ND>: OpDispatch<V>,
     {
-    KVSBuilder::<V, Pipeline<CD, ND>, NM>::from_spec(self)
+    KVSBuilder::<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>::from_spec(self)
     }
 
     /// Build a server directly from this spec by specifying only the value type `V`.
-    pub async fn build_server<V>(self) -> Result<BuiltKVS<V, Pipeline<CD, ND>, NM>, Box<dyn std::error::Error>>
+    /// Maintenance attached at this level and at its children is combined automatically.
+    pub async fn build_server<V>(self) -> Result<BuiltKVS<V, Pipeline<CD, ND>, crate::maintenance::CombinedMaintenance<CM, NM>>, Box<dyn std::error::Error>>
     where
         V: Clone
             + serde::Serialize
@@ -164,7 +166,7 @@ impl<CD, ND, CM, NM> KVSCluster<CD, ND, CM, NM> {
             + 'static,
         CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
         ND: OpDispatch<V> + Clone,
-        CM: ReplicationStrategy<V>,
+        CM: ReplicationStrategy<V> + Clone,
         NM: ReplicationStrategy<V> + Clone,
         Pipeline<CD, ND>: OpDispatch<V>,
     {

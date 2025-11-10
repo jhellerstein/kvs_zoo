@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct BroadcastReplicationConfig {
     /// Batch multiple updates before broadcasting
     pub enable_batching: bool,
-    /// Maximum time to wait before sending a batch
-    pub batch_timeout: std::time::Duration,
+    /// Maximum time to wait before sending a batch (in milliseconds)
+    pub batch_timeout_ms: u64,
     /// Maximum number of keys per batch
     pub max_batch_size: usize,
 }
@@ -25,7 +25,7 @@ impl Default for BroadcastReplicationConfig {
     fn default() -> Self {
         Self {
             enable_batching: false,
-            batch_timeout: std::time::Duration::from_millis(100),
+            batch_timeout_ms: 100,
             max_batch_size: 50,
         }
     }
@@ -36,7 +36,7 @@ impl BroadcastReplicationConfig {
     pub fn low_latency() -> Self {
         Self {
             enable_batching: false,
-            batch_timeout: std::time::Duration::from_millis(50),
+            batch_timeout_ms: 50,
             max_batch_size: 1,
         }
     }
@@ -45,7 +45,7 @@ impl BroadcastReplicationConfig {
     pub fn high_throughput() -> Self {
         Self {
             enable_batching: true,
-            batch_timeout: std::time::Duration::from_millis(200),
+            batch_timeout_ms: 200,
             max_batch_size: 100,
         }
     }
@@ -54,7 +54,7 @@ impl BroadcastReplicationConfig {
     pub fn synchronous() -> Self {
         Self {
             enable_batching: false,
-            batch_timeout: std::time::Duration::from_millis(0),
+            batch_timeout_ms: 0,
             max_batch_size: 1,
         }
     }
@@ -127,9 +127,12 @@ where
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Simple broadcast replication - broadcasts all local operations to all nodes
-        // This preserves the existing behavior while adapting to the new trait
-        self.handle_replication(cluster, local_data)
+        // Choose implementation based on config
+        if self.config.enable_batching {
+            self.handle_replication_periodic(cluster, local_data)
+        } else {
+            self.handle_replication_immediate(cluster, local_data)
+        }
     }
 
     // Ordered logs with "slots" (positions) need to be replicated for ordered "replay".
@@ -161,52 +164,74 @@ where
         + Default
         + Merge<V>,
 {
-    /// Simple broadcast replication - broadcasts all local operations to all nodes
+    /// Immediate synchronous broadcast replication
     ///
-    /// This implementation provides immediate, reliable broadcasting of all updates
-    /// to all cluster members. It prioritizes consistency and simplicity over
-    /// network efficiency.
+    /// Every local write is immediately broadcast to all cluster members.
+    /// No buffering, no delays - pure synchronous replication.
     ///
     /// ## Behavior
-    /// - Every local update is broadcast to every cluster member
-    /// - No batching or optimization (can be configured via BroadcastReplicationConfig)
-    /// - Deterministic delivery guarantees
+    /// - Event-driven: broadcasts immediately on every local write
+    /// - Synchronous: no batching or periodic delays
+    /// - Deterministic: all nodes receive all updates
     /// - Returns stream of updates received from other nodes
-    pub fn handle_replication<'a>(
+    pub fn handle_replication_immediate<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // For now, implement simple immediate broadcasting
-        // Future enhancement: implement batching based on config.enable_batching
         local_put_tuples
-            .broadcast_bincode(cluster, nondet!(/** broadcast to all nodes */))
+            .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
             .assume_ordering(nondet!(/** broadcast messages unordered */))
     }
 
-    /// Batched broadcast replication (future enhancement)
+    /// Periodic background broadcast replication
     ///
-    /// This method would implement batching based on the configuration,
-    /// collecting multiple updates and sending them together to reduce
-    /// network overhead while maintaining strong consistency.
-    #[allow(dead_code)]
-    pub fn handle_replication_batched<'a>(
+    /// Local writes are buffered and periodically broadcast as a batch.
+    /// Reduces network overhead at the cost of increased latency.
+    ///
+    /// ## Behavior
+    /// - Accumulates local writes into a KVS
+    /// - Periodically broadcasts accumulated state at configured intervals
+    /// - No immediate forwarding - only periodic background broadcasts
+    /// - Returns stream of updates received from other nodes
+    pub fn handle_replication_periodic<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        if self.config.enable_batching {
-            // TODO: Implement batching logic
-            // - Collect updates for batch_timeout duration
-            // - Send batches when max_batch_size is reached
-            // - Broadcast batched updates to all nodes
-
-            // For now, fall back to simple broadcasting
-            self.handle_replication(cluster, local_put_tuples)
-        } else {
-            self.handle_replication(cluster, local_put_tuples)
-        }
+        let ticker = cluster.tick();
+        
+        // Capture config value for use in quote (must be a primitive type like u64)
+        let batch_timeout_ms = self.config.batch_timeout_ms;
+        
+        // Accumulate local writes into a KVS (no immediate broadcast)
+        let accumulated_kvs = local_put_tuples
+            .into_keyed()
+            .fold_commutative(
+                q!(|| V::default()),
+                q!(|acc, v| {
+                    lattices::Merge::merge(acc, v);
+                }),
+            );
+        
+        // Periodically snapshot and broadcast the accumulated state
+        let periodic_broadcast = accumulated_kvs
+            .snapshot(&ticker, nondet!(/** snapshot for periodic broadcast */))
+            .entries()
+            .all_ticks()
+            .sample_every(
+                q!(std::time::Duration::from_millis(batch_timeout_ms)),
+                nondet!(/** periodic broadcast interval */),
+            )
+            .broadcast_bincode(cluster, nondet!(/** periodic broadcast to all nodes */));
+        
+        // Return received updates
+        periodic_broadcast
+            .values()
+            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            // Sampling may produce duplicate deliveries; declare retry semantics
+            .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }
 
@@ -254,31 +279,22 @@ mod tests {
     fn test_broadcast_replication_config_values() {
         let config = BroadcastReplicationConfig::default();
         assert!(!config.enable_batching);
-        assert_eq!(config.batch_timeout, std::time::Duration::from_millis(100));
+        assert_eq!(config.batch_timeout_ms, 100);
         assert_eq!(config.max_batch_size, 50);
 
         let low_latency_config = BroadcastReplicationConfig::low_latency();
         assert!(!low_latency_config.enable_batching);
-        assert_eq!(
-            low_latency_config.batch_timeout,
-            std::time::Duration::from_millis(50)
-        );
+        assert_eq!(low_latency_config.batch_timeout_ms, 50);
         assert_eq!(low_latency_config.max_batch_size, 1);
 
         let high_throughput_config = BroadcastReplicationConfig::high_throughput();
         assert!(high_throughput_config.enable_batching);
-        assert_eq!(
-            high_throughput_config.batch_timeout,
-            std::time::Duration::from_millis(200)
-        );
+        assert_eq!(high_throughput_config.batch_timeout_ms, 200);
         assert_eq!(high_throughput_config.max_batch_size, 100);
 
         let synchronous_config = BroadcastReplicationConfig::synchronous();
         assert!(!synchronous_config.enable_batching);
-        assert_eq!(
-            synchronous_config.batch_timeout,
-            std::time::Duration::from_millis(0)
-        );
+        assert_eq!(synchronous_config.batch_timeout_ms, 0);
         assert_eq!(synchronous_config.max_batch_size, 1);
     }
 
