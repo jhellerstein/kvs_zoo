@@ -2,8 +2,9 @@
 source: tests/examples_snapshots.rs
 expression: sanitize(&stdout)
 ---
-🚀 Replicated KVS Demo (gossip, lattice=causal)
-→ PUT doc = OK
-→ PUT doc = OK
-→ GET doc = {x, y}
+🚀 Replicated KVS Demo (gossip)
+→ PUT alpha = OK
+→ GET alpha = one
+→ PUT beta = OK
+→ GET beta = two
 ✅ Replicated (gossip) demo complete

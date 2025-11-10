@@ -47,11 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("Cluster specification:");
-    println!("  Shards: {}", cluster_spec.shard_count());
-    println!(
-        "  Replicas per shard: {}",
-        cluster_spec.replicas_per_shard()
-    );
+    println!("  Shards: {}", cluster_spec.count);
+    println!("  Replicas per shard: {}", cluster_spec.each.count);
     println!("  Total nodes: {}\n", cluster_spec.total_nodes());
 
     println!("✓ Dispatch: ShardedRouter + RoundRobinRouter (inferred by spec generics)");
