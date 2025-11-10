@@ -1,6 +1,7 @@
 stageleft::stageleft_no_entry_crate!();
 
 pub mod cluster_spec;
+pub mod cluster_spec_recursive;
 pub mod demo_driver;
 pub mod dispatch;
 pub mod kvs_core;

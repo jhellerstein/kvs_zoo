@@ -246,12 +246,12 @@ where
     D: OpDispatch<V>,
     M: ReplicationStrategy<V>,
 {
-    num_nodes: usize,
-    num_aux1: Option<usize>,
-    num_aux2: Option<usize>,
-    dispatch: Option<D>,
-    maintenance: Option<M>,
-    _phantom: std::marker::PhantomData<V>,
+    pub(crate) num_nodes: usize,
+    pub(crate) num_aux1: Option<usize>,
+    pub(crate) num_aux2: Option<usize>,
+    pub(crate) dispatch: Option<D>,
+    pub(crate) maintenance: Option<M>,
+    pub(crate) _phantom: std::marker::PhantomData<V>,
 }
 
 impl<V, D, M> KVSBuilder<V, D, M>
