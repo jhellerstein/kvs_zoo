@@ -87,6 +87,36 @@ pub struct KVSCluster<D, M, Child> {
     pub maintenance: M,
     pub count: usize,
     pub each: Child,
+    /// Optional auxiliary clusters (e.g., for Paxos proposers/acceptors)
+    /// These are deployed alongside but separate from the main cluster hierarchy
+    #[doc(hidden)]
+    pub aux_clusters: Option<AuxiliaryClusters>,
+}
+
+/// Auxiliary clusters for protocols that need additional node groups
+/// (e.g., Paxos needs proposers and acceptors in addition to storage replicas)
+#[derive(Clone, Debug, Default)]
+pub struct AuxiliaryClusters {
+    /// First auxiliary cluster (e.g., Paxos proposers)
+    pub aux1_count: Option<usize>,
+    /// Second auxiliary cluster (e.g., Paxos acceptors)
+    pub aux2_count: Option<usize>,
+}
+
+impl AuxiliaryClusters {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    pub fn with_aux1(mut self, count: usize) -> Self {
+        self.aux1_count = Some(count);
+        self
+    }
+    
+    pub fn with_aux2(mut self, count: usize) -> Self {
+        self.aux2_count = Some(count);
+        self
+    }
 }
 
 /// Leaf node specification (storage replicas)
@@ -188,6 +218,24 @@ where
         ClusterSpec::total_nodes(self)
     }
 
+    /// Add auxiliary clusters for protocols that need them (e.g., Paxos)
+    pub fn with_aux_clusters(mut self, aux: AuxiliaryClusters) -> Self {
+        self.aux_clusters = Some(aux);
+        self
+    }
+    
+    /// Set first auxiliary cluster count (e.g., Paxos proposers)
+    pub fn with_aux1(mut self, count: usize) -> Self {
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux1_count = Some(count);
+        self
+    }
+    
+    /// Set second auxiliary cluster count (e.g., Paxos acceptors)
+    pub fn with_aux2(mut self, count: usize) -> Self {
+        self.aux_clusters.get_or_insert_with(AuxiliaryClusters::new).aux2_count = Some(count);
+        self
+    }
+
     /// Create a KVSBuilder from this spec, automatically building dispatch and maintenance chains.
     ///
     /// Supply only the value type `V`; the dispatch and maintenance types are inferred from the spec.
@@ -216,13 +264,14 @@ where
         <Self as ClusterSpec>::MaintenanceChain: ReplicationStrategy<V> + Clone,
     {
         let total = self.total_nodes();
+        let aux_clusters = self.aux_clusters.clone();
         let dispatch = self.clone().build_dispatch_chain();
         let maintenance = self.build_maintenance_chain();
 
         KVSBuilder {
             num_nodes: total,
-            num_aux1: None,
-            num_aux2: None,
+            num_aux1: aux_clusters.as_ref().and_then(|a| a.aux1_count),
+            num_aux2: aux_clusters.as_ref().and_then(|a| a.aux2_count),
             dispatch: Some(dispatch),
             maintenance: Some(maintenance),
             _phantom: std::marker::PhantomData,
@@ -264,12 +313,15 @@ where
 
 impl<D: fmt::Debug, M: fmt::Debug, Child: fmt::Debug> fmt::Debug for KVSCluster<D, M, Child> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("KVSCluster")
-            .field("dispatch", &self.dispatch)
+        let mut s = f.debug_struct("KVSCluster");
+        s.field("dispatch", &self.dispatch)
             .field("maintenance", &self.maintenance)
             .field("count", &self.count)
-            .field("each", &self.each)
-            .finish()
+            .field("each", &self.each);
+        if let Some(ref aux) = self.aux_clusters {
+            s.field("aux_clusters", aux);
+        }
+        s.finish()
     }
 }
 

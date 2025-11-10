@@ -7,43 +7,37 @@
 //! **Nodes:** 3 Paxos acceptors + 3 proposers + 3 KVS replicas = 9 total
 //! **Consistency:** Linearizable (strongest consistency model)
 
+use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::dispatch::PaxosDispatcher;
 use kvs_zoo::maintenance::{BroadcastReplication, LogBased};
-use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
-
-// ====================================================================================
-// Server Architecture Declaration
-// ====================================================================================
-// This type defines the complete system architecture:
-// - Value type: LwwWrapper<String> (last-writer-wins semantics)
-// - Dispatch: PaxosDispatcher (total ordering via consensus)
-// - Maintenance: LogBased<BroadcastReplication> (replicated ordered log)
-type Server = KVSServer<
-    LwwWrapper<String>,
-    PaxosDispatcher<LwwWrapper<String>>,
-    LogBased<BroadcastReplication<LwwWrapper<String>>>,
->;
-// ====================================================================================
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Linearizable KVS Demo (Paxos, f=1)");
 
-    // Runtime configuration (only values that need to be configured, not types)
+    // Runtime configuration
     let paxos_cfg = kvs_zoo::dispatch::PaxosConfig {
         f: 1,
         ..Default::default()
     };
-    let dispatch = PaxosDispatcher::with_config(paxos_cfg);
-    let maintenance = LogBased::<BroadcastReplication<LwwWrapper<String>>>::default();
 
-    let mut built = Server::builder()
-        .with_cluster_size(3) // 3 KVS replicas
-        .with_aux1_nodes(3) // 3 Paxos proposers
-        .with_aux2_nodes(3) // 3 Paxos acceptors
-        .build_with(dispatch, maintenance)
-        .await?;
+    // Define the cluster topology hierarchically
+    let cluster_spec = KVSCluster {
+        dispatch: PaxosDispatcher::with_config(paxos_cfg),
+        maintenance: LogBased::<BroadcastReplication<LwwWrapper<String>>>::default(),
+        count: 1, // 1 cluster
+        each: KVSNode {
+            dispatch: (),
+            maintenance: (),
+            count: 3, // 3 KVS replicas
+        },
+        aux_clusters: None, // Will add via with_aux1/with_aux2
+    }
+    .with_aux1(3) // 3 Paxos proposers
+    .with_aux2(3); // 3 Paxos acceptors
+
+    let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
 
     built.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(1000)).await; // leader election
