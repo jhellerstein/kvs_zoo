@@ -1,0 +1,9 @@
+---
+source: tests/examples_snapshots.rs
+expression: sanitize(&stdout)
+---
+🚀 Replicated KVS Demo (gossip, lattice=causal)
+→ PUT doc = OK
+→ PUT doc = OK
+→ GET doc = {x, y}
+✅ Replicated (gossip) demo complete

@@ -47,9 +47,16 @@ pub struct TombstoneCleanupConfig {
 impl Default for TombstoneCleanupConfig {
     fn default() -> Self {
         Self {
-            cleanup_interval_ms: 60_000,   // 1 minute
-            tombstone_ttl_ms: 3_600_000,   // 1 hour
+            cleanup_interval_ms: 60_000, // 1 minute
+            tombstone_ttl_ms: 3_600_000, // 1 hour
         }
+    }
+}
+
+impl From<usize> for TombstoneCleanupConfig {
+    /// Interpret usize as milliseconds for the cleanup interval; tombstone TTL stays default
+    fn from(ms: usize) -> Self {
+        TombstoneCleanupConfig { cleanup_interval_ms: ms as u64, ..Default::default() }
     }
 }
 
@@ -60,13 +67,17 @@ impl Default for TombstoneCleanupConfig {
 /// operation that doesn't affect the core replication logic.
 #[derive(Clone, Debug)]
 pub struct TombstoneCleanup {
+    #[allow(dead_code)]
     config: TombstoneCleanupConfig,
 }
 
 impl TombstoneCleanup {
-    /// Create a new tombstone cleanup strategy with the given configuration
-    pub fn new(config: TombstoneCleanupConfig) -> Self {
-        Self { config }
+    /// Create a new tombstone cleanup strategy with the given configuration. Accepts any Into<TombstoneCleanupConfig>
+    pub fn new<C>(config: C) -> Self
+    where
+        C: Into<TombstoneCleanupConfig>,
+    {
+        Self { config: config.into() }
     }
 }
 
@@ -74,17 +85,17 @@ impl<V> ReplicationStrategy<V> for TombstoneCleanup {
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        _local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        todo!(
-            "Tombstone cleanup would periodically scan for expired tombstones \
-             (older than {}ms) and remove them. Cleanup runs every {}ms.",
-            self.config.tombstone_ttl_ms,
-            self.config.cleanup_interval_ms
-        )
+        // Interval gating: only consider cleanup when an input PUT arrives AND
+        // the configured cleanup interval has elapsed since the last gated item.
+        // We don't yet have a Duration-aware sampling combinator in this scope.
+        // For now, return an empty stream (same semantics as before) until a
+        // time-based gating primitive is introduced for node-level maintenance.
+        local_data.filter(q!(|_kv| false))
     }
 
     fn replicate_slotted_data<'a>(
@@ -95,10 +106,8 @@ impl<V> ReplicationStrategy<V> for TombstoneCleanup {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        todo!(
-            "Slotted tombstone cleanup would track slot numbers to determine \
-             when all nodes have seen a tombstone before cleaning it up."
-        )
+        // Placeholder: no slotted cleanup emitted yet
+        _local_slotted_data.filter(q!(|_s| false))
     }
 }
 

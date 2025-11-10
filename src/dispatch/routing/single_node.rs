@@ -1,4 +1,4 @@
-//! Single-Node Router Operation Interceptor
+//! Single-Node Router Operation dispatcher
 //!
 //! The SingleNodeRouter is intended for usage over a single node and acts as a
 //! no-op router: it does not fan out or load-balance. It simply routes all
@@ -6,7 +6,7 @@
 //! effectively an identity. In a multi-node cluster this pins all operations
 //! to member 0 and should generally be avoided.
 
-use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
+use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```rust
 /// use kvs_zoo::dispatch::routing::SingleNodeRouter;
-/// use kvs_zoo::dispatch::OpIntercept;
+/// use kvs_zoo::dispatch::OpDispatch;
 ///
 /// let router = SingleNodeRouter::new();
 /// // Operations will be routed to member 0 (no broadcast or load-balancing)
@@ -43,14 +43,14 @@ impl SingleNodeRouter {
     }
 }
 
-impl<V> OpIntercept<V> for SingleNodeRouter {
+impl<V> OpDispatch<V> for SingleNodeRouter {
     type Deployment<'a> = Deployment<'a>;
 
     fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
         Deployment::SingleCluster(flow.cluster::<KVSNode>())
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,

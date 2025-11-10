@@ -1,0 +1,14 @@
+---
+source: tests/examples_snapshots.rs
+expression: sanitize(&stdout)
+---
+🚀 Sharded Local KVS Demo
+   → shard 1 for 'shard_key_0'
+   → shard 0 for 'shard_key_1'
+   → shard 1 for 'shard_key_0'
+   → shard 0 for 'shard_key_1'
+→ PUT shard_key_0 = OK
+→ PUT shard_key_1 = OK
+→ GET shard_key_0 = value_0
+→ GET shard_key_1 = value_1
+✅ Sharded local demo complete

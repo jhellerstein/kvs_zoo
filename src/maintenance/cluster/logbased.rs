@@ -218,13 +218,13 @@ impl<R> LogBased<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::maintenance::{BroadcastReplication, EpidemicGossip, NoReplication};
+    use crate::maintenance::{BroadcastReplication, SimpleGossip, NoReplication};
 
     #[test]
     fn test_logbased_creation() {
         let _logbased_broadcast =
             LogBased::new(BroadcastReplication::<crate::values::CausalString>::new());
-        let _logbased_gossip = LogBased::new(EpidemicGossip::<crate::values::CausalString>::new());
+        let _logbased_gossip = LogBased::new(SimpleGossip::<crate::values::CausalString>::default());
         let _logbased_none = LogBased::new(NoReplication::new());
     }
 
@@ -256,22 +256,22 @@ mod tests {
         _test_replication_strategy::<crate::values::CausalString>(LogBased::new(
             BroadcastReplication::<crate::values::CausalString>::new(),
         ));
-        _test_replication_strategy::<crate::values::CausalString>(LogBased::new(EpidemicGossip::<
+        _test_replication_strategy::<crate::values::CausalString>(LogBased::new(SimpleGossip::<
             crate::values::CausalString,
-        >::new()));
+        >::default()));
     }
 
     #[test]
     fn test_logbased_composition() {
         // Test that LogBased can wrap different strategies
         type LogBasedBroadcast<V> = LogBased<BroadcastReplication<V>>;
-        type LogBasedGossip<V> = LogBased<EpidemicGossip<V>>;
+        type LogBasedGossip<V> = LogBased<SimpleGossip<V>>;
         type LogBasedNone = LogBased<NoReplication>;
 
         let _broadcast: LogBasedBroadcast<crate::values::CausalString> =
             LogBased::new(BroadcastReplication::new());
         let _gossip: LogBasedGossip<crate::values::CausalString> =
-            LogBased::new(EpidemicGossip::new());
+            LogBased::new(SimpleGossip::default());
         let _none: LogBasedNone = LogBased::new(NoReplication::new());
     }
 

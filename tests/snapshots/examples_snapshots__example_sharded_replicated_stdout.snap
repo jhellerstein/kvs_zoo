@@ -1,0 +1,19 @@
+---
+source: tests/examples_snapshots.rs
+expression: sanitize(&stdout)
+---
+🚀 Sharded + Replicated KVS Demo
+📋 Topology: 3 shards × 3 replicas = 9 nodes
+Cluster specification (tree structure):
+  Shards (cluster.count): 3
+  Replicas per shard (node.count): 3
+  Total nodes: 9
+   → shard 1 for 'user:alice'
+   → shard 1 for 'user:bob'
+   → shard 1 for 'user:alice'
+   → shard 1 for 'user:bob'
+→ PUT user:alice = OK
+→ PUT user:bob = OK
+→ GET user:alice = x
+→ GET user:bob = y
+✅ Sharded+Replicated demo complete

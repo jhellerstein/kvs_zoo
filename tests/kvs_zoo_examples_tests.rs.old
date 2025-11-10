@@ -11,9 +11,9 @@ use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
 // Replication strategies
 use kvs_zoo::maintenance::{BroadcastReplication, EpidemicGossip, LogBased, NoReplication};
 
-// Op interceptors / pipelines
+// Op dispatchers / pipelines
 use kvs_zoo::dispatch::{
-    PaxosInterceptor, Pipeline, RoundRobinRouter, ShardedRouter, SingleNodeRouter,
+    PaxosDispatcher, Pipeline, RoundRobinRouter, ShardedRouter, SingleNodeRouter,
 };
 
 #[tokio::test]
@@ -278,7 +278,7 @@ async fn example_linearizable_paxos_lww() {
         LwwWrapper<String>,
         LogBased<BroadcastReplication<LwwWrapper<String>>>,
     >;
-    let paxos = PaxosInterceptor::<LwwWrapper<String>>::new();
+    let paxos = PaxosDispatcher::<LwwWrapper<String>>::new();
     let replication = LogBased::new(BroadcastReplication::<LwwWrapper<String>>::default());
     let cluster = <Server as KVSServer<LwwWrapper<String>>>::create_deployment(
         &flow,

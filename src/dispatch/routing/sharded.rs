@@ -1,10 +1,10 @@
-//! Sharded Router Operation Interceptor
+//! Sharded Router Operation dispatcher
 //!
 //! The ShardedRouter partitions operations by key hash, distributing them
 //! across cluster nodes for horizontal scaling. Each key is consistently
 //! routed to the same shard based on its hash value.
 
-use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
+use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -25,7 +25,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// ```rust
 /// use kvs_zoo::dispatch::routing::ShardedRouter;
-/// use kvs_zoo::dispatch::OpIntercept;
+/// use kvs_zoo::dispatch::OpDispatch;
 ///
 /// let router = ShardedRouter::new(3);
 /// // Operations will be routed to shards based on key hash
@@ -67,7 +67,7 @@ impl ShardedRouter {
     }
 }
 
-impl<V> OpIntercept<V> for ShardedRouter
+impl<V> OpDispatch<V> for ShardedRouter
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {
@@ -77,7 +77,7 @@ where
         Deployment::SingleCluster(flow.cluster::<KVSNode>())
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -106,7 +106,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::OpInterceptExt;
+    use crate::dispatch::OpDispatchExt;
 
     #[test]
     fn test_sharded_router_creation() {
@@ -118,21 +118,21 @@ mod tests {
     }
 
     #[test]
-    fn test_sharded_router_implements_interception() {
+    fn test_sharded_router_implements_dispatch() {
         let router = ShardedRouter::new(3);
 
-        // This should compile, demonstrating that ShardedRouter implements OpIntercept
-        fn _test_interception<V>(_interceptor: impl OpIntercept<V>) {}
-        _test_interception::<String>(router);
+        // This should compile, demonstrating that ShardedRouter implements OpDispatch
+        fn _test_dispatch<V>(_dispatcher: impl OpDispatch<V>) {}
+        _test_dispatch::<String>(router);
     }
 
     #[test]
-    fn test_sharded_router_implements_interception_ext() {
+    fn test_sharded_router_implements_dispatch_ext() {
         let router = ShardedRouter::new(3);
 
-        // Test that ShardedRouter implements OpInterceptExt for chaining
-        fn _test_interception_ext<V>(_interceptor: impl OpInterceptExt<V>) {}
-        _test_interception_ext::<String>(router);
+        // Test that ShardedRouter implements OpDispatchExt for chaining
+        fn _test_dispatch_ext<V>(_dispatcher: impl OpDispatchExt<V>) {}
+        _test_dispatch_ext::<String>(router);
     }
 
     #[test]

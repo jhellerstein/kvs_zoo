@@ -1,4 +1,4 @@
-# KVS Zoo 🦁
+# KVS Zoo 🦁 🐵 🦒
 
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
@@ -21,7 +21,7 @@ The zoo showcases a composable architecture where dispatch strategies, maintenan
 ### Core Abstractions
 
 - **`KVSServer<V>`**: Trait defining how to deploy and run a KVS architecture
-- **Routing/Dispatch Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosInterceptor`
+- **Routing/Dispatch Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`
 - **Replication Strategies**: `NoReplication`, `EpidemicGossip`, `BroadcastReplication`, `LogBased`
 - **Value Types**: `LwwWrapper<T>` (last-write-wins), `CausalWrapper<T>` (causal with vector clocks)
 
@@ -87,7 +87,7 @@ Combines sharding and replication for both scalability and fault tolerance.
 Strong consistency via Paxos consensus with write-ahead logging.
 
 - **Server**: `LinearizableKVSServer<LwwWrapper<String>, LogBased<BroadcastReplication>>`
-- **Dispatch**: `PaxosInterceptor` (total order before execution)
+- **Dispatch**: `PaxosDispatcher` (total order before execution)
 - **Maintenance**: `LogBased<BroadcastReplication>` (replicated write-ahead log)
 - **Nodes**: 3 Paxos acceptors + 3 log replicas + 3 KVS replicas = 9 total
 - **Concepts**: Consensus, linearizability, write-ahead logging
@@ -137,7 +137,7 @@ Implementations include:
 - **`SingleNodeRouter`**: Direct to single node
 - **`RoundRobinRouter`**: Load balance across replicas
 - **`ShardedRouter`**: Hash-based key partitioning
-- **`PaxosInterceptor`**: Global total order via Paxos consensus
+- **`PaxosDispatcher`**: Global total order via Paxos consensus
 - **`Pipeline<R1, R2>`**: Compose two routing strategies
 
 ## 🚀 Getting Started
@@ -301,6 +301,25 @@ cargo nextest run
 # Run specific test suite
 cargo test causal_consistency
 ```
+
+### Snapshot tests (insta)
+
+We use the [`insta`](https://crates.io/crates/insta) crate to snapshot the user-facing stdout of examples in `tests/examples_snapshots.rs`. The test harness filters out unstable, internal process-launch noise; only semantically meaningful lines (banner, shard mapping lines, operation outputs, completion banners) are retained to keep snapshots stable over time.
+
+Common workflow:
+
+```bash
+# Run snapshot tests normally
+cargo test --test examples_snapshots -- --nocapture
+
+# Review and accept updated snapshots interactively after intentional output changes
+cargo insta review
+
+# Force regenerate all snapshots (CI should not do this)
+INSTA_UPDATE=always cargo test --test examples_snapshots
+```
+
+Commit updated `tests/snapshots/*.snap` files when outputs change intentionally. CI runs these to guard the educational surface of example output.
 
 ## 🤝 Contributing
 

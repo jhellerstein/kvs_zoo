@@ -1,190 +1,173 @@
-//! Declarative cluster specification
+//! Declarative cluster specification with inline dispatch and maintenance
 //!
 //! This module provides a clean, declarative API for specifying KVS cluster
-//! topologies without ambiguity about node counts, sharding, or replication.
+//! topologies with dispatch and maintenance strategies attached to the tree nodes.
 //!
-//! ## Design
+//! ## Design Philosophy
 //!
-//! Instead of imperative builder methods like `.with_nodes(9)` on a sharded+replicated
-//! config (does that mean 9 total nodes? 9 per shard? 9 shards?), we use:
+//! The cluster specification is a tree where:
+//! - **Dispatch** strategies attach to each level (how to route at that level)
+//! - **Maintenance** strategies attach to each level (how to sync at that level)
+//! - **Count** defines the fanout at that level
+//! - **Each** defines the child configuration
+//!
+//! Notes:
+//! - At leaf nodes (actual storage replicas), routing is often unnecessary.
+//!   To make that explicit and educative, you can write `dispatch: ()` for a
+//!   `KVSNode` to indicate “no routing here”. The unit type implements
+//!   `OpDispatch` as a trivial forwarder to the single member.
+//! - At the cluster level, we require a real dispatcher (e.g., sharding or
+//!   replica selection). Using `dispatch: ()` at the top is intentionally
+//!   disallowed by the `from_spec` API to avoid ambiguity.
+//!
+//! Example: Sharded + Replicated (3 shards × 3 replicas = 9 nodes)
 //!
 //! ```ignore
 //! KVSCluster {
-//!     members: ClusterMembers {
-//!         count: 3,           // 3 shards
-//!         each: KVSNode {
-//!             members: NodeMembers {
-//!                 count: 3    // 3 replicas per shard
-//!             }
-//!         }
+//!     dispatch: ShardedRouter::new(3),        // Route to shard by key
+//!     maintenance: ZeroMaintenance,           // No cross-shard sync
+//!     count: 3,                               // 3 shards
+//!     each: KVSNode {
+//!         dispatch: RoundRobinRouter::new(),  // Round-robin within shard
+//!         maintenance: BroadcastReplication::default(),  // Sync replicas
+//!         count: 3                            // 3 replicas per shard
 //!     }
 //! }
-//! // = 9 total nodes (3 shards × 3 replicas)
 //! ```
 
-use serde::{Deserialize, Serialize};
+use std::fmt;
+use crate::dispatch::{OpDispatch, ClusterLevelDispatch, Pipeline};
+use crate::maintenance::ReplicationStrategy;
+use crate::server::{KVSBuilder, BuiltKVS};
 
-/// Top-level cluster specification
+/// Top-level cluster specification with dispatch and maintenance
 ///
-/// Describes the complete topology: how many shards/groups, and what each contains.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KVSCluster {
-    pub members: ClusterMembers,
-}
-
-/// Members of a cluster (shards or groups)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ClusterMembers {
-    /// Number of shards/groups
+/// - `CD`: Cluster-level dispatch type (e.g., ShardedRouter, SingleNodeRouter)
+/// - `ND`: Node-level dispatch type (e.g., RoundRobinRouter, SingleNodeRouter)
+/// - `CM`: Cluster-level maintenance type
+/// - `NM`: Node-level maintenance type
+#[derive(Clone)]
+pub struct KVSCluster<CD, ND, CM, NM> {
+    /// Dispatch strategy for routing between shards/clusters
+    pub dispatch: CD,
+    /// Maintenance strategy at cluster level (typically () for no cross-shard sync)
+    pub maintenance: CM,
+    /// Number of shards/clusters
     pub count: usize,
-    /// Configuration for each shard/group
-    pub each: KVSNode,
+    /// Configuration for each shard/cluster
+    pub each: KVSNode<ND, NM>,
 }
 
-/// Node-level specification
+/// Node-level specification with dispatch and maintenance
 ///
-/// Describes a single shard/group: how many replicas it contains.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct KVSNode {
-    pub members: NodeMembers,
-}
-
-/// Members within a single shard/group (replicas)
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NodeMembers {
-    /// Number of replicas in this shard/group
+/// - `D`: Dispatch type (e.g., RoundRobinRouter for replicas, SingleNodeRouter for single node)
+/// - `M`: Maintenance type (e.g., SimpleGossip, BroadcastReplication, ZeroMaintenance)
+#[derive(Clone)]
+pub struct KVSNode<D, M> {
+    /// Dispatch strategy within this node (e.g., round-robin across replicas)
+    pub dispatch: D,
+    /// Maintenance strategy for this node (e.g., gossip between replicas)
+    pub maintenance: M,
+    /// Number of replicas
     pub count: usize,
 }
 
-impl KVSCluster {
-    /// Create a simple single-node cluster (no sharding, no replication)
-    pub fn single_node() -> Self {
-        Self {
-            members: ClusterMembers {
-                count: 1,
-                each: KVSNode {
-                    members: NodeMembers { count: 1 },
-                },
-            },
-        }
+// Debug implementations
+impl<CD: fmt::Debug, ND: fmt::Debug, CM: fmt::Debug, NM: fmt::Debug> fmt::Debug for KVSCluster<CD, ND, CM, NM> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KVSCluster")
+            .field("dispatch", &self.dispatch)
+            .field("maintenance", &self.maintenance)
+            .field("count", &self.count)
+            .field("each", &self.each)
+            .finish()
     }
+}
 
-    /// Create a replicated cluster (no sharding, N replicas)
-    pub fn replicated(replica_count: usize) -> Self {
-        Self {
-            members: ClusterMembers {
-                count: 1,
-                each: KVSNode {
-                    members: NodeMembers { count: replica_count },
-                },
-            },
-        }
+impl<D: fmt::Debug, M: fmt::Debug> fmt::Debug for KVSNode<D, M> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KVSNode")
+            .field("dispatch", &self.dispatch)
+            .field("maintenance", &self.maintenance)
+            .field("count", &self.count)
+            .finish()
     }
+}
 
-    /// Create a sharded cluster (N shards, 1 node per shard)
-    pub fn sharded(shard_count: usize) -> Self {
-        Self {
-            members: ClusterMembers {
-                count: shard_count,
-                each: KVSNode {
-                    members: NodeMembers { count: 1 },
-                },
-            },
-        }
-    }
-
-    /// Create a sharded + replicated cluster (N shards × M replicas)
-    pub fn sharded_replicated(shard_count: usize, replicas_per_shard: usize) -> Self {
-        Self {
-            members: ClusterMembers {
-                count: shard_count,
-                each: KVSNode {
-                    members: NodeMembers { count: replicas_per_shard },
-                },
-            },
-        }
-    }
-
-    /// Total number of nodes in the cluster
+// Helper methods
+impl<CD, ND, CM, NM> KVSCluster<CD, ND, CM, NM> {
+    /// Total number of nodes in the cluster (shards × replicas)
     pub fn total_nodes(&self) -> usize {
-        self.members.count * self.members.each.members.count
+        self.count * self.each.count
     }
 
     /// Number of shards
     pub fn shard_count(&self) -> usize {
-        self.members.count
+        self.count
     }
 
     /// Number of replicas per shard
     pub fn replicas_per_shard(&self) -> usize {
-        self.members.each.members.count
+        self.each.count
     }
 
     /// Is this a sharded configuration?
     pub fn is_sharded(&self) -> bool {
-        self.members.count > 1
+        self.count > 1
     }
 
     /// Is this a replicated configuration?
     pub fn is_replicated(&self) -> bool {
-        self.members.each.members.count > 1
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn single_node_spec() {
-        let spec = KVSCluster::single_node();
-        assert_eq!(spec.total_nodes(), 1);
-        assert_eq!(spec.shard_count(), 1);
-        assert_eq!(spec.replicas_per_shard(), 1);
-        assert!(!spec.is_sharded());
-        assert!(!spec.is_replicated());
+        self.each.count > 1
     }
 
-    #[test]
-    fn replicated_spec() {
-        let spec = KVSCluster::replicated(3);
-        assert_eq!(spec.total_nodes(), 3);
-        assert_eq!(spec.shard_count(), 1);
-        assert_eq!(spec.replicas_per_shard(), 3);
-        assert!(!spec.is_sharded());
-        assert!(spec.is_replicated());
+    /// Create a KVSBuilder from this spec, inferring dispatcher and maintenance types from the spec.
+    ///
+    /// Supply only the value type `V`; the dispatch and maintenance types are taken from the spec.
+    pub fn builder_for<V>(self) -> KVSBuilder<V, Pipeline<CD, ND>, NM>
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
+        ND: OpDispatch<V> + Clone,
+        CM: ReplicationStrategy<V>,
+        NM: ReplicationStrategy<V> + Clone,
+        Pipeline<CD, ND>: OpDispatch<V>,
+    {
+    KVSBuilder::<V, Pipeline<CD, ND>, NM>::from_spec(self)
     }
 
-    #[test]
-    fn sharded_spec() {
-        let spec = KVSCluster::sharded(3);
-        assert_eq!(spec.total_nodes(), 3);
-        assert_eq!(spec.shard_count(), 3);
-        assert_eq!(spec.replicas_per_shard(), 1);
-        assert!(spec.is_sharded());
-        assert!(!spec.is_replicated());
-    }
-
-    #[test]
-    fn sharded_replicated_spec() {
-        let spec = KVSCluster::sharded_replicated(3, 3);
-        assert_eq!(spec.total_nodes(), 9);
-        assert_eq!(spec.shard_count(), 3);
-        assert_eq!(spec.replicas_per_shard(), 3);
-        assert!(spec.is_sharded());
-        assert!(spec.is_replicated());
-    }
-
-    #[test]
-    fn manual_construction() {
-        let spec = KVSCluster {
-            members: ClusterMembers {
-                count: 2,
-                each: KVSNode {
-                    members: NodeMembers { count: 4 },
-                },
-            },
-        };
-        assert_eq!(spec.total_nodes(), 8); // 2 shards × 4 replicas
+    /// Build a server directly from this spec by specifying only the value type `V`.
+    pub async fn build_server<V>(self) -> Result<BuiltKVS<V, Pipeline<CD, ND>, NM>, Box<dyn std::error::Error>>
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        CD: OpDispatch<V> + ClusterLevelDispatch + Clone,
+        ND: OpDispatch<V> + Clone,
+        CM: ReplicationStrategy<V>,
+        NM: ReplicationStrategy<V> + Clone,
+        Pipeline<CD, ND>: OpDispatch<V>,
+    {
+        self.builder_for::<V>().build().await
     }
 }

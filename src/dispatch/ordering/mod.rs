@@ -6,5 +6,5 @@
 pub mod paxos;
 pub mod paxos_core;
 
-pub use paxos::PaxosInterceptor;
+pub use paxos::PaxosDispatcher;
 pub use paxos_core::PaxosConfig;

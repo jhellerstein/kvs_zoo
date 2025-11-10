@@ -2,9 +2,9 @@
 //!
 //! **Configuration:**
 //! - Architecture: Sharded KVS with local nodes
-//! - Routing: `Pipeline<ShardedRouter, SingleNodeRouter>` (hash-based partitioning)
-//! - Replication: None (each shard is a single local node)
-//! - Nodes: 3 shards × 1 node each = 3 total nodes
+//! - Topology: 3 shards × 1 node each = 3 total nodes
+//! - Routing: `ShardedRouter` at cluster level, `SingleNodeRouter` at node level (hash-based partitioning)
+//! - Replication: None (each shard is a single local node with `ZeroMaintenance`)
 //! - Consistency: Per-shard strong (deterministic), no cross-shard coordination
 //!
 //! **What it achieves:**
@@ -15,44 +15,48 @@
 //! architecture suitable for high-throughput, low-latency workloads where keys are accessed
 //! independently.
 
-// futures traits are used by the shared driver
-use kvs_zoo::dispatch::{Pipeline, ShardedRouter, SingleNodeRouter};
+use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
+use kvs_zoo::dispatch::ShardedRouter;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sharded Local KVS Demo");
 
-    // Server architecture: sharded local Lww nodes, no replication
-    type Server = KVSServer<
-        LwwWrapper<String>,
-        Pipeline<ShardedRouter, SingleNodeRouter>,
-        ()
-    >;
-    
-    // Configure for 3 shards
-    let dispatch = Pipeline::new(
-        ShardedRouter::new(3),
-        SingleNodeRouter::new(),
-    );
+    // Define the cluster topology hierarchically with inline dispatch/maintenance
+    let cluster_spec = KVSCluster { // a cluster
+        count: 3,                               // deploy 3 shards at the cluster level
+        dispatch: ShardedRouter::new(3),        // cluster dispatch: route to shard by key hash
+        maintenance: (),                        // no cluster-level maintenance
+        each: KVSNode {                         // each shard is a single local node
+            count: 1,                               // one node per shard (no replication)
+            dispatch: (),                           // no dispatch at the leaf: messages pass through directly
+            maintenance: (),                        // no per-node maintenance
+        },
+    };
 
-    let (mut deployment, out, input) = Server::builder()
-        .with_cluster_size(3)  // 3 shards (one node per shard)
-        .build_with(dispatch, ())
-        .await?;
+    // Build and start the server from the spec - no separate type declaration needed!
+    let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
 
-    deployment.start().await?;
+    built.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    let ops = kvs_zoo::demo_driver::ops_sharded_local();
-    // print shard mapping for clarity
+    // Use distinct keys that should hash to different shards with ShardedRouter logic
+    let ops = vec![
+        KVSOperation::Put("shard_key_0".into(), LwwWrapper::new("value_0".into())),
+        KVSOperation::Put("shard_key_1".into(), LwwWrapper::new("value_1".into())),
+        KVSOperation::Get("shard_key_0".into()),
+        KVSOperation::Get("shard_key_1".into()),
+    ];
+
+    // print shard mapping using router's helper for consistency
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {
             println!("   {}", info);
         }
     }
+    let (out, input) = built.take_ports();
     kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
 
     println!("✅ Sharded local demo complete");
@@ -62,10 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
         KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
-            use std::hash::{Hash, Hasher};
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            key.hash(&mut hasher);
-            let shard_id = hasher.finish() % shards;
+            let shard_id =
+                kvs_zoo::dispatch::ShardedRouter::calculate_shard_id(key, shards as usize);
             Some(format!("→ shard {} for '{}'", shard_id, key))
         }
     }

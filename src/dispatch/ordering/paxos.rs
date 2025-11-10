@@ -1,39 +1,49 @@
-//! Paxos-based operation interceptor for total ordering
+//! Paxos-based operation dispatcher for total ordering
 //!
-//! This module provides a Paxos consensus interceptor that ensures all operations
+//! This module provides a Paxos consensus dispatcher that ensures all operations
 //! are applied in a globally consistent order across all replicas, providing
 //! linearizability guarantees for the KVS.
 
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::dispatch::{Deployment, KVSDeployment, OpIntercept};
 use crate::dispatch::ordering::paxos_core::{PaxosConfig, PaxosPayload};
+use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
-/// Paxos interceptor that provides total ordering of operations
+/// Paxos dispatcher that provides total ordering of operations
 ///
-/// This interceptor uses the Paxos consensus algorithm to ensure that all operations
+/// This dispatcher uses the Paxos consensus algorithm to ensure that all operations
 /// are totally ordered across all nodes in the cluster, providing linearizability.
 #[derive(Clone)]
-pub struct PaxosInterceptor<V> {
+pub struct PaxosDispatcher<V> {
     pub config: PaxosConfig,
     _phantom: std::marker::PhantomData<V>,
 }
 
-impl<V> PaxosInterceptor<V> {
+impl<V> PaxosDispatcher<V> {
     pub fn new() -> Self {
-        Self { config: PaxosConfig::default(), _phantom: std::marker::PhantomData }
+        Self {
+            config: PaxosConfig::default(),
+            _phantom: std::marker::PhantomData,
+        }
     }
     pub fn with_config(config: PaxosConfig) -> Self {
-        Self { config, _phantom: std::marker::PhantomData }
+        Self {
+            config,
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
-impl<V> Default for PaxosInterceptor<V> { fn default() -> Self { Self::new() } }
+impl<V> Default for PaxosDispatcher<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-impl<V> OpIntercept<V> for PaxosInterceptor<V>
+impl<V> OpDispatch<V> for PaxosDispatcher<V>
 where
     V: PaxosPayload,
 {
@@ -43,7 +53,7 @@ where
         Deployment::SingleCluster(flow.cluster::<KVSNode>())
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -78,7 +88,7 @@ mod tests {
 
     #[test]
     fn config_defaults() {
-        let p = PaxosInterceptor::<String>::new();
+        let p = PaxosDispatcher::<String>::new();
         assert_eq!(p.config.f, PaxosConfig::default().f);
     }
 }

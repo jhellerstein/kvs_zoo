@@ -9,9 +9,10 @@
 //! - **ReplicationStrategy**: Trait for background data synchronization
 //! - **NoReplication**: No-op strategy for single-node systems
 //! - **Unit type ()**: Alternative no-op implementation
+//! - **ZeroMaintenance**: Alias for `()` to improve readability in type signatures
 //!
 //! ## Cluster-level strategies
-//! - **EpidemicGossip**: Gossip-based eventual consistency between replicas
+//! - **SimpleGossip**: Gossip-based eventual consistency between replicas
 //! - **BroadcastReplication**: Broadcast-based strong consistency
 //! - **LogBased**: Log-based replication (used with Paxos)
 //!
@@ -28,7 +29,7 @@
 //!
 //! ```rust
 //! use kvs_zoo::maintenance::{ReplicationStrategy, NoReplication};
-//! use kvs_zoo::maintenance::cluster::{EpidemicGossip, BroadcastReplication};
+//! use kvs_zoo::maintenance::cluster::{SimpleGossip, BroadcastReplication};
 //! use kvs_zoo::maintenance::node::TombstoneCleanup;
 //!
 //! // Single-node system (no replication needed)
@@ -37,7 +38,7 @@
 //! let replication = ();
 //!
 //! // Multi-node system with gossip
-//! let replication: EpidemicGossip<String> = EpidemicGossip::default();
+//! let replication: SimpleGossip<String> = SimpleGossip::default();
 //!
 //! // Multi-node system with broadcast
 //! let replication: BroadcastReplication<String> = BroadcastReplication::default();
@@ -51,8 +52,46 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Re-export commonly used strategies for convenience
-pub use cluster::{BroadcastReplication, BroadcastReplicationConfig, EpidemicGossip, EpidemicGossipConfig, LogBased};
+pub use cluster::{
+    BroadcastReplication, BroadcastReplicationConfig, SimpleGossip, SimpleGossipConfig,
+    LogBased,
+};
 pub use node::{TombstoneCleanup, TombstoneCleanupConfig};
+
+/// Compose two maintenance strategies so they can run concurrently.
+///
+/// This allows, for example, running a replication strategy (with its own
+/// tick/period) alongside a tombstone cleanup strategy (with a different
+/// tick/period). Each strategy can schedule itself independently; their
+/// emitted update streams are merged.
+#[derive(Clone, Debug)]
+pub struct CombinedMaintenance<A, B> {
+    pub a: A,
+    pub b: B,
+}
+
+impl<A, B> CombinedMaintenance<A, B> {
+    pub fn new(a: A, b: B) -> Self {
+        Self { a, b }
+    }
+}
+
+/// Extension trait to ergonomically compose maintenance strategies
+pub trait MaintenanceComposeExt: Sized {
+    fn and<O>(self, other: O) -> CombinedMaintenance<Self, O> {
+        CombinedMaintenance::new(self, other)
+    }
+}
+
+impl<T> MaintenanceComposeExt for T {}
+
+/// Readability alias for "no maintenance/replication".
+///
+/// This is equivalent to the unit type `()` which already implements
+/// `ReplicationStrategy<V>`. Prefer `ZeroMaintenance` in examples and type
+/// signatures when you want to emphasize that there is intentionally no
+/// background maintenance.
+pub type ZeroMaintenance = ();
 
 /// Core trait for replication strategies
 ///
@@ -95,6 +134,41 @@ pub trait ReplicationStrategy<V> {
         let replicated = self.replicate_data(cluster, unslotted);
         // Re-add dummy slot 0 (ordering is lost)
         replicated.map(q!(|(key, value)| (0usize, key, value)))
+    }
+}
+
+impl<V, A, B> ReplicationStrategy<V> for CombinedMaintenance<A, B>
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    A: ReplicationStrategy<V>,
+    B: ReplicationStrategy<V>,
+{
+    fn replicate_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        let a_out = self.a.replicate_data(cluster, local_data.clone());
+        let b_out = self.b.replicate_data(cluster, local_data);
+        a_out
+            .interleave(b_out)
+            .assume_ordering(nondet!(/** merged maintenance outputs */))
+    }
+
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        let a_out = self
+            .a
+            .replicate_slotted_data(cluster, local_slotted_data.clone());
+        let b_out = self
+            .b
+            .replicate_slotted_data(cluster, local_slotted_data);
+        a_out
+            .interleave(b_out)
+            .assume_ordering(nondet!(/** merged maintenance outputs (slotted) */))
     }
 }
 

@@ -305,7 +305,7 @@ mod tests {
             crate::values::CausalString,
         >::new());
         _accepts_replication_strategy::<crate::values::CausalString>(
-            crate::maintenance::EpidemicGossip::<crate::values::CausalString>::new(),
+            crate::maintenance::SimpleGossip::<crate::values::CausalString>::default(),
         );
     }
 

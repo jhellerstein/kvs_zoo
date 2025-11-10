@@ -1,7 +1,7 @@
-//! Routing Operation Interceptors
+//! Routing Operation dispatchers
 //!
-//! This module provides operation interceptors that handle routing of KVS operations
-//! to appropriate nodes in the cluster. Routing interceptors determine how operations
+//! This module provides operation dispatchers that handle routing of KVS operations
+//! to appropriate nodes in the cluster. Routing dispatchers determine how operations
 //! are distributed across nodes based on different strategies.
 //!
 //! ## Available Routers
@@ -14,7 +14,7 @@
 //!
 //! ```rust
 //! use kvs_zoo::dispatch::routing::{SingleNodeRouter, RoundRobinRouter, ShardedRouter};
-//! use kvs_zoo::dispatch::OpInterceptExt;
+//! use kvs_zoo::dispatch::OpDispatchExt;
 //!
 //! // Simple single-node routing
 //! let local = SingleNodeRouter::new();
@@ -29,12 +29,12 @@
 //! let pipeline = kvs_zoo::dispatch::Pipeline::new(sharded, round_robin);
 //! ```
 
-// Module declarations for routing interceptors
+// Module declarations for routing dispatchers
 pub mod round_robin;
 pub mod sharded;
 pub mod single_node;
 
-// Re-export routing interceptor types for convenience
+// Re-export routing dispatcher types for convenience
 pub use round_robin::RoundRobinRouter;
 pub use sharded::ShardedRouter;
 pub use single_node::SingleNodeRouter;
@@ -42,7 +42,7 @@ pub use single_node::SingleNodeRouter;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::{OpInterceptExt, Pipeline};
+    use crate::dispatch::{OpDispatchExt, Pipeline};
 
     #[test]
     fn test_router_composition_with_pipeline() {
@@ -93,11 +93,11 @@ mod tests {
         let _sharded_then_replicated: Pipeline<ShardedRouter, RoundRobinRouter> =
             Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
 
-        // Pattern: LocalRouter (single interceptor)
+        // Pattern: LocalRouter (single dispatcher)
         // This matches LocalKVSServer<V>
         let _local_only = SingleNodeRouter::new();
 
-        // Pattern: RoundRobinRouter (single interceptor)
+        // Pattern: RoundRobinRouter (single dispatcher)
         // This matches ReplicatedKVSServer<V>
         let _replicated_only = RoundRobinRouter::new();
     }
@@ -106,7 +106,7 @@ mod tests {
     fn test_all_routers_implement_required_traits() {
         // Test that all routers implement the required traits for composition
 
-        fn _test_traits<V>(_router: impl OpInterceptExt<V> + Clone + std::fmt::Debug) {}
+        fn _test_traits<V>(_router: impl OpDispatchExt<V> + Clone + std::fmt::Debug) {}
 
         _test_traits::<String>(SingleNodeRouter::new());
         _test_traits::<String>(RoundRobinRouter::new());

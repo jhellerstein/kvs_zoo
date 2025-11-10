@@ -72,7 +72,7 @@ cargo run --example sharded_replicated
 
 | Example                 | Server Type                                           | Nodes | Consistency Model | Scalability | Fault Tolerance |
 | ----------------------- | ----------------------------------------------------- | ----- | ----------------- | ----------- | --------------- |
-| `local.rs`              | `LocalKVSServer<String>`                              | 1     | Strong            | Low         | None            |
+| `local.rs`              | `LocalKVSServer<String>` (ZeroMaintenance)            | 1     | Strong            | Low         | None            |
 | `replicated.rs`         | `ReplicatedKVSServer<CausalString>` or `<LwwWrapper>` | 3     | Causal or LWW     | Medium      | High            |
 | `sharded.rs`            | `ShardedKVSServer<LocalKVSServer<String>>`            | 3     | Per-shard strong  | High        | Low             |
 | `sharded_replicated.rs` | `ShardedKVSServer<ReplicatedKVSServer<CausalString>>` | 9     | Per-shard causal  | Very High   | Very High       |
@@ -84,6 +84,17 @@ cargo run --example sharded_replicated
 - **🛡️ Fault Tolerance**: Replication provides resilience to node failures
 - **⚡ Performance**: Sharding distributes load across multiple nodes
 - **🎯 Flexibility**: Mix and match consistency models and architectures
+
+## ZeroMaintenance Alias
+
+Examples that intentionally have no background replication or maintenance now
+use the readability alias `ZeroMaintenance` (which is just `type ZeroMaintenance = ();`).
+This makes intent explicit in type signatures instead of a bare unit `()`.
+
+```rust
+use kvs_zoo::maintenance::ZeroMaintenance;
+type Local = KVSServer<LwwWrapper<String>, SingleNodeRouter, ZeroMaintenance>;
+```
 
 ## Integration Tests
 

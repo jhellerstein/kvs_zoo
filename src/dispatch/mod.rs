@@ -1,7 +1,7 @@
 //! Dispatch layer: operation interception, routing, ordering composition.
 //!
 //! This is a cleaned, minimal version restored after earlier merge/refactor
-//! corruption. It keeps public names (`OpIntercept`, `Pipeline`, `Deployment`)
+//! corruption. It keeps public names (`OpDispatch`, `Pipeline`, `Deployment`)
 //! needed by `server.rs` and examples, while removing half‑deleted fragments.
 
 use hydro_lang::prelude::*;
@@ -11,13 +11,31 @@ use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
 pub mod filtering; // (reserved)
-pub mod ordering;  // consensus / total order (e.g. Paxos)
-pub mod routing;   // key → node / cluster selection
-pub mod spec_interpreter; // cluster spec → dispatch strategy
+pub mod ordering; // consensus / total order (e.g. Paxos)
+pub mod routing; // key → node / cluster selection
 
-pub use ordering::{PaxosConfig, PaxosInterceptor};
+pub use ordering::{PaxosConfig, PaxosDispatcher};
 pub use routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
-pub use spec_interpreter::{DispatchStrategy, InferDispatch};
+
+/* ------------------------------------------------------------------------- */
+/* Marker trait to forbid `()` at cluster level                               */
+/* ------------------------------------------------------------------------- */
+/// Marker trait for dispatchers that are allowed at the cluster (outer) level.
+///
+/// We intentionally do NOT implement this for `()` so that `dispatch: ()` is
+/// accepted for `KVSNode` leaves but rejected for `KVSCluster` in `from_spec`.
+pub trait ClusterLevelDispatch {}
+
+impl ClusterLevelDispatch for SingleNodeRouter {}
+impl ClusterLevelDispatch for ShardedRouter {}
+impl ClusterLevelDispatch for RoundRobinRouter {}
+impl<V> ClusterLevelDispatch for crate::dispatch::ordering::PaxosDispatcher<V> {}
+impl ClusterLevelDispatch for IdentityDispatch {}
+impl<A, B> ClusterLevelDispatch for Pipeline<A, B>
+where
+    A: ClusterLevelDispatch,
+    B: ClusterLevelDispatch,
+{}
 
 /* ------------------------------------------------------------------------- */
 /* Deployment Abstractions                                                    */
@@ -26,7 +44,9 @@ pub use spec_interpreter::{DispatchStrategy, InferDispatch};
 /// Trait abstraction so different deployment layouts can be consumed uniformly.
 pub trait KVSDeployment<'a> {
     fn kvs_cluster(&self) -> &Cluster<'a, KVSNode>;
-    fn kvs_clusters(&self) -> Option<&[Cluster<'a, KVSNode>]> { None }
+    fn kvs_clusters(&self) -> Option<&[Cluster<'a, KVSNode>]> {
+        None
+    }
 }
 
 /// Basic deployment patterns used by dispatchers.
@@ -38,28 +58,36 @@ pub enum Deployment<'a> {
 
 impl<'a> KVSDeployment<'a> for Deployment<'a> {
     fn kvs_cluster(&self) -> &Cluster<'a, KVSNode> {
-        match self { Deployment::SingleCluster(c) => c, Deployment::ShardedClusters(v) => &v[0] }
+        match self {
+            Deployment::SingleCluster(c) => c,
+            Deployment::ShardedClusters(v) => &v[0],
+        }
     }
     fn kvs_clusters(&self) -> Option<&[Cluster<'a, KVSNode>]> {
-        match self { Deployment::ShardedClusters(v) => Some(v.as_slice()), _ => None }
+        match self {
+            Deployment::ShardedClusters(v) => Some(v.as_slice()),
+            _ => None,
+        }
     }
 }
 
 impl<'a> KVSDeployment<'a> for Cluster<'a, KVSNode> {
-    fn kvs_cluster(&self) -> &Cluster<'a, KVSNode> { self }
+    fn kvs_cluster(&self) -> &Cluster<'a, KVSNode> {
+        self
+    }
 }
 
 /* ------------------------------------------------------------------------- */
-/* Interception Core                                                          */
+/* Dispatch Core                                                          */
 /* ------------------------------------------------------------------------- */
 
-/// Interceptor transforming a process‑originated stream into a cluster stream.
-pub trait OpIntercept<V> {
+/// Dispatcher transforming a process‑originated stream into a cluster stream.
+pub trait OpDispatch<V> {
     type Deployment<'a>: KVSDeployment<'a>;
 
     fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a>;
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -68,19 +96,56 @@ pub trait OpIntercept<V> {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 }
 
-/// Identity (broadcast) interceptor placeholder.
-#[derive(Clone, Debug, Default)]
-pub struct IdentityIntercept;
-impl IdentityIntercept { pub fn new() -> Self { Self } }
-
-impl<V> OpIntercept<V> for IdentityIntercept {
+/* ------------------------------------------------------------------------- */
+/* Unit (No‑Op) Dispatch for Leaf Nodes                                      */
+/* ------------------------------------------------------------------------- */
+/// `()` implements `OpDispatch` as a no‑op router for leaf (non‑replicated) nodes.
+///
+/// Rationale: A terminal storage node does not perform routing; the pipeline
+/// abstraction originally forced a degenerate dispatcher (`SingleNodeRouter`).
+/// Allowing `dispatch: ()` in a `KVSNode` makes examples clearer: no routing
+/// happens at this level. For `KVSCluster` we still require a real dispatcher
+/// (sharding, replica selection, consensus ordering, etc.).
+impl<V> OpDispatch<V> for () {
     type Deployment<'a> = Cluster<'a, KVSNode>;
 
     fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
         flow.cluster::<KVSNode>()
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        deployment: &Self::Deployment<'a>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Forward everything directly to member 0 (same semantics as SingleNodeRouter).
+        operations
+            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .into_keyed()
+            .demux_bincode(deployment)
+    }
+}
+
+/// Identity (broadcast) dispatcher placeholder.
+#[derive(Clone, Debug, Default)]
+pub struct IdentityDispatch;
+impl IdentityDispatch {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl<V> OpDispatch<V> for IdentityDispatch {
+    type Deployment<'a> = Cluster<'a, KVSNode>;
+
+    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
+        flow.cluster::<KVSNode>()
+    }
+
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -92,16 +157,30 @@ impl<V> OpIntercept<V> for IdentityIntercept {
     }
 }
 
-/// Static composition of two interceptors.
+/// Static composition of two dispatchers.
 #[derive(Clone, Debug)]
-pub struct Pipeline<A, B> { pub first: A, pub second: B }
-impl<A, B> Pipeline<A, B> { pub fn new(first: A, second: B) -> Self { Self { first, second } } }
-impl<A: Default, B: Default> Default for Pipeline<A, B> { fn default() -> Self { Self { first: A::default(), second: B::default() } } }
+pub struct Pipeline<A, B> {
+    pub first: A,
+    pub second: B,
+}
+impl<A, B> Pipeline<A, B> {
+    pub fn new(first: A, second: B) -> Self {
+        Self { first, second }
+    }
+}
+impl<A: Default, B: Default> Default for Pipeline<A, B> {
+    fn default() -> Self {
+        Self {
+            first: A::default(),
+            second: B::default(),
+        }
+    }
+}
 
-impl<A, B, V> OpIntercept<V> for Pipeline<A, B>
+impl<A, B, V> OpDispatch<V> for Pipeline<A, B>
 where
-    A: OpIntercept<V>,
-    B: OpIntercept<V>,
+    A: OpDispatch<V>,
+    B: OpDispatch<V>,
 {
     type Deployment<'a> = A::Deployment<'a>;
 
@@ -109,7 +188,7 @@ where
         self.first.create_deployment(flow)
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -117,13 +196,17 @@ where
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        self.first.intercept_operations(operations, deployment)
+        self.first.dispatch_operations(operations, deployment)
     }
 }
 
 /// Fluent extension for chaining.
-pub trait OpInterceptExt<V>: OpIntercept<V> + Sized { fn then<N: OpIntercept<V>>(self, next: N) -> Pipeline<Self, N> { Pipeline::new(self, next) } }
-impl<V, T: OpIntercept<V>> OpInterceptExt<V> for T {}
+pub trait OpDispatchExt<V>: OpDispatch<V> + Sized {
+    fn then<N: OpDispatch<V>>(self, next: N) -> Pipeline<Self, N> {
+        Pipeline::new(self, next)
+    }
+}
+impl<V, T: OpDispatch<V>> OpDispatchExt<V> for T {}
 
 /* ------------------------------------------------------------------------- */
 /* Tests (basic structural)                                                   */
@@ -135,20 +218,20 @@ mod tests {
 
     #[test]
     fn identity_construction() {
-        let _i = IdentityIntercept::new();
-        let _d = IdentityIntercept::default();
+        let _i = IdentityDispatch::new();
+        let _d = IdentityDispatch;
     }
 
     #[test]
     fn pipeline_shape() {
-        let p = Pipeline::new(IdentityIntercept::new(), SingleNodeRouter::new());
+        let p = Pipeline::new(IdentityDispatch::new(), SingleNodeRouter::new());
         let _ = format!("{:?}", p);
     }
 
     #[test]
     fn chaining_types() {
-        fn _assert<V, T: OpInterceptExt<V>>(_: T) {}
-        _assert::<String, _>(IdentityIntercept::new());
+        fn _assert<V, T: OpDispatchExt<V>>(_: T) {}
+        _assert::<String, _>(IdentityDispatch::new());
         _assert::<String, _>(SingleNodeRouter::new());
         _assert::<String, _>(RoundRobinRouter::new());
         _assert::<String, _>(ShardedRouter::new(3));

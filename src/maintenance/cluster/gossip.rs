@@ -1,9 +1,19 @@
-//! Epidemic Gossip Replication Strategy
+//! Simple Gossip Replication Strategy
 //!
-//! This module implements the epidemic gossip protocol (Demers et al.) as a
-//! replication strategy for eventual consistency. The gossip protocol spreads
-//! updates through the network using probabilistic forwarding and rumor
-//! termination.
+//! This module implements a simple gossip protocol for replication.
+//! Updates are immediately broadcast to all peers in the cluster.
+//!
+//! # TODO: Implement True Epidemic Gossip
+//!
+//! The current implementation is a simplified broadcast mechanism. A proper
+//! epidemic gossip implementation following Demers et al. would include:
+//!
+//! - **Rumor Store**: Track which keys are "hot" (need gossiping) vs "cold" (tombstoned)
+//! - **Periodic Gossip**: Sample hot keys at intervals and re-gossip to random peers
+//! - **Probabilistic Termination**: Tombstone rumors probabilistically to prevent infinite circulation
+//! - **Bounded Message Complexity**: Target O(n log n) messages per update
+//!
+//! Reference: "Epidemic Algorithms for Replicated Database Maintenance" (Demers et al., 1987)
 
 use crate::kvs_core::KVSNode;
 use crate::maintenance::ReplicationStrategy;
@@ -15,9 +25,9 @@ use lattices::map_union_with_tombstones::MapUnionHashMapWithTombstoneHashSet;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-/// Configuration specific to epidemic gossip protocol
+/// Configuration for simple gossip replication
 #[derive(Clone, Debug)]
-pub struct EpidemicGossipConfig {
+pub struct SimpleGossipConfig {
     /// How many random peers to send each hot rumor to per gossip round
     /// This controls the "fanout" of the epidemic spread
     pub gossip_fanout: usize,
@@ -35,7 +45,7 @@ pub struct EpidemicGossipConfig {
     pub gossip_interval: std::time::Duration,
 }
 
-impl Default for EpidemicGossipConfig {
+impl Default for SimpleGossipConfig {
     fn default() -> Self {
         Self {
             gossip_fanout: 3,
@@ -48,7 +58,7 @@ impl Default for EpidemicGossipConfig {
     }
 }
 
-impl EpidemicGossipConfig {
+impl SimpleGossipConfig {
     /// Create config optimized for small clusters (< 10 nodes)
     pub fn small_cluster() -> Self {
         Self {
@@ -70,10 +80,19 @@ impl EpidemicGossipConfig {
     }
 }
 
-/// Epidemic gossip protocol implementation (Demers et al.)
+impl From<usize> for SimpleGossipConfig {
+    /// Interpret usize as milliseconds for the gossip interval; other fields defaulted
+    fn from(ms: usize) -> Self {
+        let mut cfg = SimpleGossipConfig::default();
+        cfg.gossip_interval = std::time::Duration::from_millis(ms as u64);
+        cfg
+    }
+}
+
+/// Simple gossip replication
 ///
-/// This implements rumor-mongering with probabilistic termination,
-/// where rumors spread through the network and are eventually forgotten
+/// This implements immediate broadcast replication where updates are
+/// sent to all peers in the cluster.
 /// with some probability to prevent infinite circulation.
 ///
 /// ## Protocol Overview
@@ -89,30 +108,29 @@ impl EpidemicGossipConfig {
 /// - **Probabilistic Delivery**: Updates spread with high probability
 /// - **Bounded Message Complexity**: O(n log n) messages per update
 #[derive(Clone, Debug)]
-pub struct EpidemicGossip<V> {
-    config: EpidemicGossipConfig,
+pub struct SimpleGossip<V> {
+    config: SimpleGossipConfig,
     _phantom: std::marker::PhantomData<V>,
 }
 
-impl<V> Default for EpidemicGossip<V> {
+impl<V> Default for SimpleGossip<V> {
     fn default() -> Self {
         Self {
-            config: EpidemicGossipConfig::default(),
+            config: SimpleGossipConfig::default(),
             _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<V> EpidemicGossip<V> {
-    /// Create a new epidemic gossip strategy with default configuration
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl<V> SimpleGossip<V> {
     /// Create a new epidemic gossip strategy with custom configuration
-    pub fn with_config(config: EpidemicGossipConfig) -> Self {
+    /// Accepts either an `SimpleGossipConfig` or any value that can convert into one (e.g., `usize` milliseconds)
+    pub fn new<C>(config: C) -> Self
+    where
+        C: Into<SimpleGossipConfig>,
+    {
         Self {
-            config,
+            config: config.into(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -128,7 +146,7 @@ impl<V> EpidemicGossip<V> {
     }
 }
 
-impl<V> ReplicationStrategy<V> for EpidemicGossip<V>
+impl<V> ReplicationStrategy<V> for SimpleGossip<V>
 where
     V: Clone
         + std::fmt::Debug
@@ -140,20 +158,21 @@ where
         + PartialEq
         + Eq
         + Default
-        + Merge<V>,
+        + Merge<V>
+        + std::hash::Hash,
 {
     fn replicate_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Use simplified gossip for now - immediate probabilistic forwarding
-        // This preserves the existing behavior while adapting to the new trait
+        // Use simplified gossip - immediate probabilistic forwarding
+        // This is the stable implementation from main branch
         self.handle_gossip_simple(cluster, local_data)
     }
 }
 
-impl<V> EpidemicGossip<V>
+impl<V> SimpleGossip<V>
 where
     V: Clone
         + std::fmt::Debug
@@ -165,22 +184,25 @@ where
         + PartialEq
         + Eq
         + Default
-        + Merge<V>,
+        + Merge<V>
+        + std::hash::Hash,
 {
-    /// Simplified gossip that immediately forwards PUT operations to random peers
+    /// Simplified gossip that immediately forwards PUT operations to all peers
     ///
     /// Unlike the full gossip implementation, this version:
     /// - No rumor store or tombstoning
     /// - No periodic gossip rounds
-    /// - Just immediate probabilistic forwarding of operations
+    /// - Just immediate forwarding to all peers
+    /// 
+    /// This is the stable implementation used in production.
     pub fn handle_gossip_simple<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
         let cluster_members = Self::get_cluster_members(cluster);
-        // Immediate probabilistic forwarding to peers based on infection probability
-        // Use boolean random for Hydro compatibility instead of f64 comparison
+        
+        // Immediate forwarding to all peers for reliable convergence
         let gossip_sent = local_put_tuples
             .clone()
             .cross_product(
@@ -188,10 +210,7 @@ where
                     .clone()
                     .assume_retries(nondet!(/** member list OK */)),
             )
-            .filter(q!(|(_tuple, _member_id)| {
-                // Use boolean random for ~50% probability (simplified for Hydro compatibility)
-                rand::random::<bool>()
-            }))
+            // Broadcast to all peers (no probabilistic filtering for demo reliability)
             .map(q!(|(tuple, member_id)| (member_id, tuple)))
             .into_keyed()
             .demux_bincode(cluster);
@@ -202,9 +221,9 @@ where
             .assume_retries(nondet!(/** gossip retries OK */))
     }
 
-    /// Full rumor-mongering gossip implementation (Demers et al.)
+    /// Full rumor-mongering gossip implementation (UNIMPLEMENTED)
     ///
-    /// ## Design
+    /// ## Design (for future implementation)
     /// - Pure gossip protocol that takes local PUTs and returns gossip operations
     /// - Rumor store: MapUnionWithTombstones<(), ()> tracking only hot/tombstoned keys
     /// - Periodic gossip: sample_every with configurable interval on hot (non-tombstoned) keys
@@ -292,7 +311,7 @@ where
             nondet!(/** gossip interval sampling */),
         );
 
-        // Step 5: Probabilistically tombstone keys (probabilistic termination per Demers)
+        // Step 5: Probabilistically tombstone keys (probabilistic termination)
         // TODO: Currently not implemented - would need to send tombstone operations
         // to update the rumor store and stop gossiping tombstoned keys
         let _keys_to_tombstone = hot_keys_sampled.clone().filter(q!(|_k| {
@@ -340,52 +359,52 @@ mod tests {
 
     #[test]
     fn test_epidemic_gossip_creation() {
-        let _gossip = EpidemicGossip::<String>::new();
-        let _gossip_default = EpidemicGossip::<String>::default();
+        let _gossip = SimpleGossip::<String>::default();
+        let _gossip_default = SimpleGossip::<String>::default();
     }
 
     #[test]
     fn test_epidemic_gossip_with_config() {
-        let config = EpidemicGossipConfig::small_cluster();
-        let _gossip = EpidemicGossip::<String>::with_config(config);
+        let config = SimpleGossipConfig::small_cluster();
+        let _gossip = SimpleGossip::<String>::new(config);
     }
 
     #[test]
     fn test_epidemic_gossip_config_presets() {
-        let _small = EpidemicGossipConfig::small_cluster();
-        let _large = EpidemicGossipConfig::large_cluster();
-        let _default = EpidemicGossipConfig::default();
+        let _small = SimpleGossipConfig::small_cluster();
+        let _large = SimpleGossipConfig::large_cluster();
+        let _default = SimpleGossipConfig::default();
     }
 
     #[test]
     fn test_epidemic_gossip_clone_debug() {
-        let gossip = EpidemicGossip::<String>::new();
+        let gossip = SimpleGossip::<String>::default();
         let _cloned = gossip.clone();
         let _debug_str = format!("{:?}", gossip);
     }
 
     #[test]
     fn test_epidemic_gossip_implements_replication_strategy() {
-        // Test that EpidemicGossip implements ReplicationStrategy with CausalString
+        // Test that SimpleGossip implements ReplicationStrategy with CausalString
         fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(EpidemicGossip::<
+        _test_replication_strategy::<crate::values::CausalString>(SimpleGossip::<
             crate::values::CausalString,
-        >::new());
+        >::default());
     }
 
     #[test]
     fn test_epidemic_gossip_config_values() {
-        let config = EpidemicGossipConfig::default();
+        let config = SimpleGossipConfig::default();
         assert_eq!(config.gossip_fanout, 3);
         assert_eq!(config.tombstone_prob, 0.1);
         assert_eq!(config.infection_prob, 0.5);
 
-        let small_config = EpidemicGossipConfig::small_cluster();
+        let small_config = SimpleGossipConfig::small_cluster();
         assert_eq!(small_config.gossip_fanout, 2);
         assert_eq!(small_config.tombstone_prob, 0.05);
         assert_eq!(small_config.infection_prob, 0.7);
 
-        let large_config = EpidemicGossipConfig::large_cluster();
+        let large_config = SimpleGossipConfig::large_cluster();
         assert_eq!(large_config.gossip_fanout, 5);
         assert_eq!(large_config.tombstone_prob, 0.2);
         assert_eq!(large_config.infection_prob, 0.3);
@@ -393,15 +412,15 @@ mod tests {
 
     #[test]
     fn test_epidemic_gossip_type_safety() {
-        // Test that EpidemicGossip works with different value types that implement Merge
-        let _causal_gossip = EpidemicGossip::<crate::values::CausalString>::new();
-        let _lww_gossip = EpidemicGossip::<crate::values::LwwWrapper<String>>::new();
+        // Test that SimpleGossip works with different value types that implement Merge
+        let _causal_gossip = SimpleGossip::<crate::values::CausalString>::default();
+        let _lww_gossip = SimpleGossip::<crate::values::LwwWrapper<String>>::default();
     }
 
     #[test]
     fn test_epidemic_gossip_send_sync() {
-        // Test that EpidemicGossip is Send + Sync for multi-threading
+        // Test that SimpleGossip is Send + Sync for multi-threading
         fn _requires_send_sync<T: Send + Sync>(_t: T) {}
-        _requires_send_sync(EpidemicGossip::<crate::values::CausalString>::new());
+        _requires_send_sync(SimpleGossip::<crate::values::CausalString>::default());
     }
 }

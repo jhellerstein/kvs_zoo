@@ -6,7 +6,7 @@
 //! 3. The LogBased replication correctly sequences operations
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::dispatch::PaxosInterceptor;
+use kvs_zoo::dispatch::PaxosDispatcher;
 use kvs_zoo::maintenance::LogBased;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::{KVSServer, LinearizableKVSServer};
@@ -36,7 +36,7 @@ async fn test_paxos_provides_global_ordering() {
         LogBased<kvs_zoo::maintenance::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
-    let op_pipeline = PaxosInterceptor::new();
+    let op_pipeline = PaxosDispatcher::new();
     let replication = LogBased::new(kvs_zoo::maintenance::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =
@@ -145,7 +145,7 @@ async fn test_linearizable_reads_see_writes() {
         LogBased<kvs_zoo::maintenance::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
-    let op_pipeline = PaxosInterceptor::new();
+    let op_pipeline = PaxosDispatcher::new();
     let replication = LogBased::new(kvs_zoo::maintenance::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =
@@ -238,7 +238,7 @@ async fn test_concurrent_operations_are_linearized() {
         LogBased<kvs_zoo::maintenance::BroadcastReplication<LwwWrapper<String>>>,
     >;
 
-    let op_pipeline = PaxosInterceptor::new();
+    let op_pipeline = PaxosDispatcher::new();
     let replication = LogBased::new(kvs_zoo::maintenance::BroadcastReplication::new());
 
     let (kvs_cluster, proposers, acceptors) =

@@ -1,10 +1,10 @@
-//! Round Robin Router Operation Interceptor
+//! Round Robin Router Operation dispatcher
 //!
 //! The RoundRobinRouter distributes operations across cluster nodes using
 //! round-robin load balancing, ensuring even distribution of work across
 //! all available replicas.
 
-use crate::dispatch::{OpIntercept, Deployment, KVSDeployment};
+use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```rust
 /// use kvs_zoo::dispatch::routing::RoundRobinRouter;
-/// use kvs_zoo::dispatch::OpIntercept;
+/// use kvs_zoo::dispatch::OpDispatch;
 ///
 /// let router = RoundRobinRouter::new();
 /// // Operations will be distributed round-robin across all replica nodes
@@ -47,14 +47,14 @@ impl RoundRobinRouter {
     }
 }
 
-impl<V> OpIntercept<V> for RoundRobinRouter {
+impl<V> OpDispatch<V> for RoundRobinRouter {
     type Deployment<'a> = Deployment<'a>;
 
     fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
         Deployment::SingleCluster(flow.cluster::<KVSNode>())
     }
 
-    fn intercept_operations<'a>(
+    fn dispatch_operations<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         deployment: &Self::Deployment<'a>,
@@ -72,7 +72,7 @@ impl<V> OpIntercept<V> for RoundRobinRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::OpInterceptExt;
+    use crate::dispatch::OpDispatchExt;
 
     #[test]
     fn test_round_robin_router_creation() {
@@ -81,21 +81,21 @@ mod tests {
     }
 
     #[test]
-    fn test_round_robin_router_implements_interception() {
+    fn test_round_robin_router_implements_dispatch() {
         let router = RoundRobinRouter::new();
 
-        // This should compile, demonstrating that RoundRobinRouter implements OpIntercept
-        fn _test_interception<V>(_interceptor: impl OpIntercept<V>) {}
-        _test_interception::<String>(router);
+        // This should compile, demonstrating that RoundRobinRouter implements OpDispatch
+        fn _test_dispatch<V>(_dispatcher: impl OpDispatch<V>) {}
+        _test_dispatch::<String>(router);
     }
 
     #[test]
-    fn test_round_robin_router_implements_interception_ext() {
+    fn test_round_robin_router_implements_dispatch_ext() {
         let router = RoundRobinRouter::new();
 
-        // Test that RoundRobinRouter implements OpInterceptExt for chaining
-        fn _test_interception_ext<V>(_interceptor: impl OpInterceptExt<V>) {}
-        _test_interception_ext::<String>(router);
+        // Test that RoundRobinRouter implements OpDispatchExt for chaining
+        fn _test_dispatch_ext<V>(_dispatcher: impl OpDispatchExt<V>) {}
+        _test_dispatch_ext::<String>(router);
     }
 
     #[test]

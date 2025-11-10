@@ -8,5 +8,5 @@ pub mod gossip;
 pub mod logbased;
 
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
-pub use gossip::{EpidemicGossip, EpidemicGossipConfig};
+pub use gossip::{SimpleGossip, SimpleGossipConfig};
 pub use logbased::LogBased;

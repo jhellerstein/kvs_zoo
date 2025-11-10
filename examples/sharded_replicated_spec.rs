@@ -11,7 +11,7 @@
 //! This example uses the new `KVSCluster` specification API which makes the topology
 //! unambiguous. Instead of `.with_cluster_size(N)` where N could mean different things
 //! depending on the dispatch strategy, we explicitly declare:
-//! 
+//!
 //! ```
 //! members: {
 //!     count: 3,           // 3 shards
@@ -25,11 +25,8 @@
 //!
 //! This clearly means 9 total nodes arranged as 3 shards with 3 replicas each.
 
-use kvs_zoo::cluster_spec::KVSCluster;
-use kvs_zoo::dispatch::{DispatchStrategy, InferDispatch, Pipeline, RoundRobinRouter, ShardedRouter};
-use kvs_zoo::maintenance::BroadcastReplication;
+use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::CausalString;
 
 #[tokio::main]
@@ -37,43 +34,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sharded + Replicated KVS Demo (cluster spec API)");
     println!("📋 Topology: 3 shards × 3 replicas = 9 nodes\n");
 
-    // Define the cluster topology declaratively
-    let cluster_spec = KVSCluster::sharded_replicated(3, 3);
-    
+    // Define the cluster topology declaratively (3 shards × 3 replicas)
+    let cluster_spec = KVSCluster {
+        count: 3,                      // shards
+        dispatch: kvs_zoo::dispatch::ShardedRouter::new(3),
+        maintenance: (),               // no cross-shard maintenance
+        each: KVSNode {
+            count: 3,                  // replicas per shard
+            dispatch: kvs_zoo::dispatch::RoundRobinRouter::new(),
+            maintenance: kvs_zoo::maintenance::BroadcastReplication::<CausalString>::default(),
+        },
+    };
+
     println!("Cluster specification:");
     println!("  Shards: {}", cluster_spec.shard_count());
-    println!("  Replicas per shard: {}", cluster_spec.replicas_per_shard());
+    println!(
+        "  Replicas per shard: {}",
+        cluster_spec.replicas_per_shard()
+    );
     println!("  Total nodes: {}\n", cluster_spec.total_nodes());
 
-    // The dispatch strategy is inferred from the spec
-    let dispatch_strategy = cluster_spec.create_dispatch();
-    match &dispatch_strategy {
-        DispatchStrategy::ShardedReplicated(_) => {
-            println!("✓ Dispatch: Pipeline<ShardedRouter, RoundRobinRouter>");
-        }
-        _ => println!("✗ Unexpected dispatch strategy"),
-    }
+    println!("✓ Dispatch: ShardedRouter + RoundRobinRouter (inferred by spec generics)");
 
-    // Server architecture: sharded + replicated
-    type Server = KVSServer<
-        CausalString,
-        Pipeline<ShardedRouter, RoundRobinRouter>,
-        BroadcastReplication<CausalString>,
-    >;
+    // Build from spec (unambiguous: 9 nodes in 3×3 topology), inferring dispatch and maintenance from spec
+    let mut built = cluster_spec.build_server::<CausalString>().await?;
 
-    // Configure dispatch and maintenance
-    let dispatch = Pipeline::new(
-        ShardedRouter::new(cluster_spec.shard_count()),
-        RoundRobinRouter::new(),
-    );
-    let maintenance = BroadcastReplication::<CausalString>::default();
-
-    // Build from spec (unambiguous: 9 nodes in 3×3 topology)
-    let (mut deployment, out, input) = Server::from_spec(cluster_spec)
-        .build_with(dispatch, maintenance)
-        .await?;
-
-    deployment.start().await?;
+    built.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
     println!("\n🔧 Running operations...\n");
@@ -83,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   {}", info);
         }
     }
+    let (out, input) = built.take_ports();
     kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
 
     println!("\n✅ Sharded+replicated demo complete (cluster spec API)");
