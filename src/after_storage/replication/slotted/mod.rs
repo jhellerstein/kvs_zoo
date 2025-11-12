@@ -1,8 +1,8 @@
-//! Log-Based Replication Wrapper (after-storage)
+//! Slot-based replication wrappers and helpers (after-storage)
 //!
-//! Provides a wrapper that adds slot-based total ordering guarantees to any
-//! underlying replication strategy by sequencing slotted operations and
-//! buffering out-of-order items until gaps are filled.
+//! This module contains replication strategies that explicitly preserve and
+//! operate on slot metadata, used for strong ordering (e.g., linearizability).
+//! Keeping these in a submodule keeps the common-case replication code simple.
 
 use crate::kvs_core::KVSNode;
 use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
