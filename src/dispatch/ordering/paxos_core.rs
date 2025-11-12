@@ -111,13 +111,7 @@ pub fn paxos_core<'a, P: PaxosPayload>(
 ) {
     let f = config.f;
 
-    proposers
-        .source_iter(q!(["Proposers say hello"]))
-        .for_each(q!(|s| println!("{}", s)));
-
-    acceptors
-        .source_iter(q!(["Acceptors say hello"]))
-        .for_each(q!(|s| println!("{}", s)));
+    // Startup prints removed to reduce noise
 
     let proposer_tick = proposers.tick();
     let acceptor_tick = acceptors.tick();
@@ -264,7 +258,6 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
     let p_to_acceptors_p1a = p_trigger_election
         .if_some_then(p_ballot.clone())
         .all_ticks()
-        .inspect(q!(|_| println!("Proposer leader expired, sending P1a")))
         .broadcast_bincode(acceptors, nondet!(/** TODO */))
         .values();
 
@@ -285,7 +278,7 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
 
     let (p_is_leader, p_accepted_values, fail_ballots) = p_p1b(
         proposer_tick,
-        a_to_proposers_p1b.inspect(q!(|p1b| println!("Proposer received P1b: {:?}", p1b))),
+        a_to_proposers_p1b,
         p_ballot.clone(),
         p_has_largest_ballot,
         quorum_size,
@@ -424,7 +417,6 @@ fn acceptor_p1<'a, L: Serialize + DeserializeOwned + Clone>(
 ) {
     let a_max_ballot = p_to_acceptors_p1a
         .clone()
-        .inspect(q!(|p1a| println!("Acceptor received P1a: {:?}", p1a)))
         .persist()
         .max()
         .unwrap_or(acceptor_tick.singleton(q!(Ballot {

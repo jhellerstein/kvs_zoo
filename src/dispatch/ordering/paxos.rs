@@ -86,19 +86,6 @@ impl<V> PaxosDispatcher<V> {
 
         // Convert to SequencedPayload at proposers; do not broadcast to any external cluster here
         let seq_payloads_at_proposers = ordered_slots
-            .inspect(q!(|(slot, op_opt)| {
-                match op_opt {
-                    Some(op) => println!(
-                        "[Paxos] slot {}: {}",
-                        slot,
-                        match op {
-                            KVSOperation::Put(k, _) => format!("PUT {}", k),
-                            KVSOperation::Get(k) => format!("GET {}", k),
-                        }
-                    ),
-                    None => println!("[Paxos] slot {}: EMPTY", slot),
-                }
-            }))
             .map(q!(|(seq, payload)| {
                 crate::dispatch::ordering::sequence_payloads::SequencedPayload { seq, payload }
             }));
