@@ -7,7 +7,7 @@ use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
 use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_to_proxy};
 use kvs_zoo::kvs_layer::{AfterWire, KVSCluster, KVSSpec, KVSWire};
-use kvs_zoo::after_storage::replication::{BroadcastReplication, LogBasedDelivery};
+use kvs_zoo::after_storage::replication::{LogBasedDelivery, SlottedBroadcastReplication as BroadcastReplication};
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;

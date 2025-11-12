@@ -9,6 +9,9 @@ use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub mod broadcast;
+pub use broadcast::SlottedBroadcastReplication;
+
 /// Log-based replication wrapper
 ///
 /// Wraps any replication strategy to add slot-based ordering guarantees.
