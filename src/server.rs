@@ -394,18 +394,10 @@ where
     responses.assume_ordering(nondet!(/** responses at leaf cluster */))
 }
 
-/// Wire a two-layer KVS with slotted operations from Paxos.
-///
-/// Architecture:
-/// 1. Paxos → slotted ops at proxy
-/// 2. Cluster dispatcher (e.g., RoundRobinRouter) routes slotted ops to ONE member
-/// 3. That member extracts PUTs and replicates them (with slots) to all members
-/// 4. Leaf dispatcher receives TWO slotted streams:
-///    - Local: from cluster dispatcher (should ACK client)
-///    - Replicated: from cluster maintenance (should NOT ACK, no client waiting)
-/// 5. Both streams go through SlotOrderEnforcer for buffering
-/// 6. Process local ops with responses, replicated ops without responses
-// Deprecated: slotted-specific wiring removed in favor of generic pipeline (KVSWire + AfterWire).
+// Note: Slotted-specific wiring was removed in favor of the generic pipeline
+// (KVSWire down + AfterWire up). For slotted metadata, wrap ops in Envelope<slot, op>
+// and use wire_two_layer_from_enveloped, letting leaf components (e.g., SlotOrderEnforcer)
+// consume the slot metadata directly.
 
 /// Standalone wiring function: binds a KVS layer specification into Hydro dataflow.
 ///

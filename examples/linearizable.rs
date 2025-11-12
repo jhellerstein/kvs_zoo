@@ -14,7 +14,7 @@ use kvs_zoo::dispatch::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_ord
 use kvs_zoo::dispatch::ordering::paxos_core::{Acceptor, Proposer};
 use kvs_zoo::dispatch::routing::{RoundRobinRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::{AfterWire, KVSCluster, KVSSpec, KVSWire};
-use kvs_zoo::maintenance::{BroadcastReplication, LogBased, MaintenanceAfterResponses, Responder};
+use kvs_zoo::maintenance::{BroadcastReplication, LogBased, Responder};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
