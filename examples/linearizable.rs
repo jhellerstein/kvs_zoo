@@ -87,14 +87,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (responses, _puts) = kvs_zoo::kvs_core::KVSCore::process_with_deltas(routed);
     let responses = kvs_spec.after_responses(&layers, responses);
 
-    // Send responses back to proxy and complete the bidi connection
+    // Send responses back to proxy and complete the bidi connection (optional member id stamping)
     let proxy_responses = responses.send_bincode(&proxy);
-    complete_sink.complete(
+    let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+    let to_complete = if stamp_member {
+        proxy_responses
+            .entries()
+            .map(q!(|(member_id, response)| (0u64, format!("[{}] {}", member_id, response))))
+            .into_keyed()
+    } else {
         proxy_responses
             .entries()
             .map(q!(|(_member_id, response)| (0u64, response)))
-            .into_keyed(),
-    );
+            .into_keyed()
+    };
+    complete_sink.complete(to_complete);
 
     // Deploy: 3 KVS replicas
     let nodes = flow

@@ -146,16 +146,28 @@ where
         // Process operations with selective responses
         let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
 
-        // Send responses back to clients
+        // Send responses back to clients (optionally stamp member id)
         let proxy_responses = responses.send_bincode(proxy);
 
-        // Complete the bidirectional connection
-        complete_sink.complete(
+        // Optional stamping of member id in responses for diagnostics
+        let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+        let to_complete = if stamp_member {
+            proxy_responses
+                .entries()
+                .map(q!(|(member_id, response)| (
+                    0u64,
+                    format!("[{}] {}", member_id, response)
+                )))
+                .into_keyed()
+        } else {
             proxy_responses
                 .entries()
                 .map(q!(|(_member_id, response)| (0u64, response)))
-                .into_keyed(),
-        );
+                .into_keyed()
+        };
+
+        // Complete the bidirectional connection
+        complete_sink.complete(to_complete);
 
         bidi_port
     }
@@ -450,16 +462,26 @@ where
     // Upward maintenance pass: traverse maintenance chain from leaf to root.
     let final_responses = kvs.after_responses(&layers, core_responses);
 
-    // Send responses back to proxy
+    // Send responses back to proxy (optionally stamp member id)
     let proxy_responses = final_responses.send_bincode(proxy);
-
-    // Complete the bidirectional connection
-    complete_sink.complete(
+    let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+    let to_complete = if stamp_member {
+        proxy_responses
+            .entries()
+            .map(q!(|(member_id, response)| (
+                0u64,
+                format!("[{}] {}", member_id, response)
+            )))
+            .into_keyed()
+    } else {
         proxy_responses
             .entries()
             .map(q!(|(_member_id, response)| (0u64, response)))
-            .into_keyed(),
-    );
+            .into_keyed()
+    };
+
+    // Complete the bidirectional connection
+    complete_sink.complete(to_complete);
 
     (layers, bidi_port)
 }
