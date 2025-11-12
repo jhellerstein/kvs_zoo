@@ -4,8 +4,7 @@
 //! - Architecture: Replicated KVS with epidemic gossip
 //! - Topology: 1 cluster of 3 replicas
 //! - Cluster Dispatch: `RoundRobinRouter` (load balance across replicas)
-//! - Maintenance: `SimpleGossip` for replica coordination (attached at cluster level)
-//!                and `TombstoneCleanup` for local housekeeping (attached to nodes)
+//! - Maintenance: `SimpleGossip` for replica coordination
 //! - Value Type: `LwwWrapper<String>` (last-writer-wins semantics)
 //! - Consistency: Eventual (gossip convergence with LWW merge)
 //!
@@ -14,61 +13,78 @@
 //! Uses gossip to propagate updates between replicas and tombstone cleanup for local housekeeping.
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::dispatch::RoundRobinRouter;
-use kvs_zoo::maintenance::{SimpleGossip, TombstoneCleanup};
+use kvs_zoo::kvs_layer::KVSCluster;
+use kvs_zoo::maintenance::SimpleGossip;
+use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+
+// Marker type naming this KVS layer
+#[derive(Clone)]
+struct Replica;
+
+// KVS architecture type: single layer with RoundRobin + Gossip
+type ReplicatedKVS = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<LwwWrapper<String>>, ()>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Replicated KVS Demo (gossip)");
 
-    // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster::new(
-        RoundRobinRouter::new(),                        // round-robin inbound messages across the members
-        SimpleGossip::<LwwWrapper<String>>::new(100usize), // cluster maintenance: gossip replication (100ms interval)
-        1,                                              // deploy only 1 such cluster
-        KVSNode {                                       // each cluster member is a single KVSnode
-            count: 3,                                       // three members
-            dispatch: (),                                   // no further dispatch at the individual nodes
-            maintenance: TombstoneCleanup::new(5_000usize), // node-level maintenance: local cleanup (5s interval)
-        }
+    // Standard Hydro deployment
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
+
+    // Define KVS architecture
+    let kvs_spec = ReplicatedKVS::new(
+        RoundRobinRouter::new(),
+        SimpleGossip::new(100usize), // 100ms gossip interval
+        (),
     );
 
-    // Build and start the server from the spec
-    // This is where you specify your `merge`-able value type, which is how to control consistency of unordered KVSs.
-    // For example, using CausalWrapper in the next line would give you causal consistency.
-    // In this example we're using Last Writer Wins consistency.
-    let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
-    built.start().await?;
+    // Wire KVS dataflow (returns cluster handles + I/O port)
+    let (layers, port) =
+        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+
+    // Deploy: 3 replicas for the cluster
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(
+            layers.get::<Replica>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
+
+    deployment.deploy().await?;
+    let (mut out, mut input) = nodes.connect_bincode(port).await;
+
+    deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Run demo operations with short delays to allow fast gossip convergence
+    // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
-    let (mut out, mut input) = built.take_ports();
+    let ops = vec![
+        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
+        Op::Get("alpha".into()),
+        Op::Put("beta".into(), LwwWrapper::new("two".into())),
+        Op::Get("beta".into()),
+    ];
+    for (i, op) in ops.into_iter().enumerate() {
+        input.send(op).await?;
+        if let Some(resp) = out.next().await {
+            println!("→ {}", resp);
+        }
+        if i == 0 || i == 2 {
+            // brief pause after first PUTs for gossip
+            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+        }
+    }
 
-    // PUT alpha
-    input.send(Op::Put("alpha".into(), LwwWrapper::new("one".into()))).await?;
-    if let Some(resp) = out.next().await { println!("→ {}", resp); }
-
-    // Wait ~2 hops at 100ms/tick (plus slack)
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-
-    // GET alpha
-    input.send(Op::Get("alpha".into())).await?;
-    if let Some(resp) = out.next().await { println!("→ {}", resp); }
-
-    // PUT beta
-    input.send(Op::Put("beta".into(), LwwWrapper::new("two".into()))).await?;
-    if let Some(resp) = out.next().await { println!("→ {}", resp); }
-
-    // Wait again for replication
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-
-    // GET beta
-    input.send(Op::Get("beta".into())).await?;
-    if let Some(resp) = out.next().await { println!("→ {}", resp); }
-
+    deployment.stop().await?;
     println!("✅ Replicated (gossip) demo complete");
     Ok(())
 }

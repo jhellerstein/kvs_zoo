@@ -36,7 +36,10 @@ fn run_example(name: &str, extra: &[&str]) -> (String, String) {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     if !output.status.success() {
-        eprintln!("example `{}` failed. status={:?}\nSTDERR:\n{}\nSTDOUT:\n{}", name, output.status, stderr, stdout);
+        eprintln!(
+            "example `{}` failed. status={:?}\nSTDERR:\n{}\nSTDOUT:\n{}",
+            name, output.status, stderr, stdout
+        );
         panic!("example `{}` exited with failure", name);
     }
     (stdout, stderr)

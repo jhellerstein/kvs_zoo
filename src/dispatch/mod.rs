@@ -14,6 +14,7 @@ pub mod filtering; // (reserved)
 pub mod ordering; // consensus / total order (e.g. Paxos)
 pub mod routing; // key → node / cluster selection
 
+pub use ordering::SlotOrderEnforcer;
 pub use ordering::{PaxosConfig, PaxosDispatcher};
 pub use routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 
@@ -35,65 +36,74 @@ impl<A, B> ClusterLevelDispatch for Pipeline<A, B>
 where
     A: ClusterLevelDispatch,
     B: ClusterLevelDispatch,
-{}
+{
+}
 
 /* ------------------------------------------------------------------------- */
-/* Deployment Abstractions                                                    */
+/* (Deprecated deployment abstractions removed)                               */
 /* ------------------------------------------------------------------------- */
-
-/// Trait abstraction so different deployment layouts can be consumed uniformly.
-pub trait KVSDeployment<'a> {
-    fn kvs_cluster(&self) -> &Cluster<'a, KVSNode>;
-    fn kvs_clusters(&self) -> Option<&[Cluster<'a, KVSNode>]> {
-        None
-    }
-}
-
-/// Basic deployment patterns used by dispatchers.
-#[derive(Clone, Debug)]
-pub enum Deployment<'a> {
-    SingleCluster(Cluster<'a, KVSNode>),
-    ShardedClusters(Vec<Cluster<'a, KVSNode>>),
-}
-
-impl<'a> KVSDeployment<'a> for Deployment<'a> {
-    fn kvs_cluster(&self) -> &Cluster<'a, KVSNode> {
-        match self {
-            Deployment::SingleCluster(c) => c,
-            Deployment::ShardedClusters(v) => &v[0],
-        }
-    }
-    fn kvs_clusters(&self) -> Option<&[Cluster<'a, KVSNode>]> {
-        match self {
-            Deployment::ShardedClusters(v) => Some(v.as_slice()),
-            _ => None,
-        }
-    }
-}
-
-impl<'a> KVSDeployment<'a> for Cluster<'a, KVSNode> {
-    fn kvs_cluster(&self) -> &Cluster<'a, KVSNode> {
-        self
-    }
-}
 
 /* ------------------------------------------------------------------------- */
 /* Dispatch Core                                                          */
 /* ------------------------------------------------------------------------- */
 
-/// Dispatcher transforming a process‑originated stream into a cluster stream.
+/// Dispatcher for routing operations from proxy to cluster.
+///
+/// Dispatch strategies determine how operations from the proxy process
+/// are routed to members of the target cluster. This is the first hop
+/// in the data flow: External → Proxy (Process) → Layer Cluster.
+///
+/// For inter-layer communication (Cluster→Cluster), see `wire_kvs_dataflow`.
 pub trait OpDispatch<V> {
-    type Deployment<'a>: KVSDeployment<'a>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a>;
-
-    fn dispatch_operations<'a>(
+    /// Route operations from a proxy process to the target cluster (first hop).
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
+
+    /// Route slotted operations from a proxy process to the target cluster, preserving slots.
+    ///
+    /// Default implementation strips slots, routes bare operations, then re-attaches dummy slot 0.
+    /// Dispatchers that need to preserve slot ordering (e.g., for Paxos) should override this.
+    fn dispatch_slotted_from_process<'a>(
+        &self,
+        slotted_operations: Stream<(usize, KVSOperation<V>), Process<'a, ()>, Unbounded>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Default: strip slots, route, re-attach dummy slot 0 (loses slot ordering)
+        let bare_ops = slotted_operations.map(q!(|(_slot, op)| op));
+        let routed = self.dispatch_from_process(bare_ops, target_cluster);
+        routed.map(q!(|op| (0usize, op)))
+    }
+
+    /// Route operations originating at a source cluster into a target cluster (inter-layer hop).
+    /// Default implementation falls back to per-member local forwarding via member 0.
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Default: treat all ops as if sent from member 0 of source cluster.
+        operations
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** cluster hop routed */))
+    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -107,25 +117,41 @@ pub trait OpDispatch<V> {
 /// happens at this level. For `KVSCluster` we still require a real dispatcher
 /// (sharding, replica selection, consensus ordering, etc.).
 impl<V> OpDispatch<V> for () {
-    type Deployment<'a> = Cluster<'a, KVSNode>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        flow.cluster::<KVSNode>()
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // Forward everything directly to member 0 (same semantics as SingleNodeRouter).
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
-            .demux_bincode(deployment)
+            .demux_bincode(target_cluster)
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        operations
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** cluster hop routed */))
     }
 }
 
@@ -139,21 +165,30 @@ impl IdentityDispatch {
 }
 
 impl<V> OpDispatch<V> for IdentityDispatch {
-    type Deployment<'a> = Cluster<'a, KVSNode>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        flow.cluster::<KVSNode>()
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.broadcast_bincode(deployment, nondet!(/** identity */))
+        operations.broadcast_bincode(target_cluster, nondet!(/** identity */))
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        operations
+            .broadcast_bincode(target_cluster, nondet!(/** identity layer hop */))
+            .values()
+            .assume_ordering(nondet!(/** cluster hop broadcast */))
     }
 }
 
@@ -182,21 +217,34 @@ where
     A: OpDispatch<V>,
     B: OpDispatch<V>,
 {
-    type Deployment<'a> = A::Deployment<'a>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        self.first.create_deployment(flow)
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        self.first.dispatch_operations(operations, deployment)
+        let first_out = self.first.dispatch_from_process(operations, target_cluster);
+        // Chain the second stage at the cluster hop
+        self.second
+            .dispatch_from_cluster(first_out, target_cluster, target_cluster)
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        let mid = self
+            .first
+            .dispatch_from_cluster(operations, source_cluster, target_cluster);
+        self.second
+            .dispatch_from_cluster(mid, target_cluster, target_cluster)
     }
 }
 

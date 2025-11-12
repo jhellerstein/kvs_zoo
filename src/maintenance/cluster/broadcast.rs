@@ -5,7 +5,7 @@
 //! faster convergence than gossip protocols at the cost of higher message overhead.
 
 use crate::kvs_core::KVSNode;
-use crate::maintenance::ReplicationStrategy;
+use crate::maintenance::{MaintenanceAfterResponses, ReplicationStrategy};
 use hydro_lang::prelude::*;
 use lattices::Merge;
 use serde::{Deserialize, Serialize};
@@ -201,20 +201,18 @@ where
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
         let ticker = cluster.tick();
-        
+
         // Capture config value for use in quote (must be a primitive type like u64)
         let batch_timeout_ms = self.config.batch_timeout_ms;
-        
+
         // Accumulate local writes into a KVS (no immediate broadcast)
-        let accumulated_kvs = local_put_tuples
-            .into_keyed()
-            .fold_commutative(
-                q!(|| V::default()),
-                q!(|acc, v| {
-                    lattices::Merge::merge(acc, v);
-                }),
-            );
-        
+        let accumulated_kvs = local_put_tuples.into_keyed().fold_commutative(
+            q!(|| V::default()),
+            q!(|acc, v| {
+                lattices::Merge::merge(acc, v);
+            }),
+        );
+
         // Periodically snapshot and broadcast the accumulated state
         let periodic_broadcast = accumulated_kvs
             .snapshot(&ticker, nondet!(/** snapshot for periodic broadcast */))
@@ -225,13 +223,24 @@ where
                 nondet!(/** periodic broadcast interval */),
             )
             .broadcast_bincode(cluster, nondet!(/** periodic broadcast to all nodes */));
-        
+
         // Return received updates
         periodic_broadcast
             .values()
             .assume_ordering(nondet!(/** broadcast messages unordered */))
             // Sampling may produce duplicate deliveries; declare retry semantics
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
+    }
+}
+
+// Upward pass hook: Broadcast replication doesn't modify responses by default
+impl<V> MaintenanceAfterResponses for BroadcastReplication<V> {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
     }
 }
 

@@ -7,109 +7,110 @@
 //!
 //! Total: 2 regions × 3 datacenters × 5 nodes = 30 nodes
 //!
-//! This showcases the power of the recursive cluster spec:
-//! - Dispatch chains: Pipeline<RegionRouter, Pipeline<DatacenterRouter, ()>>
-//! - Maintenance chains: CombinedMaintenance<Zero, CombinedMaintenance<Gossip, Tombstone>>
-
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
-use kvs_zoo::dispatch::routing::{ShardedRouter, SingleNodeRouter};
+use kvs_zoo::dispatch::{ShardedRouter, SingleNodeRouter};
+use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::maintenance::{SimpleGossip, TombstoneCleanup};
+use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+
+#[derive(Clone)]
+struct Region;
+#[derive(Clone)]
+struct Datacenter;
+#[derive(Clone)]
+struct Node;
+
+// 3-level architecture: Region -> Datacenter -> Node
+type GeoKVS = KVSCluster<
+    Region,
+    ShardedRouter,
+    (),
+    KVSCluster<
+        Datacenter,
+        ShardedRouter,
+        SimpleGossip<LwwWrapper<String>>,
+        KVSCluster<Node, SingleNodeRouter, TombstoneCleanup, ()>,
+    >,
+>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 3-Level Recursive Cluster Demo\n");
-    println!("   Structure: Regions → Datacenters → Nodes");
-    println!("   Total: 2 regions × 3 datacenters × 5 nodes = 30 nodes\n");
+    println!("🚀 3-Level Recursive Cluster Demo");
 
-    // Define the 3-level cluster spec
-    let spec = KVSCluster::new(
-        // Level 1: Route to region by key hash
-        ShardedRouter::new(2),
-        (), // No cross-region sync
-        2, // 2 regions
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
+
+    // Configure architecture
+    let kvs_spec = GeoKVS::new(
+        ShardedRouter::new(2), // 2 regions
+        (),
         KVSCluster::new(
-            // Level 2: Route to datacenter (round-robin for simplicity)
-            ShardedRouter::new(3),
-            SimpleGossip::<LwwWrapper<String>>::new(200), // Gossip between datacenters
-            3, // 3 datacenters per region
-            KVSNode {
-                // Level 3: Actual storage nodes
-                dispatch: SingleNodeRouter, // No routing at leaf
-                maintenance: TombstoneCleanup::new(5_000), // Local cleanup every 5s
-                count: 5, // 5 nodes per datacenter
-            },
+            ShardedRouter::new(3),       // 3 datacenters per region
+            SimpleGossip::new(250usize), // intra-region gossip among datacenters
+            KVSCluster::new(
+                SingleNodeRouter::new(),
+                TombstoneCleanup::new(
+                    kvs_zoo::maintenance::node::tombstone_cleanup::TombstoneCleanupConfig::default(
+                    ),
+                ), // local cleanup config
+                (),
+            ),
         ),
     );
 
-    println!("📊 Spec stats:");
-    println!("   Total nodes: {}", spec.total_nodes());
-    println!("   Regions: {}", spec.count);
-    println!("   Datacenters per region: {}", spec.each.count);
-    println!("   Nodes per datacenter: {}", spec.each.each.count);
-    println!();
+    let (layers, port) =
+        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
-    // Build the server - dispatch and maintenance chains are built recursively!
-    let mut built = spec.build_server::<LwwWrapper<String>>().await?;
+    // Deploy clusters per layer
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(
+            layers.get::<Region>(),
+            vec![localhost.clone(), localhost.clone()], // 2 regions
+        )
+        .with_cluster(
+            layers.get::<Datacenter>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()], // 3 datacenters
+        )
+        .with_cluster(
+            layers.get::<Node>(),
+            vec![
+                localhost.clone(),
+                localhost.clone(),
+                localhost.clone(),
+                localhost.clone(),
+                localhost.clone(),
+            ], // 5 nodes per datacenter (single-node router semantics)
+        )
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
 
-    println!("✅ Built 30-node cluster with 3-level recursive spec");
-    println!("   Dispatch: Region → Datacenter → Node");
-    println!("   Maintenance: () → Gossip → TombstoneCleanup\n");
+    deployment.deploy().await?;
+    let (mut out, mut input) = nodes.connect_bincode(port).await;
+    deployment.start().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-    built.start().await?;
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    // Run demo operations
-    use kvs_zoo::protocol::KVSOperation as Op;
-    let (mut out, mut input) = built.take_ports();
-
-    println!("📝 Testing operations across regions...\n");
-
-    // Keys that will likely hash to different regions
-    let test_data = vec![
-        ("region_a_key", "Value from Region A"),
-        ("region_b_key", "Value from Region B"),
-        ("another_a", "Another in Region A"),
-        ("another_b", "Another in Region B"),
+    // Demo workload
+    let ops = vec![
+        KVSOperation::Put("acct:alice".into(), LwwWrapper::new("1".into())),
+        KVSOperation::Put("acct:bob".into(), LwwWrapper::new("2".into())),
+        KVSOperation::Get("acct:alice".into()),
+        KVSOperation::Get("acct:bob".into()),
     ];
-
-    for (key, value) in &test_data {
-        input
-            .send(Op::Put(
-                key.to_string(),
-                LwwWrapper::new(value.to_string()),
-            ))
-            .await?;
+    for op in ops {
+        input.send(op).await?;
         if let Some(resp) = out.next().await {
-            println!("   {}", resp);
+            println!("→ {}", resp);
         }
     }
 
-    println!();
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    for (key, _) in &test_data {
-        input.send(Op::Get(key.to_string())).await?;
-        if let Some(resp) = out.next().await {
-            println!("   {}", resp);
-        }
-    }
-
-    println!("\n⏱️  Waiting for gossip propagation (600ms = 3 hops × 200ms)...");
-    tokio::time::sleep(tokio::time::Duration::from_millis(600)).await;
-
-    println!("\n🔍 Verifying after gossip convergence...\n");
-
-    for (key, _) in &test_data {
-        input.send(Op::Get(key.to_string())).await?;
-        if let Some(resp) = out.next().await {
-            println!("   {}", resp);
-        }
-    }
-
-    println!("\n✅ 3-Level Recursive demo complete!");
-    println!("   The recursive API supports arbitrary nesting depth!");
-
+    deployment.stop().await?;
+    println!("✅ 3-Level recursive demo complete");
     Ok(())
 }

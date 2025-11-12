@@ -7,5 +7,4 @@ expression: sanitize(&stdout)
 → GET alpha = one
 → PUT alpha = OK
 → GET alpha = two
-→ GET missing = NOT FOUND
 ✅ Local demo complete

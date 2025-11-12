@@ -4,7 +4,7 @@
 //! across cluster nodes for horizontal scaling. Each key is consistently
 //! routed to the same shard based on its hash value.
 
-use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
+use crate::dispatch::OpDispatch;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -71,21 +71,14 @@ impl<V> OpDispatch<V> for ShardedRouter
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {
-    type Deployment<'a> = Deployment<'a>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        Deployment::SingleCluster(flow.cluster::<KVSNode>())
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        let cluster = deployment.kvs_cluster();
         let shard_count = self.shard_count;
 
         // Calculate shard ID for each operation based on its key
@@ -99,7 +92,32 @@ where
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }))
             .into_keyed()
-            .demux_bincode(cluster)
+            .demux_bincode(target_cluster)
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        let shard_count = self.shard_count;
+        operations
+            .map(q!(move |op| {
+                let key = match &op {
+                    KVSOperation::Get(k) => k,
+                    KVSOperation::Put(k, _) => k,
+                };
+                let shard_id = ShardedRouter::calculate_shard_id(key, shard_count);
+                (hydro_lang::location::MemberId::from_raw(shard_id), op)
+            }))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** cluster hop sharded */))
     }
 }
 

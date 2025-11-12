@@ -4,7 +4,7 @@
 //! - Architecture: Single node KVS
 //! - Topology: 1 node (no sharding, no replication)
 //! - Routing: `SingleNodeRouter` (direct to single node)
-//! - Replication: None (`ZeroMaintenance`)
+//! - Replication: None
 //! - Consistency: Strong (deterministic single-threaded ordering)
 //!
 //! **What it achieves:**
@@ -13,38 +13,68 @@
 //! semantics. No networking or replication overhead, making it suitable for
 //! development, testing, and simple single-machine applications.
 
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
 use kvs_zoo::dispatch::SingleNodeRouter;
+use kvs_zoo::kvs_layer::KVSCluster;
+use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+
+// Hydro location type = KVS layer type (no duplication!)
+#[derive(Clone)]
+struct LocalStorage;
+
+// Architecture: single layer, single node
+type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>; // KVSCluster<Marker type, Dispatch, Maintenance, Nested layer>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Local KVS Demo (single node)");
 
-    // Define the cluster topology hierarchically
-    let cluster_spec = KVSCluster::new(
-        SingleNodeRouter,                       // dispatch all messages to the first node in the cluster
-        (),                                     // no cluster maintenance defined
-        1,                                      // deploy only 1 such cluster
-        KVSNode {                               // each cluster member is a single node
-            count: 1,                               // deploy only 1 node in this cluster
-            dispatch: (),                           // no dispatch: messages pass through directly to the local KVS
-            maintenance: (),                        // no per-node maintenance defined
-        },
+    // Standard Hydro deployment
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
+
+    // Wire the KVS architecture into dataflow
+    let (layers, port) = wire_kvs_dataflow::<LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        LocalKVS::default(),
     );
 
-    // Build and start a server from the Spec, using a generic type argument that supports `merge`.
-    // This trivial single-node example does not call `merge`, so we choose the simple LwwWrapper
-    // that just mutates the value directly.
-    let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
-    built.start().await?;
+    // Deploy: cluster of 1 node for local storage
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(layers.get::<LocalStorage>(), vec![localhost.clone()])
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
+
+    deployment.deploy().await?;
+    let (mut out, mut input) = nodes.connect_bincode(port).await;
+
+    deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 
     // Run demo operations
-    let ops = kvs_zoo::demo_driver::ops_local();
-    let (out, input) = built.take_ports();
-    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
+    use futures::{SinkExt, StreamExt};
+    use kvs_zoo::protocol::KVSOperation as Op;
+    let ops = vec![
+        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
+        Op::Get("alpha".into()),
+        Op::Put("alpha".into(), LwwWrapper::new("two".into())),
+        Op::Get("alpha".into()),
+    ];
+    for op in ops {
+        input.send(op).await?;
+        if let Some(resp) = out.next().await {
+            println!("→ {}", resp);
+        }
+    }
 
     println!("✅ Local demo complete");
+    deployment.stop().await?;
     Ok(())
 }

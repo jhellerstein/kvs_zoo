@@ -193,7 +193,7 @@ where
     /// - No rumor store or tombstoning
     /// - No periodic gossip rounds
     /// - Just immediate forwarding to all peers
-    /// 
+    ///
     /// This is the stable implementation used in production.
     pub fn handle_gossip_simple<'a>(
         &self,
@@ -201,7 +201,7 @@ where
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
         let cluster_members = Self::get_cluster_members(cluster);
-        
+
         // Immediate forwarding to all peers for reliable convergence
         let gossip_sent = local_put_tuples
             .clone()

@@ -1,101 +1,63 @@
 # KVS Zoo Examples
 
-This directory contains examples demonstrating different KVS server architectures using the composable server framework.
+This directory contains examples that demonstrate different KVS architectures, all described with a single, unified, recursive cluster specification API.
 
-## Server Architecture Examples
+## The Cluster Spec (one API for all topologies)
 
-All examples use the **composable server architecture** from `kvs_zoo::server`, showcasing how different server types can be composed to create sophisticated distributed systems.
+The API is a tiny tree of two building blocks:
 
-### Core Server Types
+- `KVSCluster<D, M, Child>` — a cluster level with dispatch `D`, maintenance `M`, and a child (another cluster or a node)
+- `KVSNode<D, M>` — a leaf node with per-node dispatch `D` and maintenance `M`
 
-- **`local.rs`** - LocalKVSServer (Single Node)
-
-  - **Architecture**: Single process, no networking
-  - **Nodes**: 1
-  - **Consistency**: Strong (deterministic)
-  - **Use case**: Development, testing, simple applications
-
-- **`replicated.rs`** - ReplicatedKVSServer (Replicated Cluster)
-
-  - **Architecture**: Multiple replicas with epidemic gossip
-  - **Nodes**: 3 replicas
-  - **Consistency**: Causal (default) or LWW (with `--lattice` flag)
-  - **Use case**: High availability, fault tolerance
-  - **Flags**:
-    - `--lattice causal` - Uses CausalString with vector clock (default)
-    - `--lattice lww` - Uses LwwWrapper with last-write-wins semantics
-
-- **`sharded.rs`** - ShardedKVSServer<LocalKVSServer> (Sharded)
-
-  - **Architecture**: Hash-based key partitioning
-  - **Nodes**: 3 shards (3 total nodes)
-  - **Consistency**: Per-shard strong, global eventual
-  - **Use case**: Horizontal scalability for large datasets
-
-- **`sharded_replicated.rs`** - ShardedKVSServer<ReplicatedKVSServer> (**The Holy Grail!**)
-  - **Architecture**: Sharded + replicated (nested composition)
-  - **Nodes**: 3 shards × 3 replicas = 9 total nodes
-  - **Consistency**: Per-shard causal, cross-shard eventual
-  - **Use case**: Web-scale applications requiring both scalability and fault tolerance
-
-### Composable Server Framework
-
-All examples demonstrate the use of the `KVSServer<V>` trait:
+You compose these to any depth. A minimal example:
 
 ```rust
-pub trait KVSServer<V> {
-    type Deployment<'a>;
-    fn create_deployment<'a>(flow: &FlowBuilder<'a>) -> Self::Deployment<'a>;
-    fn run<'a>(...) -> ServerPorts<V>;
-    fn size() -> usize;
-}
+use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
+use kvs_zoo::dispatch::{SingleNodeRouter, ShardedRouter, RoundRobinRouter};
+use kvs_zoo::maintenance::{BroadcastReplication, ZeroMaintenance};
+
+// Single node
+let local = KVSCluster::new(SingleNodeRouter, ZeroMaintenance, 1, KVSNode { dispatch: (), maintenance: (), count: 1 });
+
+// Sharded (3 shards)
+let sharded = KVSCluster::new(ShardedRouter::new(3), ZeroMaintenance, 3, KVSNode { dispatch: (), maintenance: (), count: 1 });
+
+// Sharded + Replicated (3 shards × 3 replicas)
+let sharded_repl = KVSCluster::new(
+    ShardedRouter::new(3),
+    BroadcastReplication::default(),
+    3,
+    KVSNode { dispatch: RoundRobinRouter::new(), maintenance: (), count: 3 },
+);
+
+// Build and run directly from the spec
+let mut server = sharded_repl.build_server::<kvs_zoo::values::CausalString>().await?;
+server.start().await?;
 ```
 
-This enables architectural composability, where any server can be used as a building block for more complex architectures.
+Auxiliary clusters (for protocols like Paxos) are added with `.with_cluster(count, Option<name>)` and are optional.
 
-## Running Examples
+## Examples
+
+- `local.rs` — Single node
+- `replicated.rs` — 3 replicas with gossip
+- `sharded.rs` — 3 shards, single node per shard
+- `sharded_replicated.rs` — 3 shards × 3 replicas (canonical)
+- `linearizable.rs` — Paxos + log-based replication (proposers/acceptors as auxiliary clusters)
+
+## Running
 
 ```bash
-# Basic architectures
 cargo run --example local
-
-# Distributed architectures
-cargo run --example replicated                      # Uses causal consistency by default
-cargo run --example replicated -- --lattice causal  # Explicit causal with vector clocks
-cargo run --example replicated -- --lattice lww     # Last-write-wins semantics
-
+cargo run --example replicated                      # causal by default
+cargo run --example replicated -- --lattice lww     # last-write-wins
 cargo run --example sharded
 cargo run --example sharded_replicated
+cargo run --example linearizable
 ```
 
-## Architecture Comparison
+Outputs are intentionally terse and uniform:
 
-| Example                 | Server Type                                           | Nodes | Consistency Model | Scalability | Fault Tolerance |
-| ----------------------- | ----------------------------------------------------- | ----- | ----------------- | ----------- | --------------- |
-| `local.rs`              | `LocalKVSServer<String>` (ZeroMaintenance)            | 1     | Strong            | Low         | None            |
-| `replicated.rs`         | `ReplicatedKVSServer<CausalString>` or `<LwwWrapper>` | 3     | Causal or LWW     | Medium      | High            |
-| `sharded.rs`            | `ShardedKVSServer<LocalKVSServer<String>>`            | 3     | Per-shard strong  | High        | Low             |
-| `sharded_replicated.rs` | `ShardedKVSServer<ReplicatedKVSServer<CausalString>>` | 9     | Per-shard causal  | Very High   | Very High       |
-
-## Key Benefits
-
-- **🔧 Composability**: Servers can be nested and combined arbitrarily
-- **📈 Scalability**: From 1 node to 9+ nodes with the same patterns
-- **🛡️ Fault Tolerance**: Replication provides resilience to node failures
-- **⚡ Performance**: Sharding distributes load across multiple nodes
-- **🎯 Flexibility**: Mix and match consistency models and architectures
-
-## ZeroMaintenance Alias
-
-Examples that intentionally have no background replication or maintenance now
-use the readability alias `ZeroMaintenance` (which is just `type ZeroMaintenance = ();`).
-This makes intent explicit in type signatures instead of a bare unit `()`.
-
-```rust
-use kvs_zoo::maintenance::ZeroMaintenance;
-type Local = KVSServer<LwwWrapper<String>, SingleNodeRouter, ZeroMaintenance>;
-```
-
-## Integration Tests
-
-All examples are validated by comprehensive integration tests in `tests/composable_integration.rs` that verify correctness of operations and consistency guarantees.
+- Header: `🚀 ...`
+- Operations: `→ ...`
+- Footer: `✅ ... complete`

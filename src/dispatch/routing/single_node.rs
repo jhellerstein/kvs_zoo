@@ -6,7 +6,7 @@
 //! effectively an identity. In a multi-node cluster this pins all operations
 //! to member 0 and should generally be avoided.
 
-use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
+use crate::dispatch::OpDispatch;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -44,22 +44,15 @@ impl SingleNodeRouter {
 }
 
 impl<V> OpDispatch<V> for SingleNodeRouter {
-    type Deployment<'a> = Deployment<'a>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        Deployment::SingleCluster(flow.cluster::<KVSNode>())
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        let cluster = deployment.kvs_cluster();
-        // Route all operations to a single local member (member 0)
+        // Route all operations to a single member (member 0)
         // This avoids broadcast and acts as a no-op in single-node clusters.
         operations
             .map(q!(|op| (
@@ -67,6 +60,26 @@ impl<V> OpDispatch<V> for SingleNodeRouter {
                 op
             )))
             .into_keyed()
-            .demux_bincode(cluster)
+            .demux_bincode(target_cluster)
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        operations
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** cluster hop routed */))
     }
 }

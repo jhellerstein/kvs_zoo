@@ -32,6 +32,7 @@
 
 use crate::kvs_core::KVSNode;
 use crate::maintenance::ReplicationStrategy;
+use crate::maintenance::MaintenanceAfterResponses;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -56,7 +57,10 @@ impl Default for TombstoneCleanupConfig {
 impl From<usize> for TombstoneCleanupConfig {
     /// Interpret usize as milliseconds for the cleanup interval; tombstone TTL stays default
     fn from(ms: usize) -> Self {
-        TombstoneCleanupConfig { cleanup_interval_ms: ms as u64, ..Default::default() }
+        TombstoneCleanupConfig {
+            cleanup_interval_ms: ms as u64,
+            ..Default::default()
+        }
     }
 }
 
@@ -77,7 +81,9 @@ impl TombstoneCleanup {
     where
         C: Into<TombstoneCleanupConfig>,
     {
-        Self { config: config.into() }
+        Self {
+            config: config.into(),
+        }
     }
 }
 
@@ -108,6 +114,17 @@ impl<V> ReplicationStrategy<V> for TombstoneCleanup {
     {
         // Placeholder: no slotted cleanup emitted yet
         _local_slotted_data.filter(q!(|_s| false))
+    }
+}
+
+// Upward pass: tombstone cleanup does not alter responses
+impl MaintenanceAfterResponses for TombstoneCleanup {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
     }
 }
 

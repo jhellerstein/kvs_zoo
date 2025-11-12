@@ -45,17 +45,19 @@
 //! ```
 
 pub mod cluster;
+pub mod leaf;
 pub mod node;
 
 use crate::kvs_core::KVSNode;
+use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Re-export commonly used strategies for convenience
 pub use cluster::{
-    BroadcastReplication, BroadcastReplicationConfig, SimpleGossip, SimpleGossipConfig,
-    LogBased,
+    BroadcastReplication, BroadcastReplicationConfig, LogBased, SimpleGossip, SimpleGossipConfig,
 };
+pub use leaf::{LeafAfterHook, Responder};
 pub use node::{TombstoneCleanup, TombstoneCleanupConfig};
 
 /// Compose two maintenance strategies so they can run concurrently.
@@ -135,7 +137,70 @@ pub trait ReplicationStrategy<V> {
         // Re-add dummy slot 0 (ordering is lost)
         replicated.map(q!(|(key, value)| (0usize, key, value)))
     }
+
+    /// Forward the routed slotted operation stream to a replicated "forwarded" slotted op stream.
+    ///
+    /// This is the canonical API for server wiring: pass the routed slotted ops,
+    /// get back the forwarded slotted ops. Implementation details (e.g., filtering
+    /// only PUTs) are encapsulated here.
+    fn forward_from_routed_slotted<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        routed_slotted_ops: Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Extract only PUTs with their slots for replication
+        let local_slotted_puts = routed_slotted_ops.filter_map(q!(|(slot, op)| match op {
+            KVSOperation::Put(k, v) => Some((slot, k, v)),
+            KVSOperation::Get(_) => None,
+        }));
+
+        // Use the slotted-data replication path
+        let replicated_slotted_puts = self.replicate_slotted_data(cluster, local_slotted_puts);
+
+        // Rewrap as slotted operations (PUTs only)
+        replicated_slotted_puts.map(q!(|(slot, k, v)| (slot, KVSOperation::Put(k, v))))
+    }
 }
+
+/// Upward pass (After storage) maintenance hook for responses
+///
+/// Default implementation is pass-through. Strategies that want to adjust
+/// response behavior (e.g., add headers, redact, sample) can override.
+pub trait MaintenanceAfterResponses {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>;
+}
+
+// Default pass-through impl for unit type () so examples can use () as maintenance and still participate.
+impl MaintenanceAfterResponses for () {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
+    }
+}
+
+// Pass-through impls for cluster/node maintenance strategies so they participate in upward wiring.
+impl<V> MaintenanceAfterResponses for SimpleGossip<V> {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
+    }
+}
+
+// NOTE: Pass-through impls for LogBased, BroadcastReplication, TombstoneCleanup are already defined in their
+// respective modules. Do not redefine here to avoid conflicting implementations.
 
 impl<V, A, B> ReplicationStrategy<V> for CombinedMaintenance<A, B>
 where
@@ -163,9 +228,7 @@ where
         let a_out = self
             .a
             .replicate_slotted_data(cluster, local_slotted_data.clone());
-        let b_out = self
-            .b
-            .replicate_slotted_data(cluster, local_slotted_data);
+        let b_out = self.b.replicate_slotted_data(cluster, local_slotted_data);
         a_out
             .interleave(b_out)
             .assume_ordering(nondet!(/** merged maintenance outputs (slotted) */))
@@ -199,6 +262,17 @@ impl<V> ReplicationStrategy<V> for NoReplication {
     {
         // No replication - just return the local data stream unchanged
         local_data
+    }
+}
+
+// Upward pass default for NoReplication: pass-through
+impl MaintenanceAfterResponses for NoReplication {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
     }
 }
 

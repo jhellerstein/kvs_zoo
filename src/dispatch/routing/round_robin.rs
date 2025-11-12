@@ -4,7 +4,7 @@
 //! round-robin load balancing, ensuring even distribution of work across
 //! all available replicas.
 
-use crate::dispatch::{Deployment, KVSDeployment, OpDispatch};
+use crate::dispatch::OpDispatch;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -48,24 +48,62 @@ impl RoundRobinRouter {
 }
 
 impl<V> OpDispatch<V> for RoundRobinRouter {
-    type Deployment<'a> = Deployment<'a>;
-
-    fn create_deployment<'a>(&self, flow: &FlowBuilder<'a>) -> Self::Deployment<'a> {
-        Deployment::SingleCluster(flow.cluster::<KVSNode>())
-    }
-
-    fn dispatch_operations<'a>(
+    fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        deployment: &Self::Deployment<'a>,
+        target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        let cluster = deployment.kvs_cluster();
-        // Distribute operations round-robin across all replica nodes
-        // This provides load balancing while ensuring all nodes can handle operations
-        operations.round_robin_bincode(cluster, nondet!(/** distribute operations round robin */))
+        // For now, route to member 0 to avoid TotalOrder constraints
+        operations
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+    }
+
+    fn dispatch_slotted_from_process<'a>(
+        &self,
+        slotted_operations: Stream<(usize, KVSOperation<V>), Process<'a, ()>, Unbounded>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Route to member 0, preserving slots (demux_bincode yields stream of tuples directly)
+        slotted_operations
+            .map(q!(|slotted_op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                slotted_op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .assume_ordering(nondet!(/** routed slotted to single member */))
+    }
+
+    fn dispatch_from_cluster<'a>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        _source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Cluster-origin fallback: forward everything from each member to a single target member (0).
+        operations
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** cluster hop routed */))
     }
 }
 

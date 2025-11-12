@@ -12,50 +12,107 @@
 //! with replication for fault tolerance. The cluster specification makes the tree structure
 //! explicit with dispatch and maintenance attached inline.
 
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
+use futures::{SinkExt, StreamExt};
 use kvs_zoo::dispatch::{RoundRobinRouter, ShardedRouter};
+use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::maintenance::BroadcastReplication;
 use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::CausalString;
+
+// Hydro location types = KVS layer types (no duplication!)
+#[derive(Clone)]
+struct Shard;
+
+#[derive(Clone)]
+struct Replica;
+
+// Architecture: nested layers - sharding at top, replication within each shard
+type ShardedReplicatedKVS = KVSCluster<
+    Shard,
+    ShardedRouter,
+    (),
+    KVSCluster<Replica, RoundRobinRouter, BroadcastReplication<CausalString>, ()>,
+>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sharded + Replicated KVS Demo");
-    println!("📋 Topology: 3 shards × 3 replicas = 9 nodes\n");
 
-    // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster::new(
-        ShardedRouter::new(3),                  // cluster dispatch: route to shard by key
-        BroadcastReplication::<CausalString>::default(), // cluster maintenance: replicate within each shard
-        3,                                      // deploy 3 shards at the cluster level
-        KVSNode {                               // each shard contains a replicated node group
-            count: 3,                               // three replicas per shard
-            dispatch: RoundRobinRouter::new(),      // node-level dispatch: load-balance across replicas
-            maintenance: (),                        // no node-level maintenance
-        },
+    // Standard Hydro deployment
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
+
+    // Define KVS architecture: nested layers
+    let kvs_spec = ShardedReplicatedKVS::new(
+        ShardedRouter::new(3), // route to shard by key hash
+        (),                    // no maintenance at shard level
+        KVSCluster::new(
+            RoundRobinRouter::new(),         // load-balance within shard
+            BroadcastReplication::default(), // replicate within each shard
+            (),
+        ),
     );
 
-    println!("Cluster specification (tree structure):");
-    println!("  Shards (cluster.count): {}", cluster_spec.count);
-    println!("  Replicas per shard (node.count): {}", cluster_spec.each.count);
-    println!("  Total nodes: {}\n", cluster_spec.total_nodes());
+    // Wire KVS dataflow
+    let (layers, port) =
+        wire_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
 
-    // Build and start the server from the spec - no separate type declaration needed!
-    let mut built = cluster_spec.build_server::<CausalString>().await?;
+    // Deploy: one cluster per layer (as designed)
+    // - Shard cluster: 3 members
+    // - Replica cluster: 3 members
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(
+            layers.get::<Shard>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_cluster(
+            layers.get::<Replica>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
 
-    built.start().await?;
+    deployment.deploy().await?;
+    let (mut out, mut input) = nodes.connect_bincode(port).await;
+
+    deployment.start().await?;
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+
+    deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
     // Run operations
-    let ops = kvs_zoo::demo_driver::ops_sharded_replicated_broadcast();
+    fn causal(node: &str, v: &str) -> CausalString {
+        let mut vc = kvs_zoo::values::VCWrapper::new();
+        vc.bump(node.to_string());
+        CausalString::new(vc, v.to_string())
+    }
+    let ops = vec![
+        KVSOperation::Put("user:alice".into(), causal("a", "x")),
+        KVSOperation::Put("user:bob".into(), causal("b", "y")),
+        KVSOperation::Get("user:alice".into()),
+        KVSOperation::Get("user:bob".into()),
+    ];
+
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {
             println!("   {}", info);
         }
     }
-    let (out, input) = built.take_ports();
-    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
+    for op in ops {
+        input.send(op).await?;
+        if let Some(resp) = out.next().await {
+            println!("→ {}", resp);
+        }
+    }
 
+    deployment.stop().await?;
     println!("✅ Sharded+Replicated demo complete");
     Ok(())
 }

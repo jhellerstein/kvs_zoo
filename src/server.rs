@@ -1,42 +1,16 @@
-//! Unified KVS Server Architecture
+//! Internal KVS server runtime wiring.
 //!
-//! This module provides a single, composable server type parameterized by
-//! dispatch and maintenance strategies.
+//! The public user-facing API is the recursive cluster spec in `cluster_spec.rs`.
+//! This module now provides only the minimal primitives required by that builder:
+//! - `KVSServer` struct (type-level composition of dispatch + maintenance)
+//! - Minimal runtime primitives to bind dispatch + maintenance to Hydro dataflow
+//! - `run` function to bind dispatch + maintenance to Hydro dataflow
 //!
-//! ## Usage
-//!
-//! ```ignore
-//! // Local single-node server
-//! // Use the `ZeroMaintenance` alias (equivalent to `()`) for readability
-//! type Local = KVSServer<LwwWrapper<String>, SingleNodeRouter, kvs_zoo::maintenance::ZeroMaintenance>;
-//!
-//! // Replicated with round-robin + gossip  
-//! type Replicated = KVSServer<
-//!     CausalString,
-//!     RoundRobinRouter,
-//!     SimpleGossip<CausalString>
-//! >;
-//!
-//! // Sharded + Replicated
-//! type ShardedReplicated = KVSServer<
-//!     CausalString,
-//!     Pipeline<ShardedRouter, RoundRobinRouter>,
-//!     BroadcastReplication<CausalString>
-//! >;
-//!
-//! // Linearizable with Paxos
-//! type Linearizable = KVSServer<
-//!     LwwWrapper<String>,
-//!     PaxosDispatcher<LwwWrapper<String>>,
-//!     LogBased<BroadcastReplication<LwwWrapper<String>>>
-//! >;
-//!
-//! // Deploy and run
-//! let (deployment, dispatch, maintenance) = Server::deploy(&flow);
-//! let port = Server::run(&proxy, &deployment, &client_external, dispatch, maintenance);
-//! ```
+//! All higher-level construction flows through `KVSCluster::build_server` and
+//! typical users never touch this module directly.
 
-use crate::dispatch::{KVSDeployment, OpDispatch};
+use crate::dispatch::OpDispatch;
+use crate::kvs_layer::{AfterWire, KVSWire};
 use crate::maintenance::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
@@ -47,10 +21,6 @@ use serde::{Deserialize, Serialize};
 type ServerBidiPort<V> =
     ExternalBincodeBidi<KVSOperation<V>, String, hydro_lang::location::external_process::Many>;
 pub type ServerPorts<V> = ServerBidiPort<V>;
-
-// Type aliases for complex stream/sink types to avoid clippy complexity warnings
-type OutputStream = std::pin::Pin<Box<dyn futures::Stream<Item = String>>>;
-type InputStream<V> = std::pin::Pin<Box<dyn futures::Sink<KVSOperation<V>, Error = std::io::Error>>>;
 
 /// Unified KVS Server parameterized by Value, Dispatch, and Maintenance
 ///
@@ -70,6 +40,7 @@ where
 pub type LocalKVSServer<V> =
     KVSServer<V, crate::dispatch::SingleNodeRouter, crate::maintenance::ZeroMaintenance>;
 
+// Legacy deploy helpers removed: construction flows through KVSBuilder produced by cluster spec.
 impl<V, D, M> KVSServer<V, D, M>
 where
     V: Clone
@@ -87,32 +58,27 @@ where
     D: OpDispatch<V> + Clone + Default,
     M: ReplicationStrategy<V> + Clone + Default,
 {
-    /// Deploy a KVS server with default dispatch and maintenance configuration
-    pub fn deploy<'a>(flow: &FlowBuilder<'a>) -> (D::Deployment<'a>, D, M) {
+    /// Minimal deploy helper kept for internal tests; prefer cluster spec elsewhere.
+    pub fn deploy<'a>(flow: &FlowBuilder<'a>) -> (Cluster<'a, crate::kvs_core::KVSNode>, D, M) {
         let dispatch = D::default();
         let maintenance = M::default();
-        let deployment = dispatch.create_deployment(flow);
-        (deployment, dispatch, maintenance)
+        // In the simplified model, deployments are plain clusters created explicitly.
+        let cluster = flow.cluster::<crate::kvs_core::KVSNode>();
+        (cluster, dispatch, maintenance)
     }
 
-    /// Convenience method: Deploy and run the KVS server with default configuration
-    ///
-    /// This combines `deploy()` and `run()` into a single call for simpler examples.
-    /// For custom configuration (e.g., shard count, Paxos config), use `deploy()` and `run()` separately.
-    ///
-    /// Returns a tuple of (deployment, server_port).
-    /// Call `.kvs_cluster()` on the deployment to get the cluster for the flow builder.
+    /// Convenience: deploy and run with defaults. Used by integration tests.
     pub fn deploy_and_run<'a>(
         flow: &FlowBuilder<'a>,
         proxy: &Process<'a, ()>,
         client_external: &External<'a, ()>,
-    ) -> (D::Deployment<'a>, ServerPorts<V>)
+    ) -> (Cluster<'a, crate::kvs_core::KVSNode>, ServerPorts<V>)
     where
         V: std::fmt::Debug + Send + Sync,
     {
-        let (deployment, dispatch, maintenance) = Self::deploy(flow);
-        let port = Self::run(proxy, &deployment, client_external, dispatch, maintenance);
-        (deployment, port)
+        let (cluster, dispatch, maintenance) = Self::deploy(flow);
+        let port = Self::run(proxy, &cluster, client_external, dispatch, maintenance);
+        (cluster, port)
     }
 }
 
@@ -138,7 +104,7 @@ where
     /// This is the universal run method that works for all dispatch/maintenance combinations.
     pub fn run<'a>(
         proxy: &Process<'a, ()>,
-        deployment: &D::Deployment<'a>,
+        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         client_external: &External<'a, ()>,
         dispatch: D,
         maintenance: M,
@@ -151,12 +117,12 @@ where
             proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
 
         // Apply dispatch strategy to route operations
-        let routed_operations = dispatch.dispatch_operations(
+        let routed_operations = dispatch.dispatch_from_process(
             operations_stream
                 .entries()
                 .map(q!(|(_client_id, op)| op))
                 .assume_ordering(nondet!(/** operations routing */)),
-            deployment,
+            target_cluster,
         );
 
         // Tag local operations (respond = true)
@@ -168,10 +134,8 @@ where
             KVSOperation::Get(_) => None,
         }));
 
-        // Apply maintenance strategy to replicate data
-        // Use the KVS cluster from the deployment (works for both simple and Paxos deployments)
-        let kvs_cluster = deployment.kvs_cluster();
-        let replicated_puts = maintenance.replicate_data(kvs_cluster, local_puts);
+        // Apply maintenance strategy to replicate data in the target cluster
+        let replicated_puts = maintenance.replicate_data(target_cluster, local_puts);
         let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
 
         // Merge local and replicated operations
@@ -197,11 +161,22 @@ where
     }
 }
 
-// =============================================================================
-// Configuration Helpers for Specific Dispatchers
-// =============================================================================
-
-impl<V, M> KVSServer<V, crate::dispatch::PaxosDispatcher<V>, M>
+/// Wire a single-layer KVS from an already-ordered Process stream.
+///
+/// This helper mirrors the core of `run`, but instead of reading from an
+/// external port it takes a Process-located stream of operations and wires:
+/// - dispatch routing via the spec's dispatcher
+/// - maintenance replication via the spec's maintenance
+/// - processing via KVSCore::process_with_responses
+///
+/// Returns a cluster-located response stream, suitable for `.send_bincode(proxy)`
+/// and forwarding to a complete sink in the caller (examples/tests).
+pub fn wire_single_layer_from_operations<'a, V, Name, D, M>(
+    _proxy: &Process<'a, ()>,
+    layers: &crate::kvs_layer::KVSClusters<'a>,
+    kvs: &crate::kvs_layer::KVSCluster<Name, D, M, ()>,
+    operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
 where
     V: Clone
         + Serialize
@@ -215,46 +190,57 @@ where
         + Send
         + Sync
         + 'static,
-    M: ReplicationStrategy<V> + Clone + Default,
+    D: OpDispatch<V> + Clone,
+    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    Name: 'static,
 {
-    /// Deploy a Paxos-based KVS server with custom configuration
-    ///
-    /// This allows configuring the Paxos parameters (like fault tolerance f).
-    pub fn deploy_with_paxos_config<'a>(
-        flow: &FlowBuilder<'a>,
-        paxos_config: crate::dispatch::PaxosConfig,
-    ) -> (
-        <crate::dispatch::PaxosDispatcher<V> as OpDispatch<V>>::Deployment<'a>,
-        crate::dispatch::PaxosDispatcher<V>,
+    let target_cluster = layers.get::<Name>();
+
+    // Route operations via the layer dispatcher
+    let routed_operations = kvs
+        .dispatch
+        .dispatch_from_process(operations, target_cluster);
+
+    // Tag local operations (respond = true)
+    let local_tagged = routed_operations.clone().map(q!(|op| (true, op)));
+
+    // Extract local PUTs for replication
+    let local_puts = routed_operations.filter_map(q!(|op| match op {
+        KVSOperation::Put(k, v) => Some((k, v)),
+        KVSOperation::Get(_) => None,
+    }));
+
+    // Apply maintenance strategy to replicate data in the target cluster
+    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
+    let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
+
+    // Merge local and replicated operations
+    let all_tagged = local_tagged
+        .interleave(replicated_tagged)
+        .assume_ordering(nondet!(/** sequential processing */));
+
+    // Process operations with selective responses
+    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
+
+    // Keep response stream cluster-located; caller will send to proxy
+    responses
+}
+
+/// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.
+///
+/// This preserves the standard replication semantics at the cluster layer and then applies
+/// the leaf-level dispatch (e.g., SlotOrderEnforcer) before processing.
+pub fn wire_two_layer_from_operations<'a, V, ClusterName, D, M, LeafName, DLeaf, MLeaf>(
+    _proxy: &Process<'a, ()>,
+    layers: &crate::kvs_layer::KVSClusters<'a>,
+    kvs: &crate::kvs_layer::KVSCluster<
+        ClusterName,
+        D,
         M,
-    ) {
-        let dispatch = crate::dispatch::PaxosDispatcher::with_config(paxos_config);
-        let maintenance = M::default();
-        let deployment = dispatch.create_deployment(flow);
-        (deployment, dispatch, maintenance)
-    }
-}
-
-// =============================================================================
-// Builder API for Easy Setup
-// =============================================================================
-
-/// Builder for setting up a KVS server with minimal boilerplate
-pub struct KVSBuilder<V, D, M>
-where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
-    D: OpDispatch<V>,
-    M: ReplicationStrategy<V>,
-{
-    pub(crate) num_nodes: usize,
-    pub(crate) num_aux1: Option<usize>,
-    pub(crate) num_aux2: Option<usize>,
-    pub(crate) dispatch: Option<D>,
-    pub(crate) maintenance: Option<M>,
-    pub(crate) _phantom: std::marker::PhantomData<V>,
-}
-
-impl<V, D, M> KVSBuilder<V, D, M>
+        crate::kvs_layer::KVSNode<LeafName, DLeaf, MLeaf>,
+    >,
+    operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
 where
     V: Clone
         + Serialize
@@ -269,216 +255,79 @@ where
         + Sync
         + 'static,
     D: OpDispatch<V> + Clone,
-    M: ReplicationStrategy<V> + Clone,
+    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    DLeaf: OpDispatch<V> + Clone,
+    MLeaf: crate::maintenance::ReplicationStrategy<V> + Clone,
+    ClusterName: 'static,
+    LeafName: 'static,
 {
-    /// Create a new KVS builder
-    pub fn new() -> Self {
-        Self {
-            num_nodes: 1,
-            num_aux1: None,
-            num_aux2: None,
-            dispatch: None,
-            maintenance: None,
-            _phantom: std::marker::PhantomData,
-        }
-    }
+    let target_cluster = layers.get::<ClusterName>();
 
-    /// Set the number of KVS cluster nodes to deploy
-    ///
-    /// **Semantics depend on your dispatch strategy:**
-    /// - `SingleNodeRouter`: 1 node (ignores this setting)
-    /// - `RoundRobinRouter`: N replicas (this is the replica count)
-    /// - `ShardedRouter(S)`: Should be S (one node per shard)
-    /// - `Pipeline<ShardedRouter(S), RoundRobinRouter>`: Should be S (one per shard)
-    ///   - To get S shards × R replicas, you need to configure the dispatch Pipeline properly
-    ///   - The total nodes deployed = S, but routing distributes across S partitions
-    ///
-    /// **For nested cluster architectures** (like sharded+replicated):
-    /// This sets the number at the **outermost level** of the routing pipeline.
-    /// Inner replication/routing is handled by the dispatch strategy's logic.
-    pub fn with_cluster_size(mut self, num_nodes: usize) -> Self {
-        self.num_nodes = num_nodes;
-        self
-    }
+    // Route operations via the cluster layer dispatcher
+    let routed_operations = kvs
+        .dispatch
+        .dispatch_from_process(operations, target_cluster);
 
-    /// Deprecated: Use `with_cluster_size()` instead
-    #[deprecated(note = "Use with_cluster_size() for clarity about what is being configured")]
-    pub fn with_nodes(self, num_nodes: usize) -> Self {
-        self.with_cluster_size(num_nodes)
-    }
+    // Split local and replicated paths at the cluster layer
+    let local_ops = routed_operations.clone();
+    let local_puts = routed_operations.filter_map(q!(|op| match op {
+        KVSOperation::Put(k, v) => Some((k, v)),
+        KVSOperation::Get(_) => None,
+    }));
 
-    /// Set the number of aux1 cluster nodes (for multi-cluster deployments like Paxos)
-    pub fn with_aux1_nodes(mut self, num_aux1: usize) -> Self {
-        self.num_aux1 = Some(num_aux1);
-        self
-    }
+    // Apply maintenance strategy to replicate data in the target cluster
+    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
 
-    /// Set the number of aux2 cluster nodes (for multi-cluster deployments like Paxos)
-    pub fn with_aux2_nodes(mut self, num_aux2: usize) -> Self {
-        self.num_aux2 = Some(num_aux2);
-        self
-    }
+    // Apply leaf-level dispatch within the same (parent) cluster
+    let leaf_local_ops =
+        kvs.child
+            .dispatch
+            .dispatch_from_cluster(local_ops, target_cluster, target_cluster);
+    let leaf_replicated_ops =
+        kvs.child
+            .dispatch
+            .dispatch_from_cluster(replicated_ops, target_cluster, target_cluster);
 
-    /// Set a custom dispatch strategy (instead of using Default)
-    pub fn with_dispatch(mut self, dispatch: D) -> Self {
-        self.dispatch = Some(dispatch);
-        self
-    }
+    // Tag after leaf dispatch: local should respond, replicated should not
+    let local_tagged = leaf_local_ops.map(q!(|op| (true, op)));
+    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
 
-    /// Set a custom maintenance strategy (instead of using Default)
-    pub fn with_maintenance(mut self, maintenance: M) -> Self {
-        self.maintenance = Some(maintenance);
-        self
-    }
+    // Merge and process at the leaf cluster
+    let all_tagged = local_tagged
+        .interleave(replicated_tagged)
+        .assume_ordering(nondet!(/** sequential processing at leaf */));
 
-    /// Build the server
-    ///
-    /// Returns (deployment, out stream, input sink)
-    pub async fn build(mut self) -> Result<BuiltKVS<V, D, M>, Box<dyn std::error::Error>> {
-        let dispatch = self.dispatch.take().expect("dispatch must be set");
-        let maintenance = self.maintenance.take().expect("maintenance must be set");
-        self.build_with(dispatch, maintenance).await
-    }
+    // Process operations with selective responses
+    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
 
-    /// Build with defaults (requires Default trait bounds)
-    pub async fn build_with_defaults(mut self) -> Result<BuiltKVS<V, D, M>, Box<dyn std::error::Error>>
-    where
-        D: Default,
-        M: Default,
-    {
-        let dispatch = self.dispatch.take().unwrap_or_default();
-        let maintenance = self.maintenance.take().unwrap_or_default();
-        self.build_with(dispatch, maintenance).await
-    }
-
-    /// Build with explicit dispatch and maintenance (no Default required)
-    pub async fn build_with(
-        self,
-        dispatch: D,
-        maintenance: M,
-    ) -> Result<BuiltKVS<V, D, M>, Box<dyn std::error::Error>> {
-        let mut deployment_hdro = hydro_deploy::Deployment::new();
-        let localhost = deployment_hdro.Localhost();
-
-        // IMPORTANT LIFETIME FIX:
-        // Previously we constructed the FlowBuilder and cluster wiring inside this
-        // method and then returned only the bincode ports. Dropping the FlowBuilder,
-        // its Processes, Externals, and the deployed node handle (`nodes`) caused
-        // the underlying pipes to close early, yielding BrokenPipe at runtime.
-        //
-        // To ensure the builder's internal flow graph lives for the duration of the
-        // returned streams, we leak the FlowBuilder (and intentionally forget the
-        // node handle) so that Hydro's runtime resources aren't dropped prematurely.
-        // This trades a small, bounded memory leak (per builder invocation) for
-        // correct behavior. For long-lived applications a refactored two-phase
-        // builder API should own these resources explicitly, but for examples/tests
-        // this is acceptable and stops the BrokenPipe failures.
-        let flow = hydro_lang::compile::builder::FlowBuilder::new();
-        let proxy = flow.process::<()>();
-        let client_external = flow.external::<()>();
-
-        let clusters = dispatch.create_deployment(&flow);
-        let port = KVSServer::<V, D, M>::run(
-            &proxy,
-            &clusters,
-            &client_external,
-            dispatch.clone(),
-            maintenance.clone(),
-        );
-
-        // Deploy flow with process, cluster, external wiring
-        let nodes = flow
-            .with_process(&proxy, localhost.clone())
-            .with_cluster(
-                clusters.kvs_cluster(),
-                vec![localhost.clone(); self.num_nodes],
-            )
-            .with_external(&client_external, localhost)
-            .deploy(&mut deployment_hdro);
-
-        deployment_hdro.deploy().await?;
-        let (out, input) = nodes.connect_bincode(port).await;
-
-        // Keep nodes alive (see DEBUG_BROKEN_PIPE.md for context)
-        std::mem::forget(nodes);
-        Ok(BuiltKVS::new(deployment_hdro, out, input))
-    }
+    // Keep response stream cluster-located
+    responses.assume_ordering(nondet!(/** responses at leaf cluster */))
 }
 
-/// RAII wrapper owning deployment resources and client ports.
-pub struct BuiltKVS<V, D, M>
-where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
-    D: OpDispatch<V>,
-    M: ReplicationStrategy<V>,
-{
-    deployment: hydro_deploy::Deployment,
-    out: Option<OutputStream>,
-    input: Option<InputStream<V>>,
-    _phantom: std::marker::PhantomData<(D, M)>,
-}
-
-impl<V, D, M> BuiltKVS<V, D, M>
-where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
-    D: OpDispatch<V>,
-    M: ReplicationStrategy<V>,
-{
-    fn new(
-        deployment: hydro_deploy::Deployment,
-        out: OutputStream,
-        input: InputStream<V>,
-    ) -> Self {
-        Self {
-            deployment,
-            out: Some(out),
-            input: Some(input),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    pub async fn start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.deployment.start().await?;
-        Ok(())
-    }
-
-    pub async fn shutdown(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.deployment.stop().await?;
-        Ok(())
-    }
-
-    pub fn take_ports(&mut self) -> (OutputStream, InputStream<V>) {
-        (
-            self.out.take().expect("ports already taken"),
-            self.input.take().expect("ports already taken"),
-        )
-    }
-
-    pub fn out(&mut self) -> &mut OutputStream {
-        self.out.as_mut().expect("ports taken")
-    }
-    pub fn input(&mut self) -> &mut InputStream<V> {
-        self.input.as_mut().expect("ports taken")
-    }
-    // port is not retained; the bidi connection is represented by out/input.
-    pub fn deployment(&mut self) -> &mut hydro_deploy::Deployment {
-        &mut self.deployment
-    }
-}
-
-impl<V, D, M> Drop for BuiltKVS<V, D, M>
-where
-    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
-    D: OpDispatch<V>,
-    M: ReplicationStrategy<V>,
-{
-    fn drop(&mut self) {
-        // Best-effort async teardown not possible in Drop; user should call shutdown().
-        // Could integrate a background runtime if needed later.
-    }
-}
-
-impl<V, D, M> Default for KVSBuilder<V, D, M>
+/// Wire a two-layer KVS with enveloped operations (e.g., slotted from Paxos).
+///
+/// This variant takes operations wrapped in Envelope<Meta, KVSOperation<V>> from a Process stream,
+/// unwraps them for routing through cluster dispatch, rewraps for leaf dispatch, and extracts
+/// the bare operation for processing.
+///
+/// Use case: Paxos produces Stream<(usize, KVSOperation<V>), ...>. Map to Envelope<usize, ...>,
+/// pass here, and slots will be preserved down to the leaf level where SlotOrderEnforcer can use them.
+pub fn wire_two_layer_from_enveloped<'a, V, Meta, ClusterName, D, M, LeafName, DLeaf, MLeaf>(
+    _proxy: &Process<'a, ()>,
+    layers: &crate::kvs_layer::KVSClusters<'a>,
+    kvs: &crate::kvs_layer::KVSCluster<
+        ClusterName,
+        D,
+        M,
+        crate::kvs_layer::KVSNode<LeafName, DLeaf, MLeaf>,
+    >,
+    enveloped_operations: Stream<
+        crate::protocol::Envelope<Meta, KVSOperation<V>>,
+        Process<'a, ()>,
+        Unbounded,
+    >,
+) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
 where
     V: Clone
         + Serialize
@@ -492,15 +341,86 @@ where
         + Send
         + Sync
         + 'static,
+    Meta: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     D: OpDispatch<V> + Clone,
-    M: ReplicationStrategy<V> + Clone,
+    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    DLeaf: OpDispatch<V> + Clone,
+    MLeaf: crate::maintenance::ReplicationStrategy<V> + Clone,
+    ClusterName: 'static,
+    LeafName: 'static,
 {
-    fn default() -> Self {
-        Self::new()
-    }
+    let target_cluster = layers.get::<ClusterName>();
+
+    // Unwrap envelope for cluster dispatch (routers only see bare operations)
+    let bare_operations = enveloped_operations.clone().map(q!(|env| env.operation));
+
+    // Route via cluster dispatcher
+    let routed_operations = kvs
+        .dispatch
+        .dispatch_from_process(bare_operations, target_cluster);
+
+    // Split for replication (cluster layer still sees bare operations)
+    let local_ops = routed_operations.clone();
+    let local_puts = routed_operations.filter_map(q!(|op| match op {
+        KVSOperation::Put(k, v) => Some((k, v)),
+        KVSOperation::Get(_) => None,
+    }));
+
+    // Replicate at cluster layer
+    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
+
+    // TODO: Rewrap with preserved metadata for leaf dispatch
+    // For now, just apply leaf dispatch on bare operations
+    let leaf_local_ops =
+        kvs.child
+            .dispatch
+            .dispatch_from_cluster(local_ops, target_cluster, target_cluster);
+    let leaf_replicated_ops =
+        kvs.child
+            .dispatch
+            .dispatch_from_cluster(replicated_ops, target_cluster, target_cluster);
+
+    // Tag and process
+    let local_tagged = leaf_local_ops.map(q!(|op| (true, op)));
+    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
+
+    let all_tagged = local_tagged
+        .interleave(replicated_tagged)
+        .assume_ordering(nondet!(/** sequential processing at leaf */));
+
+    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
+
+    responses.assume_ordering(nondet!(/** responses at leaf cluster */))
 }
 
-impl<V, D, M> KVSServer<V, D, M>
+/// Wire a two-layer KVS with slotted operations from Paxos.
+///
+/// Architecture:
+/// 1. Paxos → slotted ops at proxy
+/// 2. Cluster dispatcher (e.g., RoundRobinRouter) routes slotted ops to ONE member
+/// 3. That member extracts PUTs and replicates them (with slots) to all members
+/// 4. Leaf dispatcher receives TWO slotted streams:
+///    - Local: from cluster dispatcher (should ACK client)
+///    - Replicated: from cluster maintenance (should NOT ACK, no client waiting)
+/// 5. Both streams go through SlotOrderEnforcer for buffering
+/// 6. Process local ops with responses, replicated ops without responses
+// Deprecated: slotted-specific wiring removed in favor of generic pipeline (KVSWire + AfterWire).
+
+/// Standalone wiring function: binds a KVS layer specification into Hydro dataflow.
+///
+/// This function takes a KVS architecture (expressed as nested `KVSCluster` types),
+/// creates a cluster for each layer, wires inter-cluster communication, and returns
+/// cluster handles plus the client I/O port.
+///
+/// Users then assign hosts to the returned cluster handles using standard Hydro
+/// deployment APIs (`.with_cluster(layers.get::<Name>(), ...)`).
+pub fn wire_kvs_dataflow<'a, V, K>(
+    proxy: &Process<'a, ()>,
+    client_external: &External<'a, ()>,
+    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    kvs: K,
+) -> (crate::kvs_layer::KVSClusters<'a>, ServerPorts<V>)
 where
     V: Clone
         + Serialize
@@ -514,14 +434,47 @@ where
         + Send
         + Sync
         + 'static,
-    D: OpDispatch<V> + Clone,
-    M: ReplicationStrategy<V> + Clone,
+    K: crate::kvs_layer::KVSSpec<V> + KVSWire<V> + AfterWire<V>,
 {
-    /// Create a builder for easy setup
-    pub fn builder() -> KVSBuilder<V, D, M> {
-        KVSBuilder::new()
-    }
+    // Create all clusters for all layers
+    let mut layers = crate::kvs_layer::KVSClusters::new();
+    let _entry_cluster = kvs.create_clusters(flow, &mut layers);
+
+    // Create bidirectional external connection
+    let (bidi_port, operations_stream, _membership, complete_sink) =
+        proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
+
+    // Build initial operation stream from external input
+    let initial_ops = operations_stream
+        .entries()
+        .map(q!(|(_client_id, op)| op))
+        .assume_ordering(nondet!(/** client op stream */));
+    // Downward pass via dispatch chain (KVSWire)
+    let routed_ops = kvs.wire_from_process(&layers, initial_ops);
+
+    // Core processing at leaf (assume total order already imposed by dispatch components)
+    let core_responses = crate::kvs_core::KVSCore::process(routed_ops);
+
+    // Upward maintenance pass: traverse maintenance chain from leaf to root.
+    let final_responses = kvs.after_responses(&layers, core_responses);
+
+    // Send responses back to proxy
+    let proxy_responses = final_responses.send_bincode(proxy);
+
+    // Complete the bidirectional connection
+    complete_sink.complete(
+        proxy_responses
+            .entries()
+            .map(q!(|(_member_id, response)| (0u64, response)))
+            .into_keyed(),
+    );
+
+    (layers, bidi_port)
 }
+
+// Paxos-specific deploy helper removed; cluster specs configure Paxos via dispatcher value.
+
+// Nothing else lives here: construction happens via cluster specs and runtime module.
 
 // =============================================================================
 // Convenient Type Aliases for Common Configurations
@@ -533,7 +486,7 @@ pub mod common {
     use crate::dispatch::{
         PaxosDispatcher, Pipeline, RoundRobinRouter, ShardedRouter, SingleNodeRouter,
     };
-    use crate::maintenance::{BroadcastReplication, SimpleGossip, LogBased, NoReplication};
+    use crate::maintenance::{BroadcastReplication, LogBased, NoReplication, SimpleGossip};
     use crate::values::{CausalString, LwwWrapper};
 
     /// Local single-node server with LWW semantics

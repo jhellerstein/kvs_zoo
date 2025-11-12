@@ -29,7 +29,7 @@
 //! 3. Always maintain sequential slot processing
 
 use crate::kvs_core::KVSNode;
-use crate::maintenance::ReplicationStrategy;
+use crate::maintenance::{MaintenanceAfterResponses, ReplicationStrategy};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -111,6 +111,17 @@ where
 
         // Step 2: Apply gap-filling sequencing to ensure operations are applied in order
         Self::sequence_slotted_operations(cluster, replicated_slotted)
+    }
+}
+
+// Upward pass hook: by default, LogBased doesn't alter responses
+impl<R> MaintenanceAfterResponses for LogBased<R> {
+    fn after_responses<'a>(
+        &self,
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        responses
     }
 }
 
@@ -218,13 +229,14 @@ impl<R> LogBased<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::maintenance::{BroadcastReplication, SimpleGossip, NoReplication};
+    use crate::maintenance::{BroadcastReplication, NoReplication, SimpleGossip};
 
     #[test]
     fn test_logbased_creation() {
         let _logbased_broadcast =
             LogBased::new(BroadcastReplication::<crate::values::CausalString>::new());
-        let _logbased_gossip = LogBased::new(SimpleGossip::<crate::values::CausalString>::default());
+        let _logbased_gossip =
+            LogBased::new(SimpleGossip::<crate::values::CausalString>::default());
         let _logbased_none = LogBased::new(NoReplication::new());
     }
 
@@ -258,7 +270,8 @@ mod tests {
         ));
         _test_replication_strategy::<crate::values::CausalString>(LogBased::new(SimpleGossip::<
             crate::values::CausalString,
-        >::default()));
+        >::default(
+        )));
     }
 
     #[test]

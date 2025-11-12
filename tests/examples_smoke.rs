@@ -18,10 +18,20 @@ fn run_example(name: &str, extra: &[&str]) {
     // Run from crate root (tests execute with current_dir already at crate root)
     let output = cmd.output().expect("failed to spawn example");
     if !output.status.success() {
-        eprintln!("\n===== STDERR ({name}) =====\n{}\n", String::from_utf8_lossy(&output.stderr));
-        eprintln!("\n===== STDOUT ({name}) =====\n{}\n", String::from_utf8_lossy(&output.stdout));
+        eprintln!(
+            "\n===== STDERR ({name}) =====\n{}\n",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        eprintln!(
+            "\n===== STDOUT ({name}) =====\n{}\n",
+            String::from_utf8_lossy(&output.stdout)
+        );
     }
-    assert!(output.status.success(), "example `{}` exited with failure", name);
+    assert!(
+        output.status.success(),
+        "example `{}` exited with failure",
+        name
+    );
 }
 
 #[ignore]

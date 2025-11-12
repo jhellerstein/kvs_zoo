@@ -4,7 +4,7 @@
 //! - Architecture: Sharded KVS with local nodes
 //! - Topology: 3 shards × 1 node each = 3 total nodes
 //! - Routing: `ShardedRouter` at cluster level, `SingleNodeRouter` at node level (hash-based partitioning)
-//! - Replication: None (each shard is a single local node with `ZeroMaintenance`)
+//! - Replication: None (each shard is a single local node with no maintenance)
 //! - Consistency: Per-shard strong (deterministic), no cross-shard coordination
 //!
 //! **What it achieves:**
@@ -15,50 +15,79 @@
 //! architecture suitable for high-throughput, low-latency workloads where keys are accessed
 //! independently.
 
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
+use futures::{SinkExt, StreamExt};
 use kvs_zoo::dispatch::ShardedRouter;
+use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+
+// Marker type naming this KVS layer
+#[derive(Clone)]
+struct Shard;
+
+// KVS architecture type: single layer with sharded routing
+type ShardedKVS = KVSCluster<Shard, ShardedRouter, (), ()>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Sharded Local KVS Demo");
 
-    // Define the cluster topology hierarchically with inline dispatch/maintenance
-    let cluster_spec = KVSCluster::new(
-        ShardedRouter::new(3),                  // cluster dispatch: route to shard by key hash
-        (),                                     // no cluster-level maintenance
-        3,                                      // deploy 3 shards at the cluster level
-        KVSNode {                               // each shard is a single local node
-            count: 1,                               // one node per shard (no replication)
-            dispatch: (),                           // no dispatch at the leaf: messages pass through directly
-            maintenance: (),                        // no per-node maintenance
-        },
+    // Standard Hydro deployment
+    let mut deployment = hydro_deploy::Deployment::new();
+    let localhost = deployment.Localhost();
+
+    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let client_external = flow.external::<()>();
+
+    // Define KVS architecture
+    let kvs_spec = ShardedKVS::new(
+        ShardedRouter::new(3), // route to shard by key hash
+        (),                    // no maintenance
+        (),
     );
 
-    // Build and start the server from the spec - no separate type declaration needed!
-    let mut built = cluster_spec.build_server::<LwwWrapper<String>>().await?;
+    // Wire KVS dataflow (returns cluster handles + I/O port)
+    let (layers, port) =
+        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
-    built.start().await?;
+    // Deploy: 3 shards, 1 node each
+    let nodes = flow
+        .with_process(&proxy, localhost.clone())
+        .with_cluster(
+            layers.get::<Shard>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_external(&client_external, localhost)
+        .deploy(&mut deployment);
+
+    deployment.deploy().await?;
+    let (mut out, mut input) = nodes.connect_bincode(port).await;
+
+    deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    // Use distinct keys that should hash to different shards with ShardedRouter logic
+    // Workload inline
     let ops = vec![
-        KVSOperation::Put("shard_key_0".into(), LwwWrapper::new("value_0".into())),
-        KVSOperation::Put("shard_key_1".into(), LwwWrapper::new("value_1".into())),
-        KVSOperation::Get("shard_key_0".into()),
-        KVSOperation::Get("shard_key_1".into()),
+        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into())),
+        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into())),
+        KVSOperation::Get("user:1".into()),
+        KVSOperation::Get("user:2".into()),
     ];
-
-    // print shard mapping using router's helper for consistency
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {
             println!("   {}", info);
         }
     }
-    let (out, input) = built.take_ports();
-    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
+    for op in ops {
+        input.send(op).await?;
+        if let Some(resp) = out.next().await {
+            println!("→ {}", resp);
+        }
+    }
 
+    deployment.stop().await?;
     println!("✅ Sharded local demo complete");
     Ok(())
 }
