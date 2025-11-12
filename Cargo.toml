@@ -8,7 +8,7 @@ edition = "2024"
 name = "kvs_zoo"
 
 [dependencies]
-hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
+hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = ["deploy"] }
 hydro_std = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
 hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
 lattices = { version = "0.6.1", features = ["serde"] }
@@ -32,6 +32,7 @@ hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "mai
 tokio = { version = "1.29.0", features = ["full"] }
 tokio-stream = { version = "0.1.3", default-features = false }
 futures = "0.3.0"
+insta = { version = "1", features = ["json"] }
 
 [lints.clippy]
 uninlined_format_args = "allow"

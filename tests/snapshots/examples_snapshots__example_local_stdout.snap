@@ -1,0 +1,10 @@
+---
+source: tests/examples_snapshots.rs
+expression: sanitize(&stdout)
+---
+🚀 Local KVS Demo (single node)
+→ PUT alpha = OK
+→ GET alpha = one
+→ PUT alpha = OK
+→ GET alpha = two
+✅ Local demo complete

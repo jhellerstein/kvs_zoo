@@ -1,5 +1,5 @@
 /// Tests for sharding hash calculation consistency
-use kvs_zoo::dispatch::ShardedRouter;
+use kvs_zoo::before_storage::routing::ShardedRouter;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -126,5 +126,26 @@ fn test_similar_keys_different_shards() {
     assert!(
         !all_same,
         "Similar keys should likely hash to different shards"
+    );
+}
+
+#[test]
+fn test_example_keys_map_to_distinct_shards() {
+    // Regression: ensure the example keys used in examples/sharded.rs
+    // map to different shards when shard_count = 3.
+    // This guards against accidental changes to hashing or key choices
+    // that would collapse traffic onto a single shard.
+    let shard_count = 3;
+    let k0 = "shard_key_0";
+    let k1 = "shard_key_1";
+
+    let s0 = ShardedRouter::calculate_shard_id(k0, shard_count);
+    let s1 = ShardedRouter::calculate_shard_id(k1, shard_count);
+
+    assert!(s0 < shard_count as u32);
+    assert!(s1 < shard_count as u32);
+    assert_ne!(
+        s0, s1,
+        "example keys should map to distinct shards for shard_count = 3"
     );
 }

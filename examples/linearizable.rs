@@ -1,75 +1,141 @@
-//! Linearizable KVS Example
-//!
-//! **Configuration:**
-//! - Architecture: `LinearizableKVSServer<LwwWrapper<String>, LogBased<BroadcastReplication>>`
-//! - Routing: `PaxosInterceptor` (total order via consensus before execution)
-//! - Replication: `LogBased<BroadcastReplication>` (replicated write-ahead log)
-//! - Nodes: 3 Paxos acceptors + 3 log replicas + 3 KVS replicas = 9 total nodes
-//! - Consistency: Linearizable (strongest consistency model)
-//!
-//! **What it achieves:**
-//! Demonstrates strong consistency via Paxos consensus. Every operation goes through
-//! a consensus round to establish total order before execution, ensuring that all
-//! nodes see operations in the same sequence. The replicated write-ahead log provides
-//! durability, and the value semantics (LWW) handle execution. This architecture
-//! trades latency for strong consistency guarantees, making it suitable for
-//! applications requiring strict ordering (e.g., financial transactions, inventory
-//! management) where correctness is more important than raw performance.
+//! Linearizable KVS (Paxos ordering + standard KVS pipeline)
 
-// futures traits are used by the shared driver
-use kvs_zoo::server::{KVSServer, LinearizableKVSServer};
+use futures::{SinkExt, StreamExt};
+use hydro_lang::prelude::*; // macros q!, nondet!, stream/cluster traits
+// Paxos ordering and roles
+use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
+use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
+use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_to_proxy};
+use kvs_zoo::kvs_layer::{AfterWire, KVSCluster, KVSSpec, KVSWire};
+use kvs_zoo::after_storage::replication::{BroadcastReplication, LogBasedDelivery};
+use kvs_zoo::after_storage::responders::Responder;
+use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
+
+#[derive(Clone)]
+struct ReplicaCluster;
+#[derive(Clone)]
+struct ReplicaLeaf;
+
+// Single-layer linearizable KVS: RoundRobin routing + LogBased replication.
+// Paxos ordering is applied before entering this layer (not part of the spec).
+type LinearizableKVS = KVSCluster<
+    ReplicaCluster,
+    RoundRobinRouter,
+    LogBasedDelivery<BroadcastReplication<LwwWrapper<String>>>,
+    kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SingleNodeRouter, Responder>,
+>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Linearizable KVS Demo (Paxos, f=1)");
+    println!("🚀 Linearizable KVS Demo (Paxos + LogBased<Broadcast>)");
 
+    // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
+
     let flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    type Server = LinearizableKVSServer<
-        LwwWrapper<String>,
-        kvs_zoo::maintenance::LogBased<kvs_zoo::maintenance::BroadcastReplication<LwwWrapper<String>>>,
-    >;
-
-    let paxos_cfg = kvs_zoo::dispatch::PaxosConfig {
-        f: 1,
-        i_am_leader_send_timeout: 1,
-        i_am_leader_check_timeout: 3,
-        i_am_leader_check_timeout_delay_multiplier: 1,
-    };
-
-    let replication = kvs_zoo::maintenance::LogBased::new(kvs_zoo::maintenance::BroadcastReplication::<
-        LwwWrapper<String>,
-    >::default());
-    let paxos = kvs_zoo::dispatch::PaxosInterceptor::<LwwWrapper<String>>::with_config(paxos_cfg);
-    let cluster = Server::create_deployment(&flow, paxos.clone(), replication.clone());
-    let port = Server::run(
-        &proxy,
-        &cluster,
-        &client_external,
-        paxos,
-        replication.clone(),
+    // Define KVS architecture: routing + replication handled inside KVS Zoo.
+    let kvs_spec = LinearizableKVS::new(
+        RoundRobinRouter::new(),
+    LogBasedDelivery::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+        kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SingleNodeRouter, Responder>::new(
+            SingleNodeRouter::new(),
+            Responder::new(),
+        ),
     );
+
+    // Create clusters for KVS and Paxos roles
+    let mut layers = kvs_zoo::kvs_layer::KVSClusters::new();
+    let _entry = kvs_spec.create_clusters(&flow, &mut layers);
+    let proposers = flow.cluster::<Proposer>();
+    let acceptors = flow.cluster::<Acceptor>();
+
+    // External bidirectional port
+    let (bidi_port, operations_stream, _membership, complete_sink) = proxy
+        .bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(
+            &client_external,
+        );
+
+    // Build client operations stream
+    let initial_ops = operations_stream
+        .entries()
+        .map(q!(|(_client_id, op)| op))
+        .assume_ordering(nondet!(/** client op stream */));
+
+    // Impose total order via Paxos and bring ordered ops back to the proxy.
+    let dispatcher = PaxosDispatcher::<LwwWrapper<String>>::with_config(PaxosConfig::default());
+    let ordered_ops_at_proxy = paxos_order_to_proxy(
+        &dispatcher,
+        initial_ops,
+        &proposers,
+        &acceptors,
+        &proxy,
+    );
+
+    // Server generic wiring: downward dispatch -> leaf core -> upward maintenance
+    let routed = kvs_spec.wire_from_process(&layers, ordered_ops_at_proxy);
+    let (responses, _puts) = kvs_zoo::kvs_core::KVSCore::process_with_deltas(routed);
+    let responses = kvs_spec.after_responses(&layers, responses);
+
+    // Send responses back to proxy and complete the bidi connection (optional member id stamping)
+    let proxy_responses = responses.send_bincode(&proxy);
+    let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+    let to_complete = if stamp_member {
+        proxy_responses
+            .entries()
+            .map(q!(|(member_id, response)| (0u64, format!("[{}] {}", member_id, response))))
+            .into_keyed()
+    } else {
+        proxy_responses
+            .entries()
+            .map(q!(|(_member_id, response)| (0u64, response)))
+            .into_keyed()
+    };
+    complete_sink.complete(to_complete);
+
+    // Deploy: 3 KVS replicas
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&cluster.0, vec![localhost.clone(); 3])
-        .with_cluster(&cluster.1, vec![localhost.clone(); 3])
-        .with_cluster(&cluster.2, vec![localhost.clone(); 3])
+        .with_cluster(
+            layers.get::<ReplicaCluster>(),
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_cluster(
+            &proposers,
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
+        .with_cluster(
+            &acceptors,
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
     deployment.deploy().await?;
-    let (out, input) = nodes.connect_bincode(port).await;
+    let (mut out, mut input) = nodes.connect_bincode(bidi_port).await;
+
     deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await; // leader election
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
-    let ops = kvs_zoo::demo_driver::ops_linearizable();
-    kvs_zoo::demo_driver::run_ops(out, input, ops).await?;
+    // Demo operations
+    let ops = vec![
+        KVSOperation::Put("acct".into(), LwwWrapper::new("100".into())),
+        KVSOperation::Get("acct".into()),
+        KVSOperation::Put("acct".into(), LwwWrapper::new("200".into())),
+        KVSOperation::Get("acct".into()),
+    ];
+    for op in ops {
+        input.send(op).await?;
+        if let Some(resp) = out.next().await {
+            println!("→ {}", resp);
+        }
+    }
 
+    deployment.stop().await?;
     println!("✅ Linearizable demo complete");
     Ok(())
 }

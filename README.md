@@ -1,8 +1,8 @@
-# KVS Zoo 🦁
+# KVS Zoo 🦁 🐵 🦒
 
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
-The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a **composable server architecture** that allows mixing and matching
+The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a composable server architecture that allows mixing and matching
 message dispatch strategies, data maintenance strategies, and value semantics to create sophisticated distributed key-value stores from reusable components.
 
 ## 📚 Background
@@ -12,16 +12,16 @@ This project builds on prior distributed systems research:
 - **[Anna KVS](https://github.com/hydro-project/anna)**: A lattice-based key-value store emphasizing coordination-free semantics (original papers [here](https://dsf.berkeley.edu/jmh/papers/anna_ieee18.pdf) and [here](https://www.vldb.org/pvldb/vol12/p624-wu.pdf)
 - **[Hydro Project](https://hydro.run/)**: A Rust framework for correct and performance distributed systems
 
-The implementations showcase Hydro's approach to building distributed systems: expressing coordination patterns as location-aware, low-latency dataflow graphs.
+The implementations showcase Hydro's approach to building distributed systems: expressing coordination patterns as location-aware, low-latency dataflow graphs that provide zero-overhead _distributed safety_ at compile time.
 
 ## 🏗️ Architecture
 
-The zoo showcases a **composable server architecture** where server types, dispatch strategies, maintenance strategies, and value semantics can be mixed and matched:
+The zoo showcases a composable architecture where dispatch strategies, maintenance strategies, and value semantics can be mixed and matched:
 
 ### Core Abstractions
 
 - **`KVSServer<V>`**: Trait defining how to deploy and run a KVS architecture
-- **Routing Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosInterceptor`
+- **Routing/Dispatch Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`
 - **Replication Strategies**: `NoReplication`, `EpidemicGossip`, `BroadcastReplication`, `LogBased`
 - **Value Types**: `LwwWrapper<T>` (last-write-wins), `CausalWrapper<T>` (causal with vector clocks)
 
@@ -29,24 +29,24 @@ The zoo showcases a **composable server architecture** where server types, dispa
 
 ### 1. **Local KVS** (`examples/local.rs`)
 
-Single-node key-value store with last-writer-wins semantics.
+Single-node key-value store with sequential semantics.
 
 - **Server**: `LocalKVSServer<LwwWrapper<String>>`
-- **Routing**: `SingleNodeRouter`
-- **Replication**: None
+- **Dispatch**: `SingleNodeRouter`
+- **Maintenance**: None
 - **Nodes**: 1
 - **Concepts**: Basic Hydro dataflow, external interfaces, process/cluster abstraction
 
 ### 2. **Replicated KVS** (`examples/replicated.rs`)
 
-Multi-node replication with selectable consistency model.
+Multi-node replication with selectable eventual consistency model.
 
 - **Server**: `ReplicatedKVSServer<V, EpidemicGossip<V>>`
-- **Routing**: `RoundRobinRouter`
-- **Replication**: `EpidemicGossip` (epidemic rumor-mongering)
+- **Dispatch**: `RoundRobinRouter`
+- **Maintenance**: `EpidemicGossip` (epidemic rumor-mongering)
 - **Value Types**:
-  - `CausalString` (default) - causal consistency with vector clocks
-  - `LwwWrapper<String>` (via `--lattice lww`) - last-write-wins
+  - `CausalString` (default) - _causal_ consistency with vector clocks
+  - `LwwWrapper<String>` (via `--lattice lww`) - last-writer-wins _non-deterministic_ consistency
 - **Nodes**: 3 replicas
 - **Concepts**: Gossip protocols, eventual consistency, lattice-based merge semantics
 - **Features**:
@@ -59,8 +59,8 @@ Multi-node replication with selectable consistency model.
 Horizontal partitioning via consistent hashing for scalability.
 
 - **Server**: `ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>`
-- **Routing**: `Pipeline<ShardedRouter, SingleNodeRouter>`
-- **Replication**: None (per-shard)
+- **Dispatch**: `Pipeline<ShardedRouter, SingleNodeRouter>`
+- **Maintenance**: None (per-shard)
 - **Nodes**: 3 shards
 - **Concepts**: Data partitioning, hash-based routing, independent shards
 - **Features**:
@@ -73,8 +73,8 @@ Horizontal partitioning via consistent hashing for scalability.
 Combines sharding and replication for both scalability and fault tolerance.
 
 - **Server**: `ShardedKVSServer<ReplicatedKVSServer<CausalString, BroadcastReplication>>`
-- **Routing**: `Pipeline<ShardedRouter, RoundRobinRouter>`
-- **Replication**: `BroadcastReplication` (within each shard)
+- **Dispatch**: `Pipeline<ShardedRouter, RoundRobinRouter>`
+- **Maintenance**: `BroadcastReplication` (within each shard)
 - **Nodes**: 3 shards × 3 replicas = 9 total nodes
 - **Concepts**: Hybrid architecture, multi-level composition
 - **Features**:
@@ -87,8 +87,8 @@ Combines sharding and replication for both scalability and fault tolerance.
 Strong consistency via Paxos consensus with write-ahead logging.
 
 - **Server**: `LinearizableKVSServer<LwwWrapper<String>, LogBased<BroadcastReplication>>`
-- **Routing**: `PaxosInterceptor` (total order before execution)
-- **Replication**: `LogBased<BroadcastReplication>` (replicated write-ahead log)
+- **Dispatch**: `PaxosDispatcher` (total order before execution)
+- **Maintenance**: `LogBased<BroadcastReplication>` (replicated write-ahead log)
 - **Nodes**: 3 Paxos acceptors + 3 log replicas + 3 KVS replicas = 9 total
 - **Concepts**: Consensus, linearizability, write-ahead logging
 - **Features**:
@@ -124,19 +124,20 @@ Implementations include:
 - **`CausalWrapper<T>`**: Causal consistency using `DomPair<VCWrapper, SetUnionHashSet<T>>`
 - **`VCWrapper`**: Vector clock primitive for causality tracking
 
-### Replication Strategies (`src/maintain/`)
+### Maintenance Strategies (`src/maintain/`)
 
 - **`NoReplication`**: No background synchronization
 - **`EpidemicGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
 - **`BroadcastReplication<V>`**: Eager broadcast of all updates
 - **`LogBased<R>`**: Write-ahead log wrapper over another replication strategy
+- **`TombstoneCleanup`**: Elimination of globally-known tombstones.
 
-### Routing Strategies (`src/dispatch/`)
+### Dispatch Strategies (`src/dispatch/`)
 
 - **`SingleNodeRouter`**: Direct to single node
 - **`RoundRobinRouter`**: Load balance across replicas
 - **`ShardedRouter`**: Hash-based key partitioning
-- **`PaxosInterceptor`**: Total order via Paxos consensus
+- **`PaxosDispatcher`**: Global total order via Paxos consensus
 - **`Pipeline<R1, R2>`**: Compose two routing strategies
 
 ## 🚀 Getting Started
@@ -252,9 +253,9 @@ Epidemic gossip separates metadata from values:
 - **Lattice Store**: Holds actual merged values
 - **Optimization**: Only gossip keys, fetch values from local store
 
-### 4. **Pipeline Routing**
+### 4. **Pipeline Dispatch**
 
-Compose routing strategies for multi-level architectures:
+Compose dispatch strategies for multi-level architectures:
 
 ```rust
 // First route by shard, then by replica within shard
@@ -300,6 +301,25 @@ cargo nextest run
 # Run specific test suite
 cargo test causal_consistency
 ```
+
+### Snapshot tests (insta)
+
+We use the [`insta`](https://crates.io/crates/insta) crate to snapshot the user-facing stdout of examples in `tests/examples_snapshots.rs`. The test harness filters out unstable, internal process-launch noise; only semantically meaningful lines (banner, shard mapping lines, operation outputs, completion banners) are retained to keep snapshots stable over time.
+
+Common workflow:
+
+```bash
+# Run snapshot tests normally
+cargo test --test examples_snapshots -- --nocapture
+
+# Review and accept updated snapshots interactively after intentional output changes
+cargo insta review
+
+# Force regenerate all snapshots (CI should not do this)
+INSTA_UPDATE=always cargo test --test examples_snapshots
+```
+
+Commit updated `tests/snapshots/*.snap` files when outputs change intentionally. CI runs these to guard the educational surface of example output.
 
 ## 🤝 Contributing
 

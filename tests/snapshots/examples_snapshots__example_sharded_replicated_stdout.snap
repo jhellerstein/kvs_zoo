@@ -1,0 +1,14 @@
+---
+source: tests/examples_snapshots.rs
+expression: sanitize(&stdout)
+---
+🚀 Sharded + Replicated KVS Demo
+   → shard 1 for 'user:alice'
+   → shard 1 for 'user:bob'
+   → shard 1 for 'user:alice'
+   → shard 1 for 'user:bob'
+→ PUT user:alice = OK
+→ PUT user:bob = OK
+→ GET user:alice = x
+→ GET user:bob = y
+✅ Sharded+Replicated demo complete
