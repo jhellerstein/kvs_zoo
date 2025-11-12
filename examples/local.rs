@@ -1,24 +1,11 @@
-//! Local KVS Example
-//!
-//! **Configuration:**
-//! - Architecture: Single node KVS
-//! - Topology: 1 node (no sharding, no replication)
-//! - Routing: `SingleNodeRouter` (direct to single node)
-//! - Replication: None
-//! - Consistency: Strong (deterministic single-threaded ordering)
-//!
-//! **What it achieves:**
-//! This is the simplest KVS architecture, serving as a baseline for the composable
-//! server framework. All operations execute on a single node with last-write-wins
-//! semantics. No networking or replication overhead, making it suitable for
-//! development, testing, and simple single-machine applications.
+//! Local KVS (single node)
 
-use kvs_zoo::dispatch::SingleNodeRouter;
+use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
 
-// Hydro location type = KVS layer type (no duplication!)
+// Marker type for Hydro location type / KVS layer type
 #[derive(Clone)]
 struct LocalStorage;
 
@@ -37,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Wire the KVS architecture into dataflow
+    // Build a Hydro graph for the LocalKVS type, return layer handles and client I/O ports
     let (layers, port) = wire_kvs_dataflow::<LwwWrapper<String>, _>(
         &proxy,
         &client_external,

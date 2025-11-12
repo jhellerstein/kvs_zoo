@@ -19,8 +19,8 @@
 //! >;
 //! ```
 
-use crate::dispatch::OpDispatch;
-use crate::maintenance::{MaintenanceAfterResponses, ReplicationStrategy};
+use crate::before_storage::OpDispatch;
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
 use crate::protocol::KVSOperation;
 use hydro_lang::location::cluster::Cluster;
 use hydro_lang::prelude::*;
@@ -406,8 +406,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::SingleNodeRouter;
-    use crate::maintenance::NoReplication;
+    use crate::after_storage::NoReplication;
+    use crate::before_storage::routing::SingleNodeRouter;
 
     struct TestLayer;
 

@@ -55,7 +55,7 @@ use serde::{Deserialize, Serialize};
 
 // Re-export commonly used strategies for convenience
 pub use cluster::{
-    BroadcastReplication, BroadcastReplicationConfig, LogBased, SimpleGossip, SimpleGossipConfig,
+    BroadcastReplication, BroadcastReplicationConfig, SimpleGossip, SimpleGossipConfig,
 };
 pub use leaf::{LeafAfterHook, Responder};
 pub use node::{TombstoneCleanup, TombstoneCleanupConfig};

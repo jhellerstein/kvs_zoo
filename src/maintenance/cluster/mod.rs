@@ -9,4 +9,4 @@ pub mod logbased;
 
 pub use broadcast::{BroadcastReplication, BroadcastReplicationConfig};
 pub use gossip::{SimpleGossip, SimpleGossipConfig};
-pub use logbased::LogBased;
+// Intentionally do not re-export LogBased here to steer users to after_storage::replication::LogBasedDelivery

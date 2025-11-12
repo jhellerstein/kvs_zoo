@@ -1,12 +1,9 @@
-//! Leaf-level after hooks
-//!
-//! These run after CoreKVS processing on each leaf node.
-//! They can emit responses, trigger local side-effects, etc.
+//! Leaf-level after hooks (after-storage, native)
 
 use hydro_lang::prelude::*;
 
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
-use crate::maintenance::{MaintenanceAfterResponses, ReplicationStrategy};
 use serde::{Deserialize, Serialize};
 
 /// Trait for leaf after-hooks that decide how to emit responses locally.
@@ -35,11 +32,7 @@ impl LeafAfterHook for Responder {
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         tagged_responses
-            .filter_map(q!(|(is_replica, resp)| if !is_replica {
-                Some(resp)
-            } else {
-                None
-            }))
+            .filter_map(q!(|(is_replica, resp)| if !is_replica { Some(resp) } else { None }))
             .assume_ordering(nondet!(/** local responses only for originals */))
     }
 }
@@ -52,14 +45,13 @@ impl MaintenanceAfterResponses for Responder {
         _cluster: &Cluster<'a, KVSNode>,
         responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
-        // Responder's filtering is applied earlier via `respond`. Upward pass is pass-through.
         responses
     }
 }
 
 // Allow Responder to serve as a leaf "maintenance" component by also implementing
-// the replication trait as a no-op. This satisfies existing generic bounds on
-// KVSNode while we evolve the separation between replication and after-hooks.
+// the replication trait as a no-op. This satisfies existing generic bounds while
+// we evolve the separation between replication and after-hooks.
 impl<V> ReplicationStrategy<V> for Responder
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,

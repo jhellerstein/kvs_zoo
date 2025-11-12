@@ -1,12 +1,9 @@
-//! Operation ordering strategies
-//!
-//! This module contains dispatchers that establish a total order over operations,
-//! ensuring consistency guarantees like linearizability.
+//! Operation ordering strategies (before-storage)
 
-pub mod paxos;
 pub mod paxos_core;
 pub mod sequence_payloads;
 pub mod slot_enforcer;
+pub mod paxos;
 
 pub use paxos::{PaxosConfig, PaxosDispatcher};
 pub use paxos_core::{Acceptor, PaxosPayload, Proposer};

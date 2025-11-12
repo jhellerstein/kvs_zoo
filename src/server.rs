@@ -9,9 +9,9 @@
 //! All higher-level construction flows through `KVSCluster::build_server` and
 //! typical users never touch this module directly.
 
-use crate::dispatch::OpDispatch;
+use crate::before_storage::OpDispatch;
 use crate::kvs_layer::{AfterWire, KVSWire};
-use crate::maintenance::ReplicationStrategy;
+use crate::after_storage::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
@@ -38,7 +38,7 @@ where
 ///
 /// Equivalent to `KVSServer<V, SingleNodeRouter, ZeroMaintenance>`.
 pub type LocalKVSServer<V> =
-    KVSServer<V, crate::dispatch::SingleNodeRouter, crate::maintenance::ZeroMaintenance>;
+    KVSServer<V, crate::before_storage::routing::SingleNodeRouter, crate::after_storage::ZeroMaintenance>;
 
 // Legacy deploy helpers removed: construction flows through KVSBuilder produced by cluster spec.
 impl<V, D, M> KVSServer<V, D, M>
@@ -203,7 +203,7 @@ where
         + Sync
         + 'static,
     D: OpDispatch<V> + Clone,
-    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    M: crate::after_storage::ReplicationStrategy<V> + Clone,
     Name: 'static,
 {
     let target_cluster = layers.get::<Name>();
@@ -267,9 +267,9 @@ where
         + Sync
         + 'static,
     D: OpDispatch<V> + Clone,
-    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    M: crate::after_storage::ReplicationStrategy<V> + Clone,
     DLeaf: OpDispatch<V> + Clone,
-    MLeaf: crate::maintenance::ReplicationStrategy<V> + Clone,
+    MLeaf: crate::after_storage::ReplicationStrategy<V> + Clone,
     ClusterName: 'static,
     LeafName: 'static,
 {
@@ -355,9 +355,9 @@ where
         + 'static,
     Meta: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     D: OpDispatch<V> + Clone,
-    M: crate::maintenance::ReplicationStrategy<V> + Clone,
+    M: crate::after_storage::ReplicationStrategy<V> + Clone,
     DLeaf: OpDispatch<V> + Clone,
-    MLeaf: crate::maintenance::ReplicationStrategy<V> + Clone,
+    MLeaf: crate::after_storage::ReplicationStrategy<V> + Clone,
     ClusterName: 'static,
     LeafName: 'static,
 {
@@ -497,10 +497,11 @@ where
 /// Type aliases for common server configurations
 pub mod common {
     use super::*;
-    use crate::dispatch::{
-        PaxosDispatcher, Pipeline, RoundRobinRouter, ShardedRouter, SingleNodeRouter,
-    };
-    use crate::maintenance::{BroadcastReplication, LogBased, NoReplication, SimpleGossip};
+    use crate::before_storage::ordering::PaxosDispatcher;
+    use crate::before_storage::Pipeline;
+    use crate::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
+    use crate::after_storage::replication::{BroadcastReplication, LogBasedDelivery, SimpleGossip};
+    use crate::after_storage::NoReplication;
     use crate::values::{CausalString, LwwWrapper};
 
     /// Local single-node server with LWW semantics
@@ -526,5 +527,5 @@ pub mod common {
 
     /// Linearizable server with Paxos and log-based replication
     pub type Linearizable<V = LwwWrapper<String>> =
-        KVSServer<V, PaxosDispatcher<V>, LogBased<BroadcastReplication<V>>>;
+        KVSServer<V, PaxosDispatcher<V>, LogBasedDelivery<BroadcastReplication<V>>>;
 }

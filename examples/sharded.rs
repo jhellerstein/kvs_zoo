@@ -1,22 +1,7 @@
-//! Sharded KVS Example
-//!
-//! **Configuration:**
-//! - Architecture: Sharded KVS with local nodes
-//! - Topology: 3 shards × 1 node each = 3 total nodes
-//! - Routing: `ShardedRouter` at cluster level, `SingleNodeRouter` at node level (hash-based partitioning)
-//! - Replication: None (each shard is a single local node with no maintenance)
-//! - Consistency: Per-shard strong (deterministic), no cross-shard coordination
-//!
-//! **What it achieves:**
-//! Demonstrates horizontal data scalability through hash-based key partitioning. Each
-//! key is deterministically routed to one of 3 shards based on its hash, allowing
-//! the system to handle larger datasets by distributing load. Shards operate
-//! independently with no cross-shard communication, making this a pure partitioning
-//! architecture suitable for high-throughput, low-latency workloads where keys are accessed
-//! independently.
+//! Sharded KVS (hash-partitioned)
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::dispatch::ShardedRouter;
+use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::wire_kvs_dataflow;
@@ -48,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (),
     );
 
-    // Wire KVS dataflow (returns cluster handles + I/O port)
+    // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
     let (layers, port) =
         wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
@@ -96,7 +81,7 @@ fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<Stri
     match op {
         KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
             let shard_id =
-                kvs_zoo::dispatch::ShardedRouter::calculate_shard_id(key, shards as usize);
+                kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(key, shards as usize);
             Some(format!("→ shard {} for '{}'", shard_id, key))
         }
     }

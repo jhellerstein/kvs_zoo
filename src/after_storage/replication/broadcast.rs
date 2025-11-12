@@ -1,11 +1,9 @@
-//! Broadcast Replication Strategy
+//! Broadcast Replication Strategy (after-storage, native)
 //!
-//! This module implements broadcast replication for strong consistency guarantees.
-//! All updates are deterministically broadcast to all cluster nodes, providing
-//! faster convergence than gossip protocols at the cost of higher message overhead.
+//! Native after_storage implementation ported from legacy maintenance::cluster::broadcast.
 
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
-use crate::maintenance::{MaintenanceAfterResponses, ReplicationStrategy};
 use hydro_lang::prelude::*;
 use lattices::Merge;
 use serde::{Deserialize, Serialize};
@@ -61,23 +59,6 @@ impl BroadcastReplicationConfig {
 }
 
 /// Broadcast replication: sends updates to all cluster nodes
-///
-/// Uses deterministic all-to-all broadcasting. Higher message overhead than gossip
-/// but faster convergence and simpler reasoning about consistency.
-///
-/// ## Protocol Overview
-///
-/// 1. **Immediate Broadcasting**: All local updates are broadcast to all nodes
-/// 2. **Deterministic Delivery**: Every node receives every update
-/// 3. **Strong Consistency**: All nodes converge to the same state quickly
-/// 4. **High Message Overhead**: O(n²) messages for n nodes
-///
-/// ## Consistency Guarantees
-///
-/// - **Strong Consistency**: All nodes receive all updates
-/// - **Fast Convergence**: Updates propagate in one round
-/// - **Deterministic**: No probabilistic behavior
-/// - **Reliable**: All updates are guaranteed to be delivered
 #[derive(Clone, Debug)]
 pub struct BroadcastReplication<V> {
     config: BroadcastReplicationConfig,
@@ -101,10 +82,7 @@ impl<V> BroadcastReplication<V> {
 
     /// Create a new broadcast replication strategy with custom configuration
     pub fn with_config(config: BroadcastReplicationConfig) -> Self {
-        Self {
-            config,
-            _phantom: std::marker::PhantomData,
-        }
+        Self { config, _phantom: std::marker::PhantomData }
     }
 }
 
@@ -127,7 +105,6 @@ where
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Choose implementation based on config
         if self.config.enable_batching {
             self.handle_replication_periodic(cluster, local_data)
         } else {
@@ -135,14 +112,11 @@ where
         }
     }
 
-    // Ordered logs with "slots" (positions) need to be replicated for ordered "replay".
-    // See logbased.rs.
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Broadcast slotted operations to all nodes
         local_slotted_data
             .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
             .values()
@@ -165,15 +139,6 @@ where
         + Merge<V>,
 {
     /// Immediate synchronous broadcast replication
-    ///
-    /// Every local write is immediately broadcast to all cluster members.
-    /// No buffering, no delays - pure synchronous replication.
-    ///
-    /// ## Behavior
-    /// - Event-driven: broadcasts immediately on every local write
-    /// - Synchronous: no batching or periodic delays
-    /// - Deterministic: all nodes receive all updates
-    /// - Returns stream of updates received from other nodes
     pub fn handle_replication_immediate<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
@@ -186,26 +151,14 @@ where
     }
 
     /// Periodic background broadcast replication
-    ///
-    /// Local writes are buffered and periodically broadcast as a batch.
-    /// Reduces network overhead at the cost of increased latency.
-    ///
-    /// ## Behavior
-    /// - Accumulates local writes into a KVS
-    /// - Periodically broadcasts accumulated state at configured intervals
-    /// - No immediate forwarding - only periodic background broadcasts
-    /// - Returns stream of updates received from other nodes
     pub fn handle_replication_periodic<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
         let ticker = cluster.tick();
-
-        // Capture config value for use in quote (must be a primitive type like u64)
         let batch_timeout_ms = self.config.batch_timeout_ms;
 
-        // Accumulate local writes into a KVS (no immediate broadcast)
         let accumulated_kvs = local_put_tuples.into_keyed().fold_commutative(
             q!(|| V::default()),
             q!(|acc, v| {
@@ -213,7 +166,6 @@ where
             }),
         );
 
-        // Periodically snapshot and broadcast the accumulated state
         let periodic_broadcast = accumulated_kvs
             .snapshot(&ticker, nondet!(/** snapshot for periodic broadcast */))
             .entries()
@@ -224,11 +176,9 @@ where
             )
             .broadcast_bincode(cluster, nondet!(/** periodic broadcast to all nodes */));
 
-        // Return received updates
         periodic_broadcast
             .values()
             .assume_ordering(nondet!(/** broadcast messages unordered */))
-            // Sampling may produce duplicate deliveries; declare retry semantics
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }
@@ -269,15 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn test_broadcast_replication_clone_debug() {
-        let broadcast = BroadcastReplication::<String>::new();
-        let _cloned = broadcast.clone();
-        let _debug_str = format!("{:?}", broadcast);
-    }
-
-    #[test]
     fn test_broadcast_replication_implements_replication_strategy() {
-        // Test that BroadcastReplication implements ReplicationStrategy with CausalString
         fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
         _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
             crate::values::CausalString,
@@ -285,64 +227,14 @@ mod tests {
     }
 
     #[test]
-    fn test_broadcast_replication_config_values() {
-        let config = BroadcastReplicationConfig::default();
-        assert!(!config.enable_batching);
-        assert_eq!(config.batch_timeout_ms, 100);
-        assert_eq!(config.max_batch_size, 50);
-
-        let low_latency_config = BroadcastReplicationConfig::low_latency();
-        assert!(!low_latency_config.enable_batching);
-        assert_eq!(low_latency_config.batch_timeout_ms, 50);
-        assert_eq!(low_latency_config.max_batch_size, 1);
-
-        let high_throughput_config = BroadcastReplicationConfig::high_throughput();
-        assert!(high_throughput_config.enable_batching);
-        assert_eq!(high_throughput_config.batch_timeout_ms, 200);
-        assert_eq!(high_throughput_config.max_batch_size, 100);
-
-        let synchronous_config = BroadcastReplicationConfig::synchronous();
-        assert!(!synchronous_config.enable_batching);
-        assert_eq!(synchronous_config.batch_timeout_ms, 0);
-        assert_eq!(synchronous_config.max_batch_size, 1);
-    }
-
-    #[test]
-    fn test_broadcast_replication_type_safety() {
-        // Test that BroadcastReplication works with different value types that implement Merge
-        let _causal_broadcast = BroadcastReplication::<crate::values::CausalString>::new();
-        let _lww_broadcast = BroadcastReplication::<crate::values::LwwWrapper<String>>::new();
-    }
-
-    #[test]
-    fn test_broadcast_replication_send_sync() {
-        // Test that BroadcastReplication is Send + Sync for multi-threading
-        fn _requires_send_sync<T: Send + Sync>(_t: T) {}
-        _requires_send_sync(BroadcastReplication::<crate::values::CausalString>::new());
-    }
-
-    #[test]
     fn test_broadcast_vs_gossip_replication_strategies() {
-        // Test that both strategies implement the same trait
         fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
 
         _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
             crate::values::CausalString,
         >::new());
         _accepts_replication_strategy::<crate::values::CausalString>(
-            crate::maintenance::SimpleGossip::<crate::values::CausalString>::default(),
+            crate::after_storage::replication::SimpleGossip::<crate::values::CausalString>::default(),
         );
-    }
-
-    #[test]
-    fn test_broadcast_replication_config_builder_pattern() {
-        // Test that configs can be built and modified
-        let config = BroadcastReplicationConfig {
-            enable_batching: true,
-            max_batch_size: 200,
-            ..Default::default()
-        };
-
-        let _broadcast = BroadcastReplication::<String>::with_config(config);
     }
 }

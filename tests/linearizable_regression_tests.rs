@@ -4,7 +4,7 @@
 //! operation processing at each replica, ensuring linearizability
 //! guarantees are preserved.
 
-use kvs_zoo::dispatch::PaxosDispatcher;
+use kvs_zoo::before_storage::PaxosDispatcher;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
@@ -19,7 +19,7 @@ fn test_linearizable_kvs_sequential_processing() {
     type _LinearizableKVS = KVSServer<
         LwwWrapper<String>,
         PaxosDispatcher<LwwWrapper<String>>,
-        kvs_zoo::maintenance::NoReplication,
+        kvs_zoo::after_storage::NoReplication,
     >;
 
     // Verify that the type compiles and can be instantiated

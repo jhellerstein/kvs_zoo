@@ -1,38 +1,9 @@
-//! Tombstone Cleanup Strategy
+//! Tombstone Cleanup Strategy (after-storage, native)
 //!
-//! Provides background garbage collection for tombstoned (deleted) entries in
-//! replicated systems. This maintenance strategy runs independently to reclaim
-//! storage space from deleted keys once they are no longer needed for convergence.
-//!
-//! ## Tombstone Lifecycle
-//!
-//! 1. **Deletion**: Key is marked with a tombstone (logical delete)
-//! 2. **Propagation**: Tombstone spreads via replication (gossip, broadcast, etc.)
-//! 3. **Quiescence**: All nodes have seen the deletion
-//! 4. **Cleanup**: Safe to remove tombstone and reclaim storage
-//!
-//! ## Safety Considerations
-//!
-//! - Must ensure all nodes have received tombstone before cleanup
-//! - Cleanup too early → deleted keys may reappear (resurrection problem)
-//! - Cleanup too late → wasted storage space
-//! - Typically uses time-based or version-based heuristics
-//!
-//! ## Usage Example
-//!
-//! ```rust,ignore
-//! use kvs_zoo::maintenance::{TombstoneCleanup, TombstoneCleanupConfig};
-//!
-//! let config = TombstoneCleanupConfig {
-//!     cleanup_interval_ms: 60_000,  // Check every minute
-//!     tombstone_ttl_ms: 3600_000,   // Clean after 1 hour
-//! };
-//! let cleanup = TombstoneCleanup::new(config);
-//! ```
+//! Provides background garbage collection for tombstoned (deleted) entries.
 
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
-use crate::maintenance::ReplicationStrategy;
-use crate::maintenance::MaintenanceAfterResponses;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -47,32 +18,22 @@ pub struct TombstoneCleanupConfig {
 
 impl Default for TombstoneCleanupConfig {
     fn default() -> Self {
-        Self {
-            cleanup_interval_ms: 60_000, // 1 minute
-            tombstone_ttl_ms: 3_600_000, // 1 hour
-        }
+        Self { cleanup_interval_ms: 60_000, tombstone_ttl_ms: 3_600_000 }
     }
 }
 
 impl From<usize> for TombstoneCleanupConfig {
     /// Interpret usize as milliseconds for the cleanup interval; tombstone TTL stays default
     fn from(ms: usize) -> Self {
-        TombstoneCleanupConfig {
-            cleanup_interval_ms: ms as u64,
-            ..Default::default()
-        }
+        TombstoneCleanupConfig { cleanup_interval_ms: ms as u64, ..Default::default() }
     }
 }
 
 /// Tombstone cleanup maintenance strategy
-///
-/// Periodically scans for tombstoned entries that are safe to garbage collect
-/// and removes them to reclaim storage space. This is a pure maintenance
-/// operation that doesn't affect the core replication logic.
 #[derive(Clone, Debug)]
 pub struct TombstoneCleanup {
     #[allow(dead_code)]
-    config: TombstoneCleanupConfig,
+    pub(crate) config: TombstoneCleanupConfig,
 }
 
 impl TombstoneCleanup {
@@ -81,9 +42,7 @@ impl TombstoneCleanup {
     where
         C: Into<TombstoneCleanupConfig>,
     {
-        Self {
-            config: config.into(),
-        }
+        Self { config: config.into() }
     }
 }
 
@@ -96,24 +55,20 @@ impl<V> ReplicationStrategy<V> for TombstoneCleanup {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // Interval gating: only consider cleanup when an input PUT arrives AND
-        // the configured cleanup interval has elapsed since the last gated item.
-        // We don't yet have a Duration-aware sampling combinator in this scope.
-        // For now, return an empty stream (same semantics as before) until a
-        // time-based gating primitive is introduced for node-level maintenance.
+        // Placeholder: no-op emission for now; future: time-gated cleanup emissions
         local_data.filter(q!(|_kv| false))
     }
 
     fn replicate_slotted_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        _local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // Placeholder: no slotted cleanup emitted yet
-        _local_slotted_data.filter(q!(|_s| false))
+        local_slotted_data.filter(q!(|_s| false))
     }
 }
 
@@ -141,10 +96,7 @@ mod tests {
 
     #[test]
     fn test_custom_config() {
-        let config = TombstoneCleanupConfig {
-            cleanup_interval_ms: 5_000,
-            tombstone_ttl_ms: 10_000,
-        };
+        let config = TombstoneCleanupConfig { cleanup_interval_ms: 5_000, tombstone_ttl_ms: 10_000 };
         let cleanup = TombstoneCleanup::new(config);
         assert_eq!(cleanup.config.cleanup_interval_ms, 5_000);
         assert_eq!(cleanup.config.tombstone_ttl_ms, 10_000);

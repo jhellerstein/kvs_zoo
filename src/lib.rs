@@ -1,10 +1,10 @@
 stageleft::stageleft_no_entry_crate!();
 
-pub mod demo_driver;
-pub mod dispatch;
+// Legacy dispatch module has been migrated to `before_storage` and removed from the public API.
+pub mod before_storage;
+pub mod after_storage;
 pub mod kvs_core;
 pub mod kvs_layer;
-pub mod maintenance;
 pub mod protocol;
 pub mod server;
 pub mod values;

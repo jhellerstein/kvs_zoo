@@ -1,21 +1,9 @@
-//! Replicated KVS Example
-//!
-//! **Configuration:**
-//! - Architecture: Replicated KVS with epidemic gossip
-//! - Topology: 1 cluster of 3 replicas
-//! - Cluster Dispatch: `RoundRobinRouter` (load balance across replicas)
-//! - Maintenance: `SimpleGossip` for replica coordination
-//! - Value Type: `LwwWrapper<String>` (last-writer-wins semantics)
-//! - Consistency: Eventual (gossip convergence with LWW merge)
-//!
-//! **What it achieves:**
-//! Demonstrates fault-tolerant replication with maintenance attached at appropriate levels.
-//! Uses gossip to propagate updates between replicas and tombstone cleanup for local housekeeping.
+//! Replicated KVS (RoundRobin + Gossip)
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::dispatch::RoundRobinRouter;
+use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::maintenance::SimpleGossip;
+use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
 
@@ -45,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (),
     );
 
-    // Wire KVS dataflow (returns cluster handles + I/O port)
+    // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
         wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 

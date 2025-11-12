@@ -1,5 +1,5 @@
 /// Tests for sharding hash calculation consistency
-use kvs_zoo::dispatch::ShardedRouter;
+use kvs_zoo::before_storage::routing::ShardedRouter;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 

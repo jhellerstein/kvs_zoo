@@ -1,20 +1,14 @@
-//! Linearizable KVS Example
-//!
-//! Architecture: Paxos (global ordering) + RoundRobin (per-replica execution) +
-//! LogBased<BroadcastReplication> (replication & slot gap handling if slotted).
-//!
-//! This example does ONLY the Paxos ordering externally and then defers routing
-//! and replication to standard KVS Zoo layer logic. Proposer/Acceptor clusters
-//! are the only Paxos-specific wiring required. Ordered ops are handed to the
-//! normal KVS pipeline.
+//! Linearizable KVS (Paxos ordering + standard KVS pipeline)
 
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*; // macros q!, nondet!, stream/cluster traits
-use kvs_zoo::dispatch::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_to_proxy};
-use kvs_zoo::dispatch::ordering::paxos_core::{Acceptor, Proposer};
-use kvs_zoo::dispatch::routing::{RoundRobinRouter, SingleNodeRouter};
+// Paxos ordering and roles
+use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
+use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
+use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_to_proxy};
 use kvs_zoo::kvs_layer::{AfterWire, KVSCluster, KVSSpec, KVSWire};
-use kvs_zoo::maintenance::{BroadcastReplication, LogBased, Responder};
+use kvs_zoo::after_storage::replication::{BroadcastReplication, LogBasedDelivery};
+use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
@@ -28,7 +22,7 @@ struct ReplicaLeaf;
 type LinearizableKVS = KVSCluster<
     ReplicaCluster,
     RoundRobinRouter,
-    LogBased<BroadcastReplication<LwwWrapper<String>>>,
+    LogBasedDelivery<BroadcastReplication<LwwWrapper<String>>>,
     kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SingleNodeRouter, Responder>,
 >;
 
@@ -47,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define KVS architecture: routing + replication handled inside KVS Zoo.
     let kvs_spec = LinearizableKVS::new(
         RoundRobinRouter::new(),
-        LogBased::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+    LogBasedDelivery::new(BroadcastReplication::<LwwWrapper<String>>::new()),
         kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SingleNodeRouter, Responder>::new(
             SingleNodeRouter::new(),
             Responder::new(),

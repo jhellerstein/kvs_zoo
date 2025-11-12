@@ -1,21 +1,9 @@
-//! Sharded + Replicated KVS Example
-//!
-//! **Configuration:**
-//! - Architecture: Sharded + Replicated KVS
-//! - Topology: 3 shards × 3 replicas = 9 total nodes
-//! - Routing: `ShardedRouter` (cluster) and `RoundRobinRouter` (within shard)
-//! - Replication: `BroadcastReplication` (attached to the shard level to sync replicas)
-//! - Consistency: Per-shard causal (via vector clocks), no cross-shard coordination
-//!
-//! **What it achieves:**
-//! Demonstrates the "holy grail" composition: sharding for horizontal scalability combined
-//! with replication for fault tolerance. The cluster specification makes the tree structure
-//! explicit with dispatch and maintenance attached inline.
+//! Sharded + Replicated KVS (shards × replicas)
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::dispatch::{RoundRobinRouter, ShardedRouter};
+use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::maintenance::BroadcastReplication;
+use kvs_zoo::after_storage::replication::BroadcastReplication;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::CausalString;
@@ -58,11 +46,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     );
 
-    // Wire KVS dataflow
+    // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
         wire_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
 
-    // Deploy: one cluster per layer (as designed)
+    // Deploy: one cluster per layer
     // - Shard cluster: 3 members
     // - Replica cluster: 3 members
     let nodes = flow
@@ -80,9 +68,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     deployment.deploy().await?;
     let (mut out, mut input) = nodes.connect_bincode(port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
     deployment.start().await?;
     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
@@ -120,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn shard_info(op: &KVSOperation<CausalString>, shard_count: usize) -> Option<String> {
     match op {
         KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
-            let shard_id = kvs_zoo::dispatch::ShardedRouter::calculate_shard_id(key, shard_count);
+            let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(key, shard_count);
             Some(format!("→ shard {} for '{}'", shard_id, key))
         }
     }

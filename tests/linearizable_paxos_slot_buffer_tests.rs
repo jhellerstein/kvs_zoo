@@ -2,12 +2,12 @@
 
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
-use kvs_zoo::dispatch::SlotOrderEnforcer;
-use kvs_zoo::dispatch::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
-use kvs_zoo::dispatch::ordering::paxos_core::{Acceptor, Proposer};
-use kvs_zoo::dispatch::routing::RoundRobinRouter;
+use kvs_zoo::before_storage::SlotOrderEnforcer;
+use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
+use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
+use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode, KVSSpec};
-use kvs_zoo::maintenance::{BroadcastReplication, LogBased};
+use kvs_zoo::after_storage::replication::{BroadcastReplication, LogBasedDelivery as LogBased};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
@@ -31,7 +31,7 @@ fn get_waits_for_prior_put_slot() {
 
     let kvs = LinearizableKVS::new(
         RoundRobinRouter::new(),
-        LogBased::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+    LogBased::new(BroadcastReplication::<LwwWrapper<String>>::new()),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 

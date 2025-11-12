@@ -7,7 +7,7 @@
 
 use futures::{SinkExt, StreamExt};
 
-use kvs_zoo::dispatch::{RoundRobinRouter, SingleNodeRouter};
+use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
@@ -112,7 +112,7 @@ async fn test_replicated_kvs_service() {
 
     // Create replicated KVS server with unified API
     type ReplicatedKVS =
-        KVSServer<CausalString, RoundRobinRouter, kvs_zoo::maintenance::NoReplication>;
+        KVSServer<CausalString, RoundRobinRouter, kvs_zoo::after_storage::NoReplication>;
     let (kvs_cluster, client_port) = ReplicatedKVS::deploy_and_run(&flow, &proxy, &client_external);
     // Deploy with 3 replicas
     let nodes = flow
@@ -192,7 +192,7 @@ async fn test_sharded_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded KVS server with unified API
-    use kvs_zoo::dispatch::{Pipeline, ShardedRouter};
+    use kvs_zoo::before_storage::{Pipeline, routing::ShardedRouter};
     type ShardedKVS = KVSServer<LwwWrapper<String>, Pipeline<ShardedRouter, SingleNodeRouter>, ()>;
 
     let dispatch = Pipeline::new(ShardedRouter::new(3), SingleNodeRouter::new());
@@ -226,7 +226,7 @@ async fn test_sharded_kvs_service() {
     // Let's verify which shards these keys map to
     println!("🔍 Shard mapping verification:");
     for key in &["shard_key_0", "shard_key_1", "nonexistent"] {
-        let shard = kvs_zoo::dispatch::ShardedRouter::calculate_shard_id(key, 3);
+        let shard = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(key, 3);
         println!("  {} -> shard {}", key, shard);
     }
 
@@ -329,15 +329,15 @@ async fn test_sharded_replicated_kvs_service() {
     let client_external = flow.external::<()>();
 
     // Create sharded + replicated KVS server with unified API
-    use kvs_zoo::dispatch::{Pipeline, ShardedRouter};
+    use kvs_zoo::before_storage::{Pipeline, routing::ShardedRouter};
     type ShardedReplicatedKVS = KVSServer<
         CausalString,
         Pipeline<ShardedRouter, RoundRobinRouter>,
-        kvs_zoo::maintenance::NoReplication,
+    kvs_zoo::after_storage::NoReplication,
     >;
 
     let dispatch = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
-    let maintenance = kvs_zoo::maintenance::NoReplication::new();
+    let maintenance = kvs_zoo::after_storage::NoReplication::new();
     let kvs_cluster = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
     let client_port = ShardedReplicatedKVS::run(
         &proxy,
