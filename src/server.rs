@@ -16,7 +16,7 @@ use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::pipelines::pipeline_single_layer_from_process;
+use crate::pipelines::{pipeline_single_layer_from_process, pipeline_two_layer_from_enveloped, pipeline_two_layer_from_process};
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -224,47 +224,13 @@ where
     LeafName: 'static,
 {
     let target_cluster = layers.get::<ClusterName>();
-
-    // before_storage: route operations via the cluster's routing/ordering
-    let routed_operations = kvs
-        .dispatch
-        .dispatch_from_process(operations, target_cluster);
-
-    // Split local and replicated paths at the cluster layer
-    let local_ops = routed_operations.clone();
-    let local_puts = routed_operations.filter_map(q!(|op| match op {
-        KVSOperation::Put(k, v) => Some((k, v)),
-        KVSOperation::Get(_) => None,
-    }));
-
-    // after_storage: replicate data in the target cluster
-    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
-
-    // before_storage at leaf: apply leaf-level routing within the same (parent) cluster
-    let leaf_local_ops =
-        kvs.child
-            .dispatch
-            .dispatch_from_cluster(local_ops, target_cluster, target_cluster);
-    let leaf_replicated_ops =
-        kvs.child
-            .dispatch
-            .dispatch_from_cluster(replicated_ops, target_cluster, target_cluster);
-
-    // Tag after leaf dispatch: local should respond, replicated should not
-    let local_tagged = leaf_local_ops.map(q!(|op| (true, op)));
-    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
-
-    // Merge and process at the leaf cluster
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
-        .assume_ordering(nondet!(/** sequential processing at leaf */));
-
-    // Process operations with selective responses
-    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
-
-    // Keep response stream cluster-located
-    responses.assume_ordering(nondet!(/** responses at leaf cluster */))
+    pipeline_two_layer_from_process(
+        target_cluster,
+        &kvs.dispatch,
+        &kvs.maintenance,
+        &kvs.child.dispatch,
+        operations,
+    )
 }
 
 /// Wire a two-layer KVS with enveloped operations (e.g., slotted from Paxos).
@@ -312,48 +278,13 @@ where
     LeafName: 'static,
 {
     let target_cluster = layers.get::<ClusterName>();
-
-    // Unwrap envelope for cluster routing (routers only see bare operations)
-    let bare_operations = enveloped_operations.clone().map(q!(|env| env.operation));
-
-    // before_storage: route via cluster component
-    let routed_operations = kvs
-        .dispatch
-        .dispatch_from_process(bare_operations, target_cluster);
-
-    // Split for replication (cluster layer still sees bare operations)
-    let local_ops = routed_operations.clone();
-    let local_puts = routed_operations.filter_map(q!(|op| match op {
-        KVSOperation::Put(k, v) => Some((k, v)),
-        KVSOperation::Get(_) => None,
-    }));
-
-    // after_storage: replicate at cluster layer
-    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
-
-    // TODO: Rewrap with preserved metadata for leaf dispatch
-    // For now, just apply leaf routing on bare operations
-    let leaf_local_ops =
-        kvs.child
-            .dispatch
-            .dispatch_from_cluster(local_ops, target_cluster, target_cluster);
-    let leaf_replicated_ops =
-        kvs.child
-            .dispatch
-            .dispatch_from_cluster(replicated_ops, target_cluster, target_cluster);
-
-    // Tag and process
-    let local_tagged = leaf_local_ops.map(q!(|op| (true, op)));
-    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
-
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
-        .assume_ordering(nondet!(/** sequential processing at leaf */));
-
-    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
-
-    responses.assume_ordering(nondet!(/** responses at leaf cluster */))
+    pipeline_two_layer_from_enveloped(
+        target_cluster,
+        &kvs.dispatch,
+        &kvs.maintenance,
+        &kvs.child.dispatch,
+        enveloped_operations,
+    )
 }
 
 // Note: Slotted-specific wiring was removed in favor of the generic pipeline

@@ -4,6 +4,8 @@ stageleft::stageleft_no_entry_crate!();
 pub mod before_storage;
 pub mod after_storage;
 pub mod kvs_core;
+// The kvs_layer module is implemented as a directory of submodules (mod.rs + files)
+// to keep the types/traits (spec, wire_down, wire_up) small and readable.
 pub mod kvs_layer;
 pub mod pipelines;
 pub mod protocol;
