@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 pub struct RoundRobinRouter;
 
 impl RoundRobinRouter {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl<V> OpDispatch<V> for RoundRobinRouter {
@@ -23,7 +25,10 @@ impl<V> OpDispatch<V> for RoundRobinRouter {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
             .demux_bincode(target_cluster)
     }
@@ -37,7 +42,10 @@ impl<V> OpDispatch<V> for RoundRobinRouter {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         slotted_operations
-            .map(q!(|slotted_op| (hydro_lang::location::MemberId::from_raw(0u32), slotted_op)))
+            .map(q!(|slotted_op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                slotted_op
+            )))
             .into_keyed()
             .demux_bincode(target_cluster)
             .assume_ordering(nondet!(/** routed slotted to single member */))
@@ -53,7 +61,10 @@ impl<V> OpDispatch<V> for RoundRobinRouter {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()

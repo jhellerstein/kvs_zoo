@@ -10,11 +10,17 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug)]
-pub struct ShardedRouter { shard_count: usize }
+pub struct ShardedRouter {
+    shard_count: usize,
+}
 
 impl ShardedRouter {
-    pub fn new(shard_count: usize) -> Self { Self { shard_count } }
-    pub fn shard_count(&self) -> usize { self.shard_count }
+    pub fn new(shard_count: usize) -> Self {
+        Self { shard_count }
+    }
+    pub fn shard_count(&self) -> usize {
+        self.shard_count
+    }
     pub fn calculate_shard_id(key: &str, shard_count: usize) -> u32 {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
@@ -29,19 +35,22 @@ impl ShardedRouter {
 }
 
 impl<V> OpDispatch<V> for ShardedRouter
-where V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
-    where V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let shard_count = self.shard_count;
         operations
             .map(q!(move |op| {
-                let shard_id = ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
+                let shard_id =
+                    ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }))
             .into_keyed()
@@ -54,12 +63,14 @@ where V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Defaul
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
-    where V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let shard_count = self.shard_count;
         operations
             .map(q!(move |op| {
-                let shard_id = ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
+                let shard_id =
+                    ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }))
             .into_keyed()

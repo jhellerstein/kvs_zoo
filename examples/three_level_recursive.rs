@@ -1,8 +1,8 @@
 //! Recursive 3-level KVS (region → datacenter → node)
 use futures::{SinkExt, StreamExt};
+use kvs_zoo::after_storage::{cleanup::TombstoneCleanup, replication::SimpleGossip};
 use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::after_storage::{cleanup::TombstoneCleanup, replication::SimpleGossip};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
@@ -47,7 +47,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             SimpleGossip::new(250usize), // intra-region gossip among datacenters
             KVSCluster::new(
                 SingleNodeRouter::new(),
-                TombstoneCleanup::new(kvs_zoo::after_storage::cleanup::TombstoneCleanupConfig::default()), // local cleanup config
+                TombstoneCleanup::new(
+                    kvs_zoo::after_storage::cleanup::TombstoneCleanupConfig::default(),
+                ), // local cleanup config
                 (),
             ),
         ),

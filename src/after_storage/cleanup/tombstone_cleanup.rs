@@ -18,14 +18,20 @@ pub struct TombstoneCleanupConfig {
 
 impl Default for TombstoneCleanupConfig {
     fn default() -> Self {
-        Self { cleanup_interval_ms: 60_000, tombstone_ttl_ms: 3_600_000 }
+        Self {
+            cleanup_interval_ms: 60_000,
+            tombstone_ttl_ms: 3_600_000,
+        }
     }
 }
 
 impl From<usize> for TombstoneCleanupConfig {
     /// Interpret usize as milliseconds for the cleanup interval; tombstone TTL stays default
     fn from(ms: usize) -> Self {
-        TombstoneCleanupConfig { cleanup_interval_ms: ms as u64, ..Default::default() }
+        TombstoneCleanupConfig {
+            cleanup_interval_ms: ms as u64,
+            ..Default::default()
+        }
     }
 }
 
@@ -42,7 +48,9 @@ impl TombstoneCleanup {
     where
         C: Into<TombstoneCleanupConfig>,
     {
-        Self { config: config.into() }
+        Self {
+            config: config.into(),
+        }
     }
 }
 
@@ -96,7 +104,10 @@ mod tests {
 
     #[test]
     fn test_custom_config() {
-        let config = TombstoneCleanupConfig { cleanup_interval_ms: 5_000, tombstone_ttl_ms: 10_000 };
+        let config = TombstoneCleanupConfig {
+            cleanup_interval_ms: 5_000,
+            tombstone_ttl_ms: 10_000,
+        };
         let cleanup = TombstoneCleanup::new(config);
         assert_eq!(cleanup.config.cleanup_interval_ms, 5_000);
         assert_eq!(cleanup.config.tombstone_ttl_ms, 10_000);

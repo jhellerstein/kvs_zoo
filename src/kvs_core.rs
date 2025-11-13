@@ -195,63 +195,6 @@ impl KVSCore {
             )
             .filter_map(q!(|opt| opt)) // Remove None responses
     }
-
-    /// Process operations while preserving an optional slot (sequence number) for PUT deltas.
-    ///
-    /// Input: (opt_slot, op) in total order. Output:
-    /// - client-visible responses (total order)
-    /// - applied PUT deltas annotated with the original optional slot
-    #[allow(clippy::type_complexity)]
-    pub fn process_with_slotted_deltas<'a, V, L>(
-        slotted_ops: Stream<(Option<usize>, KVSOperation<V>), L, Unbounded, TotalOrder>,
-    ) -> (
-        Stream<String, L, Unbounded, TotalOrder>,
-        Stream<(Option<usize>, (String, V)), L, Unbounded, TotalOrder>,
-    )
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let scanned = slotted_ops.scan(
-            q!(|| (std::collections::HashMap::new(), Vec::new())),
-            q!(|state_and_deltas, (opt_slot, op)| {
-                let (state, deltas) = state_and_deltas;
-                deltas.clear();
-                let response = match op {
-                    KVSOperation::Put(key, value) => {
-                        state
-                            .entry(key.clone())
-                            .and_modify(|existing| {
-                                lattices::Merge::merge(existing, value.clone());
-                            })
-                            .or_insert(value.clone());
-                        deltas.push((opt_slot, (key.clone(), value)));
-                        format!("PUT {} = OK", key)
-                    }
-                    KVSOperation::Get(key) => match state.get(&key) {
-                        Some(value) => format!("GET {} = {}", key, value),
-                        None => format!("GET {} = NOT FOUND", key),
-                    },
-                };
-                Some((response, deltas.clone()))
-            }),
-        );
-
-        let responses = scanned.clone().map(q!(|(resp, _d)| resp));
-        let puts = scanned.flat_map_ordered(q!(|(_resp, deltas)| deltas));
-        (responses, puts)
-    }
 }
 
 impl KVSCore {

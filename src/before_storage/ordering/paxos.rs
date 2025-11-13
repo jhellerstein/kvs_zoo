@@ -11,11 +11,24 @@ use crate::before_storage::ordering::sequence_payloads::{SequencedPayload, seque
 use crate::protocol::KVSOperation;
 
 #[derive(Clone)]
-pub struct PaxosDispatcher<V> { pub config: PaxosConfig, _phantom: PhantomData<V> }
+pub struct PaxosDispatcher<V> {
+    pub config: PaxosConfig,
+    _phantom: PhantomData<V>,
+}
 
 impl<V> PaxosDispatcher<V> {
-    pub fn new() -> Self { Self { config: PaxosConfig::default(), _phantom: PhantomData } }
-    pub fn with_config(config: PaxosConfig) -> Self { Self { config, _phantom: PhantomData } }
+    pub fn new() -> Self {
+        Self {
+            config: PaxosConfig::default(),
+            _phantom: PhantomData,
+        }
+    }
+    pub fn with_config(config: PaxosConfig) -> Self {
+        Self {
+            config,
+            _phantom: PhantomData,
+        }
+    }
 
     pub fn paxos_run<'a>(
         &self,
@@ -23,7 +36,8 @@ impl<V> PaxosDispatcher<V> {
         proposers: &Cluster<'a, Proposer>,
         acceptors: &Cluster<'a, Acceptor>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, Proposer>, Unbounded>
-    where V: PaxosPayload + Eq,
+    where
+        V: PaxosPayload + Eq,
     {
         let (checkpoint_complete, checkpoint) = acceptors.forward_ref::<Optional<usize, _, _>>();
         let checkpoint_opt: Optional<usize, _, _> = acceptors.singleton(q!(0)).into();
@@ -42,15 +56,19 @@ impl<V> PaxosDispatcher<V> {
             nondet!(/** commit nondeterminism */),
         );
 
-        let seq_payloads_at_proposers = ordered_slots
-            .map(q!(|(seq, payload)| { crate::before_storage::ordering::sequence_payloads::SequencedPayload { seq, payload } }));
+        let seq_payloads_at_proposers = ordered_slots.map(q!(|(seq, payload)| {
+            crate::before_storage::ordering::sequence_payloads::SequencedPayload { seq, payload }
+        }));
 
         let proposer_tick = proposers.tick();
-        let (sequenced_ops, next_slot_cycle) = sequence_payloads(&proposer_tick, seq_payloads_at_proposers);
+        let (sequenced_ops, next_slot_cycle) =
+            sequence_payloads(&proposer_tick, seq_payloads_at_proposers);
 
         next_slot_cycle.complete_next_tick(sequenced_ops.clone().persist().fold(
             q!(|| 0),
-            q!(|next_slot, payload: SequencedPayload<_>| { *next_slot = payload.seq + 1; }),
+            q!(|next_slot, payload: SequencedPayload<_>| {
+                *next_slot = payload.seq + 1;
+            }),
         ));
 
         sequenced_ops
@@ -59,17 +77,23 @@ impl<V> PaxosDispatcher<V> {
     }
 }
 
-impl<V> Default for PaxosDispatcher<V> { fn default() -> Self { Self::new() } }
+impl<V> Default for PaxosDispatcher<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<V> OpDispatch<V> for PaxosDispatcher<V>
-where V: PaxosPayload + Eq,
+where
+    V: PaxosPayload + Eq,
 {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
-    where V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .enumerate()
@@ -85,13 +109,15 @@ where V: PaxosPayload + Eq,
         _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
-    where V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations.assume_ordering(nondet!(/** passthrough cluster hop */))
     }
 }
 
-pub fn paxos_order<'a,
+pub fn paxos_order<
+    'a,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<V>,
@@ -102,7 +128,8 @@ pub fn paxos_order<'a,
     dispatcher.paxos_run(operations, proposers, acceptors)
 }
 
-pub fn paxos_order_to_proxy<'a,
+pub fn paxos_order_to_proxy<
+    'a,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<V>,
@@ -119,7 +146,8 @@ pub fn paxos_order_to_proxy<'a,
         .assume_ordering(nondet!(/** paxos ordered at proxy */))
 }
 
-pub fn paxos_order_slotted<'a,
+pub fn paxos_order_slotted<
+    'a,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<V>,

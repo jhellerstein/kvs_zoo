@@ -16,5 +16,5 @@ pub mod tagged;
 // Re-export core KVS types for convenience
 pub use envelope::{Envelope, SlottedOperation};
 pub use kvs_ops::{KVSOperation, KVSResponse};
-pub use routing::{RoutingKey, HasSequence};
+pub use routing::{HasSequence, RoutingKey};
 pub use tagged::TaggedOperation;

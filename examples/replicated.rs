@@ -1,9 +1,9 @@
 //! Replicated KVS (RoundRobin + Gossip)
 
 use futures::{SinkExt, StreamExt};
+use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
 

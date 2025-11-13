@@ -1,7 +1,6 @@
 //! After-storage stages (replication, cleanup, responders)
 
 use crate::kvs_core::KVSNode;
-use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -48,12 +47,53 @@ impl<T> MaintenanceComposeExt for T {}
 /// background maintenance.
 pub type ZeroMaintenance = ();
 
+/// Unified replication update type
+///
+/// Replication strategies can accept and emit both unslotted (unordered)
+/// and slotted (slot-ordered) updates through a single API via this enum.
+#[derive(Clone, Debug)]
+pub enum ReplicationUpdate<V> {
+	Unslotted((String, V)),
+	Slotted((usize, String, V)),
+}
+
 /// Core trait for replication strategies
 ///
 /// Replication strategies handle background data synchronization between nodes,
 /// operating independently of operation processing. They ensure data consistency
 /// and availability across the distributed system.
 pub trait ReplicationStrategy<V> {
+	/// Unified replication entry: replicate updates (slotted or unslotted)
+	///
+	/// Implementers may override this to handle both update kinds in one place.
+	/// Default dispatch adapters call `replicate_data` and `replicate_slotted_data`
+	/// as appropriate and merge the results.
+	fn replicate_updates<'a>(
+		&self,
+		cluster: &Cluster<'a, KVSNode>,
+		updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
+	) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>
+	where
+		V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+	{
+		let unslotted_in = updates
+			.clone()
+			.filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }));
+		let slotted_in = updates
+			.filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }));
+
+		let unslotted_out = self
+			.replicate_data(cluster, unslotted_in)
+			.map(q!(|t| ReplicationUpdate::Unslotted(t)));
+		let slotted_out = self
+			.replicate_slotted_data(cluster, slotted_in)
+			.map(q!(|t| ReplicationUpdate::Slotted(t)));
+
+		unslotted_out
+			.interleave(slotted_out)
+			.assume_ordering(nondet!(/** merged replication updates */))
+	}
+
 	/// Replicate data across the cluster (unordered)
 	///
 	/// Takes a stream of local data updates and returns a stream of data
@@ -65,7 +105,13 @@ pub trait ReplicationStrategy<V> {
 		local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
 	) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
 	where
-		V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
+		V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+	{
+		let updates = local_data.map(q!(|t| ReplicationUpdate::Unslotted(t)));
+		self
+			.replicate_updates(cluster, updates)
+			.filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }))
+	}
 
 	/// Replicate slotted data across the cluster (ordered by slot)
 	///
@@ -74,7 +120,7 @@ pub trait ReplicationStrategy<V> {
 	/// This is used by consensus protocols like Paxos to ensure operations
 	/// are applied in the same order across all replicas.
 	///
-	/// Default implementation simply strips slots and uses unordered replication.
+	/// Default implementation adapts to the unified `replicate_updates` API.
 	fn replicate_slotted_data<'a>(
 		&self,
 		cluster: &Cluster<'a, KVSNode>,
@@ -83,39 +129,12 @@ pub trait ReplicationStrategy<V> {
 	where
 		V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 	{
-		// Default: strip slots, replicate unordered (loses ordering guarantees)
-		// Note: This doesn't preserve slots properly - use LogBased wrapper for proper ordering
-		let unslotted = local_slotted_data.map(q!(|(_slot, key, value)| (key, value)));
-		let replicated = self.replicate_data(cluster, unslotted);
-		// Re-add dummy slot 0 (ordering is lost)
-		replicated.map(q!(|(key, value)| (0usize, key, value)))
+		let updates = local_slotted_data.map(q!(|(s, k, v)| ReplicationUpdate::Slotted((s, k, v))));
+		self
+			.replicate_updates(cluster, updates)
+			.filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }))
 	}
 
-	/// Forward the routed slotted operation stream to a replicated "forwarded" slotted op stream.
-	///
-	/// This is the canonical API for server wiring: pass the routed slotted ops,
-	/// get back the forwarded slotted ops. Implementation details (e.g., filtering
-	/// only PUTs) are encapsulated here.
-	fn forward_from_routed_slotted<'a>(
-		&self,
-		cluster: &Cluster<'a, KVSNode>,
-		routed_slotted_ops: Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>,
-	) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
-	where
-		V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-	{
-		// Extract only PUTs with their slots for replication
-		let local_slotted_puts = routed_slotted_ops.filter_map(q!(|(slot, op)| match op {
-			KVSOperation::Put(k, v) => Some((slot, k, v)),
-			KVSOperation::Get(_) => None,
-		}));
-
-		// Use the slotted-data replication path
-		let replicated_slotted_puts = self.replicate_slotted_data(cluster, local_slotted_puts);
-
-		// Rewrap as slotted operations (PUTs only)
-		replicated_slotted_puts.map(q!(|(slot, k, v)| (slot, KVSOperation::Put(k, v))))
-	}
 }
 
 /// Upward pass (After storage) maintenance hook for responses

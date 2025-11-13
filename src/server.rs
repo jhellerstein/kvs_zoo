@@ -9,14 +9,14 @@
 //! All higher-level construction flows through `KVSCluster::build_server` and
 //! typical users never touch this module directly.
 
+use crate::after_storage::ReplicationStrategy;
 use crate::before_storage::{NO_LEAF, OpDispatch};
 use crate::kvs_layer::{AfterWire, KVSWire};
-use crate::after_storage::ReplicationStrategy;
+use crate::layer_flow::layer_flow;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::layer_flow::layer_flow;
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -38,8 +38,11 @@ where
 /// Readability alias for the most basic server: single node, no after_storage.
 ///
 /// Equivalent to `KVSServer<V, SingleNodeRouter, ZeroMaintenance>`.
-pub type LocalKVSServer<V> =
-    KVSServer<V, crate::before_storage::routing::SingleNodeRouter, crate::after_storage::ZeroMaintenance>;
+pub type LocalKVSServer<V> = KVSServer<
+    V,
+    crate::before_storage::routing::SingleNodeRouter,
+    crate::after_storage::ZeroMaintenance,
+>;
 
 // Legacy deploy helpers removed: construction flows through KVSBuilder produced by cluster spec.
 impl<V, D, M> KVSServer<V, D, M>
@@ -122,13 +125,21 @@ where
             .entries()
             .map(q!(|(_client_id, op)| op))
             .assume_ordering(nondet!(/** client op stream */));
-    let responses = layer_flow(target_cluster, &routing, &replication, &NO_LEAF, initial_ops);
+        let responses = layer_flow(
+            target_cluster,
+            &routing,
+            &replication,
+            &NO_LEAF,
+            initial_ops,
+        );
 
         // Send responses back to clients (optionally stamp member id)
         let proxy_responses = responses.send_bincode(proxy);
 
         // Optional stamping of member id in responses for diagnostics
-        let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+        let stamp_member = std::env::var("KVS_STAMP_MEMBER")
+            .map(|v| v != "0")
+            .unwrap_or(false);
         let to_complete = if stamp_member {
             proxy_responses
                 .entries()
@@ -185,7 +196,13 @@ where
     Name: 'static,
 {
     let target_cluster = layers.get::<Name>();
-    layer_flow(target_cluster, &kvs.dispatch, &kvs.maintenance, &NO_LEAF, operations)
+    layer_flow(
+        target_cluster,
+        &kvs.dispatch,
+        &kvs.maintenance,
+        &NO_LEAF,
+        operations,
+    )
 }
 
 /// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.
@@ -228,11 +245,16 @@ where
     In: Into<KVSOperation<V>> + 'static,
 {
     let target_cluster = layers.get::<ClusterName>();
-    layer_flow(target_cluster, &kvs.dispatch, &kvs.maintenance, &kvs.child.dispatch, inputs)
+    layer_flow(
+        target_cluster,
+        &kvs.dispatch,
+        &kvs.maintenance,
+        &kvs.child.dispatch,
+        inputs,
+    )
 }
 
-// Note: Slotted-specific wiring was removed in favor of the generic pipeline
-// (KVSWire down + AfterWire up). For slotted metadata, wrap ops in Envelope<slot, op>
+// Note: For slotted metadata, wrap ops in Envelope<slot, op>
 // and use wire_two_layer_from_inputs, letting leaf components (e.g., SlotOrderEnforcer)
 // consume the slot metadata directly.
 
@@ -289,7 +311,9 @@ where
 
     // Send responses back to proxy (optionally stamp member id)
     let proxy_responses = final_responses.send_bincode(proxy);
-    let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+    let stamp_member = std::env::var("KVS_STAMP_MEMBER")
+        .map(|v| v != "0")
+        .unwrap_or(false);
     let to_complete = if stamp_member {
         proxy_responses
             .entries()
@@ -311,10 +335,6 @@ where
     (layers, bidi_port)
 }
 
-// Paxos-specific deploy helper removed; cluster specs configure Paxos via dispatcher value.
-
-// Nothing else lives here: construction happens via cluster specs and runtime module.
-
 // =============================================================================
 // Convenient Type Aliases for Common Configurations
 // =============================================================================
@@ -322,11 +342,13 @@ where
 /// Type aliases for common server configurations
 pub mod common {
     use super::*;
-    use crate::before_storage::ordering::PaxosDispatcher;
-    use crate::before_storage::Pipeline;
-    use crate::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
-    use crate::after_storage::replication::{BroadcastReplication, SequencedReplication, SimpleGossip};
     use crate::after_storage::NoReplication;
+    use crate::after_storage::replication::{
+        BroadcastReplication, SequencedReplication, SimpleGossip,
+    };
+    use crate::before_storage::Pipeline;
+    use crate::before_storage::ordering::PaxosDispatcher;
+    use crate::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
     use crate::values::{CausalString, LwwWrapper};
 
     /// Local single-node server with LWW semantics

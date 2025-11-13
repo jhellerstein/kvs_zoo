@@ -16,7 +16,11 @@ pub trait KVSWire<V> {
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        operations: Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<
+            crate::protocol::KVSOperation<V>,
+            Cluster<'a, crate::kvs_core::KVSNode>,
+            Unbounded,
+        >,
     ) -> Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
@@ -38,7 +42,11 @@ impl<V> KVSWire<V> for () {
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
         _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        operations: Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<
+            crate::protocol::KVSOperation<V>,
+            Cluster<'a, crate::kvs_core::KVSNode>,
+            Unbounded,
+        >,
     ) -> Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
@@ -71,7 +79,11 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        operations: Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<
+            crate::protocol::KVSOperation<V>,
+            Cluster<'a, crate::kvs_core::KVSNode>,
+            Unbounded,
+        >,
     ) -> Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
@@ -106,7 +118,11 @@ where
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        operations: Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<
+            crate::protocol::KVSOperation<V>,
+            Cluster<'a, crate::kvs_core::KVSNode>,
+            Unbounded,
+        >,
     ) -> Stream<crate::protocol::KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,

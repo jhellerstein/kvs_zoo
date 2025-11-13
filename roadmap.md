@@ -1,5 +1,5 @@
-Opportunistic slot-aware replication:
-Consider extending after-storage path (e.g., a generic variant of LogBasedDelivery) to accept any message implementing a HasSequence-like trait and sequence when available, bypassing otherwise. This is a slightly larger refactor since current slotted APIs are (usize, String, V)-specific.
+Sequenced, slot-aware replication (DONE):
+We unified the after-storage replication path with a single API that accepts mixed updates via `ReplicationUpdate<V>` and a `replicate_updates` entrypoint. Ordering is handled by a single wrapper `SequencedReplication<R>` that gap-fills and enforces slot order when available and delegates unchanged otherwise. This replaces prior mentions of “opportunistic” and removes the `LogBasedDelivery` variant.
 Optional: Audit other routers (RoundRobin, SingleNode) for similar generic affordances. They don’t inspect the op today, so no change is necessary functionally.
 
 

@@ -41,10 +41,14 @@ impl<Meta, Op> Envelope<Meta, Op> {
     }
 
     /// Get a reference to the wrapped operation
-    pub fn operation(&self) -> &Op { &self.operation }
+    pub fn operation(&self) -> &Op {
+        &self.operation
+    }
 
     /// Get a reference to the metadata
-    pub fn metadata(&self) -> &Meta { &self.metadata }
+    pub fn metadata(&self) -> &Meta {
+        &self.metadata
+    }
 
     /// Destructure into metadata and operation
     pub fn into_parts(self) -> (Meta, Op) {
@@ -78,8 +82,12 @@ impl<Meta, Op> Envelope<Meta, Op> {
 pub type SlottedOperation<V> = Envelope<usize, crate::protocol::KVSOperation<V>>;
 
 // Convenience conversion to support generic pipelines over enveloped ops
-impl<Meta, V> From<Envelope<Meta, crate::protocol::KVSOperation<V>>> for crate::protocol::KVSOperation<V> {
-    fn from(env: Envelope<Meta, crate::protocol::KVSOperation<V>>) -> Self { env.operation }
+impl<Meta, V> From<Envelope<Meta, crate::protocol::KVSOperation<V>>>
+    for crate::protocol::KVSOperation<V>
+{
+    fn from(env: Envelope<Meta, crate::protocol::KVSOperation<V>>) -> Self {
+        env.operation
+    }
 }
 
 #[cfg(test)]
@@ -96,10 +104,10 @@ mod tests {
 
     #[test]
     fn envelope_destructure() {
-    let env = Envelope::new(10usize, KVSOperation::Put::<String>("k".into(), "v".into()));
+        let env = Envelope::new(10usize, KVSOperation::Put::<String>("k".into(), "v".into()));
         let (slot, op) = env.into_parts();
         assert_eq!(slot, 10);
-    assert_eq!(op, KVSOperation::Put::<String>("k".into(), "v".into()));
+        assert_eq!(op, KVSOperation::Put::<String>("k".into(), "v".into()));
     }
 
     #[test]

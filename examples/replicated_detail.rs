@@ -27,18 +27,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let replicas = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
 
     // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
-    let (port, operations_stream, _membership, complete_sink) =
-        proxy.bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(&client_external);
+    let (port, operations_stream, _membership, complete_sink) = proxy
+        .bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(
+            &client_external,
+        );
 
     let initial_ops = operations_stream
         .entries()
         .map(q!(|(_client_id, op)| op))
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-            nondet!(/** client op stream */),
-        );
+        nondet!(/** client op stream */),
+    );
 
     let routed_ops = initial_ops
-        .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+        .map(q!(|op| (
+            hydro_lang::location::MemberId::from_raw(0u32),
+            op
+        )))
         .into_keyed()
         .demux_bincode(&replicas)
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
@@ -59,7 +64,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let gossip_sent = local_puts
         .clone()
-        .cross_product(cluster_members.clone().assume_retries(nondet!(/** member list OK */)))
+        .cross_product(
+            cluster_members
+                .clone()
+                .assume_retries(nondet!(/** member list OK */)),
+        )
         .map(q!(|(tuple, member_id)| (member_id, tuple)))
         .into_keyed()
         .demux_bincode(&replicas);
@@ -78,8 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let all_tagged = local_tagged
         .interleave(replicated_tagged)
         .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-            nondet!(/** sequential processing per node */),
-        );
+        nondet!(/** sequential processing per node */),
+    );
 
     let responses = KVSCore::process_with_responses(all_tagged);
 
@@ -93,7 +102,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Deploy: 3 replicas for the cluster
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&replicas, vec![localhost.clone(), localhost.clone(), localhost.clone()])
+        .with_cluster(
+            &replicas,
+            vec![localhost.clone(), localhost.clone(), localhost.clone()],
+        )
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 

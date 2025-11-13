@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Default)]
 pub struct SingleNodeRouter;
 
-impl SingleNodeRouter { pub fn new() -> Self { Self } }
+impl SingleNodeRouter {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl<V> OpDispatch<V> for SingleNodeRouter {
     fn dispatch_from_process<'a>(
@@ -21,7 +25,10 @@ impl<V> OpDispatch<V> for SingleNodeRouter {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
             .demux_bincode(target_cluster)
     }
@@ -36,7 +43,10 @@ impl<V> OpDispatch<V> for SingleNodeRouter {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (hydro_lang::location::MemberId::from_raw(0u32), op)))
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()

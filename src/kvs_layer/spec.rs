@@ -1,7 +1,7 @@
 use hydro_lang::prelude::*;
 
-use crate::before_storage::OpDispatch;
 use crate::after_storage::ReplicationStrategy;
+use crate::before_storage::OpDispatch;
 
 /// Trait for KVS specifications that can create and register clusters.
 pub trait KVSSpec<V> {

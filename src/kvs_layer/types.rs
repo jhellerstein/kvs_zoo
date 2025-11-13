@@ -20,12 +20,19 @@ pub struct KVSCluster<Name, D, M, Child> {
 
 impl<Name, D, M, Child> KVSCluster<Name, D, M, Child> {
     pub fn new(dispatch: D, maintenance: M, child: Child) -> Self {
-        Self { _name: PhantomData, dispatch, maintenance, child }
+        Self {
+            _name: PhantomData,
+            dispatch,
+            maintenance,
+            child,
+        }
     }
 }
 
 impl<Name, D: Default, M: Default, Child: Default> Default for KVSCluster<Name, D, M, Child> {
-    fn default() -> Self { Self::new(D::default(), M::default(), Child::default()) }
+    fn default() -> Self {
+        Self::new(D::default(), M::default(), Child::default())
+    }
 }
 
 /// Collection of named cluster handles created during KVS wiring.
@@ -36,7 +43,11 @@ pub struct KVSClusters<'a> {
 }
 
 impl<'a> KVSClusters<'a> {
-    pub fn new() -> Self { Self { clusters: HashMap::new() } }
+    pub fn new() -> Self {
+        Self {
+            clusters: HashMap::new(),
+        }
+    }
 
     /// Insert a cluster handle for a named layer.
     pub fn insert<Name: 'static>(&mut self, cluster: Cluster<'a, crate::kvs_core::KVSNode>) {
@@ -61,7 +72,11 @@ impl<'a> KVSClusters<'a> {
     }
 }
 
-impl<'a> Default for KVSClusters<'a> { fn default() -> Self { Self::new() } }
+impl<'a> Default for KVSClusters<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Leaf-level (per-member) layer placeholder.
 #[derive(Clone)]
@@ -72,9 +87,17 @@ pub struct KVSNode<Name, D, M> {
 }
 
 impl<Name, D, M> KVSNode<Name, D, M> {
-    pub fn new(dispatch: D, maintenance: M) -> Self { Self { _name: PhantomData, dispatch, maintenance } }
+    pub fn new(dispatch: D, maintenance: M) -> Self {
+        Self {
+            _name: PhantomData,
+            dispatch,
+            maintenance,
+        }
+    }
 }
 
 impl<Name, D: Default, M: Default> Default for KVSNode<Name, D, M> {
-    fn default() -> Self { Self::new(D::default(), M::default()) }
+    fn default() -> Self {
+        Self::new(D::default(), M::default())
+    }
 }

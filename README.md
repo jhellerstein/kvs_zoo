@@ -84,16 +84,16 @@ Combines sharding and replication for both scalability and fault tolerance.
 
 ### 5. **Linearizable KVS** (`examples/linearizable.rs`)
 
-Strong consistency via Paxos consensus with write-ahead logging.
+Strong consistency via Paxos consensus with sequenced replication.
 
-- **Server**: `LinearizableKVSServer<LwwWrapper<String>, LogBased<BroadcastReplication>>`
+- **Server**: `LinearizableKVSServer<LwwWrapper<String>, SequencedReplication<BroadcastReplication>>`
 - **Dispatch**: `PaxosDispatcher` (total order before execution)
-- **Maintenance**: `LogBased<BroadcastReplication>` (replicated write-ahead log)
-- **Nodes**: 3 Paxos acceptors + 3 log replicas + 3 KVS replicas = 9 total
-- **Concepts**: Consensus, linearizability, write-ahead logging
+- **Maintenance**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery at replicas)
+- **Nodes**: 3 Paxos proposers + 3 Paxos acceptors + 3 KVS replicas = 9 total
+- **Concepts**: Consensus, linearizability, slot-preserving replication
 - **Features**:
-  - Paxos ensures total order of all operations
-  - Replicated log for durability
+  - Paxos imposes a global slot order on operations
+  - Replication preserves slots and enforces in-order application per replica
   - Strong consistency guarantees
 
 ## 🧪 Core Components
@@ -124,13 +124,16 @@ Implementations include:
 - **`CausalWrapper<T>`**: Causal consistency using `DomPair<VCWrapper, SetUnionHashSet<T>>`
 - **`VCWrapper`**: Vector clock primitive for causality tracking
 
-### Maintenance Strategies (`src/maintain/`)
+### Maintenance Strategies (`src/after_storage/`)
 
 - **`NoReplication`**: No background synchronization
 - **`EpidemicGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
 - **`BroadcastReplication<V>`**: Eager broadcast of all updates
-- **`LogBased<R>`**: Write-ahead log wrapper over another replication strategy
+- **`SequencedReplication<R>`**: Slot-ordered delivery wrapper over another replication strategy (gap-filling based on sequence/slot)
 - **`TombstoneCleanup`**: Elimination of globally-known tombstones.
+
+Notes:
+- Replication strategies implement a unified `replicate_updates` API over `ReplicationUpdate<V>` so they can handle both slotted and unslotted updates without duplication.
 
 ### Dispatch Strategies (`src/dispatch/`)
 

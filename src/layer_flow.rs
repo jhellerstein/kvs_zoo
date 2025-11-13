@@ -10,8 +10,8 @@
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::before_storage::OpDispatch;
 use crate::after_storage::ReplicationStrategy;
+use crate::before_storage::OpDispatch;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 

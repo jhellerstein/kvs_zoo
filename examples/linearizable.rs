@@ -3,13 +3,15 @@
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*; // macros q!, nondet!, stream/cluster traits
 // Paxos ordering and roles
-use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
-use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
-use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
-use kvs_zoo::before_storage::routing::RoundRobinRouter;
-use kvs_zoo::kvs_layer::{KVSSpec, KVSCluster};
-use kvs_zoo::after_storage::replication::{SequencedReplication as Sequenced, BroadcastReplication};
+use kvs_zoo::after_storage::replication::{
+    BroadcastReplication, SequencedReplication as Sequenced,
+};
 use kvs_zoo::after_storage::responders::Responder;
+use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
+use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
+use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
+use kvs_zoo::before_storage::routing::RoundRobinRouter;
+use kvs_zoo::kvs_layer::{KVSCluster, KVSSpec};
 use kvs_zoo::protocol::{Envelope, KVSOperation};
 use kvs_zoo::server::wire_two_layer_from_inputs;
 use kvs_zoo::values::LwwWrapper;
@@ -44,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define KVS architecture: cluster replication handles slotted log-based delivery.
     let kvs_spec = LinearizableKVS::new(
         RoundRobinRouter::new(),
-    Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+        Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::new()),
         kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
             SlotOrderEnforcer::new(),
             Responder::new(),
@@ -87,11 +89,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send responses back to proxy and complete the bidi connection (optional member id stamping)
     let proxy_responses = responses.send_bincode(&proxy);
-    let stamp_member = std::env::var("KVS_STAMP_MEMBER").map(|v| v != "0").unwrap_or(false);
+    let stamp_member = std::env::var("KVS_STAMP_MEMBER")
+        .map(|v| v != "0")
+        .unwrap_or(false);
     let to_complete = if stamp_member {
         proxy_responses
             .entries()
-            .map(q!(|(member_id, response)| (0u64, format!("[{}] {}", member_id, response))))
+            .map(q!(|(member_id, response)| (
+                0u64,
+                format!("[{}] {}", member_id, response)
+            )))
             .into_keyed()
     } else {
         proxy_responses

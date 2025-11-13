@@ -34,14 +34,20 @@ impl<V> RoutingKey for KVSOperation<V> {
 
 impl<V> HasSequence for KVSOperation<V> {
     type Seq = usize;
-    fn sequence(&self) -> Option<Self::Seq> { None }
+    fn sequence(&self) -> Option<Self::Seq> {
+        None
+    }
 }
 
 impl<Meta, V> RoutingKey for Envelope<Meta, KVSOperation<V>> {
-    fn routing_key(&self) -> &[u8] { self.operation.routing_key() }
+    fn routing_key(&self) -> &[u8] {
+        self.operation.routing_key()
+    }
 }
 
 impl<V> HasSequence for Envelope<usize, KVSOperation<V>> {
     type Seq = usize;
-    fn sequence(&self) -> Option<Self::Seq> { Some(self.metadata) }
+    fn sequence(&self) -> Option<Self::Seq> {
+        Some(self.metadata)
+    }
 }

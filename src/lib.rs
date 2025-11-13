@@ -1,8 +1,8 @@
 stageleft::stageleft_no_entry_crate!();
 
 // Legacy dispatch module has been migrated to `before_storage` and removed from the public API.
-pub mod before_storage;
 pub mod after_storage;
+pub mod before_storage;
 pub mod kvs_core;
 // The kvs_layer module is implemented as a directory of submodules (mod.rs + files)
 // to keep the types/traits (spec, wire_down, wire_up) small and readable.

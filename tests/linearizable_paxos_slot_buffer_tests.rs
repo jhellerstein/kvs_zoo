@@ -2,12 +2,14 @@
 
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use kvs_zoo::after_storage::replication::{
+    BroadcastReplication, SequencedReplication as Sequenced,
+};
 use kvs_zoo::before_storage::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
 use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode, KVSSpec};
-use kvs_zoo::after_storage::replication::{SequencedReplication as Sequenced, BroadcastReplication};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
@@ -63,7 +65,8 @@ fn get_waits_for_prior_put_slot() {
 
     // Use two-layer slotted wiring: preserves slots through cluster dispatch/replication to leaf SlotOrderEnforcer
     // Wrap slots into envelopes to preserve metadata through wiring
-    let enveloped = slotted_ops_process.map(q!(|(slot, op)| kvs_zoo::protocol::Envelope::new(slot, op)));
+    let enveloped =
+        slotted_ops_process.map(q!(|(slot, op)| kvs_zoo::protocol::Envelope::new(slot, op)));
     let responses = kvs_zoo::server::wire_two_layer_from_inputs(&proxy, &layers, &kvs, enveloped);
 
     let proxy_responses = responses.send_bincode(&proxy);

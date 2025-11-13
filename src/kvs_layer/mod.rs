@@ -11,15 +11,15 @@
 //! before_storage (routing/ordering) composes with after_storage (replication/responders).
 //! See `pipelines/` and `examples/*_detail.rs` for end-to-end wiring patterns.
 
+pub mod spec;
 pub mod types;
 pub mod wire_down;
 pub mod wire_up;
-pub mod spec;
 
+pub use spec::KVSSpec;
 pub use types::{KVSCluster, KVSClusters, KVSNode};
 pub use wire_down::KVSWire;
 pub use wire_up::AfterWire;
-pub use spec::KVSSpec;
 
 #[cfg(test)]
 mod tests {

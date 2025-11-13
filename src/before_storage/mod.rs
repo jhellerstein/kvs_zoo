@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
-pub mod routing;
 pub mod ordering;
+pub mod routing;
 
 /* ------------------------------------------------------------------------- */
 /* Dispatch Core (moved from crate::dispatch)                                */

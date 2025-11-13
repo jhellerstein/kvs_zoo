@@ -1,8 +1,9 @@
-//! Simple Gossip Replication Strategy (after-storage, native)
+//! Simple Gossip Replication Strategy (after-storage, unified)
 //!
-//! Native after_storage implementation ported from legacy maintenance::cluster::gossip.
+//! Implements the unified `replicate_updates` API, splitting unslotted and slotted
+//! updates internally to avoid code duplication.
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy, ReplicationUpdate};
 use crate::kvs_core::KVSNode;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::location::MemberId;
@@ -59,7 +60,10 @@ impl SimpleGossipConfig {
 impl From<usize> for SimpleGossipConfig {
     /// Interpret usize as milliseconds for the gossip interval; other fields defaulted
     fn from(ms: usize) -> Self {
-        SimpleGossipConfig { gossip_interval: std::time::Duration::from_millis(ms as u64), ..Default::default() }
+        SimpleGossipConfig {
+            gossip_interval: std::time::Duration::from_millis(ms as u64),
+            ..Default::default()
+        }
     }
 }
 
@@ -87,7 +91,10 @@ impl<V> SimpleGossip<V> {
     where
         C: Into<SimpleGossipConfig>,
     {
-        Self { config: config.into(), _phantom: std::marker::PhantomData }
+        Self {
+            config: config.into(),
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     /// Get cluster member IDs for gossip targets
@@ -116,35 +123,49 @@ where
         + Merge<V>
         + std::hash::Hash,
 {
-    fn replicate_data<'a>(
+    fn replicate_updates<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Use simplified gossip - immediate forwarding
-        self.handle_gossip_simple(cluster, local_data)
-    }
-
-    fn replicate_slotted_data<'a>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Forward slotted tuples to all peers preserving the slot
+        updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
         let cluster_members = Self::get_cluster_members(cluster)
             .assume_retries(nondet!(/** member list OK */));
 
-        let sent = local_slotted_data
+        let unslotted_in = updates
+            .clone()
+            .filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }));
+        let slotted_in = updates
+            .filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }));
+
+        // Unslotted: reuse simple immediate gossip
+        let unslotted_out = self
+            .handle_gossip_simple(cluster, unslotted_in)
+            .map(q!(|t| ReplicationUpdate::Unslotted(t)));
+
+        // Slotted: forward preserving slot to all peers
+        let slotted_out = slotted_in
             .clone()
             .cross_product(cluster_members)
-            .map(q!(|((slot, tuple_k, tuple_v), member_id)| (member_id, (slot, tuple_k, tuple_v))))
+            .map(q!(|(tuple, member_id)| (member_id, tuple)))
             .into_keyed()
-            .demux_bincode(cluster);
-
-        sent
+            .demux_bincode(cluster)
             .values()
-            .assume_ordering(nondet!(/** gossip messages unordered */))
-            .assume_retries(nondet!(/** gossip retries OK */))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
+                nondet!(/** gossip messages unordered */),
+            )
+            .assume_retries::<hydro_lang::live_collections::stream::AtLeastOnce>(
+                nondet!(/** gossip retries OK */),
+            )
+            .map(q!(|t| ReplicationUpdate::Slotted(t)));
+
+        unslotted_out
+            .interleave(slotted_out)
+            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+                nondet!(/** merged replication updates (total order for consumers) */),
+            )
+            .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
+                nondet!(/** consumers expect exactly-once semantics */),
+            )
     }
 }
 

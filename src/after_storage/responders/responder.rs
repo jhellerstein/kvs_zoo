@@ -32,7 +32,11 @@ impl LeafAfterHook for Responder {
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         tagged_responses
-            .filter_map(q!(|(is_replica, resp)| if !is_replica { Some(resp) } else { None }))
+            .filter_map(q!(|(is_replica, resp)| if !is_replica {
+                Some(resp)
+            } else {
+                None
+            }))
             .assume_ordering(nondet!(/** local responses only for originals */))
     }
 }

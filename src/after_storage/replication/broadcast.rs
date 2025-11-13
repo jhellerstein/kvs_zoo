@@ -1,8 +1,9 @@
-//! Broadcast Replication Strategy (after-storage, native)
+//! Broadcast Replication Strategy (after-storage, unified)
 //!
-//! Native after_storage implementation ported from legacy maintenance::cluster::broadcast.
+//! Implements the unified `replicate_updates` API, splitting unslotted and
+//! slotted updates internally to avoid code duplication.
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
+use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy, ReplicationUpdate};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -82,7 +83,10 @@ impl<V> BroadcastReplication<V> {
 
     /// Create a new broadcast replication strategy with custom configuration
     pub fn with_config(config: BroadcastReplicationConfig) -> Self {
-        Self { config, _phantom: std::marker::PhantomData }
+        Self {
+            config,
+            _phantom: std::marker::PhantomData,
+        }
     }
 }
 
@@ -100,28 +104,40 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_data<'a>(
+    fn replicate_updates<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
-        if self.config.enable_batching {
-            self.handle_replication_periodic(cluster, local_data)
-        } else {
-            self.handle_replication_immediate(cluster, local_data)
-        }
-    }
+        updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
+        let unslotted_in = updates
+            .clone()
+            .filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }));
+        let slotted_in = updates
+            .filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }));
 
-    fn replicate_slotted_data<'a>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Preserve slots during dissemination using broadcast
-        local_slotted_data
+        let unslotted_out_raw = if self.config.enable_batching {
+            self.handle_replication_periodic(cluster, unslotted_in)
+        } else {
+            self.handle_replication_immediate(cluster, unslotted_in)
+        };
+        let unslotted_out = unslotted_out_raw.map(q!(|t| ReplicationUpdate::Unslotted(t)));
+
+        let slotted_out = slotted_in
             .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
             .values()
-            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
+                nondet!(/** broadcast messages unordered */),
+            )
+            .map(q!(|t| ReplicationUpdate::Slotted(t)));
+
+        unslotted_out
+            .interleave(slotted_out)
+            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+                nondet!(/** merged replication updates (total order for consumers) */),
+            )
+            .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
+                nondet!(/** consumers expect exactly-once semantics */),
+            )
     }
 }
 
@@ -235,7 +251,8 @@ mod tests {
             crate::values::CausalString,
         >::new());
         _accepts_replication_strategy::<crate::values::CausalString>(
-            crate::after_storage::replication::SimpleGossip::<crate::values::CausalString>::default(),
+            crate::after_storage::replication::SimpleGossip::<crate::values::CausalString>::default(
+            ),
         );
     }
 }

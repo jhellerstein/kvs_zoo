@@ -333,7 +333,7 @@ async fn test_sharded_replicated_kvs_service() {
     type ShardedReplicatedKVS = KVSServer<
         CausalString,
         Pipeline<ShardedRouter, RoundRobinRouter>,
-    kvs_zoo::after_storage::NoReplication,
+        kvs_zoo::after_storage::NoReplication,
     >;
 
     let dispatch = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
