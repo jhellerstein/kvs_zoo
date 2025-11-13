@@ -40,8 +40,7 @@ If you don’t want to wire Hydro by hand, use the pipelines:
 - `src/pipelines/single_layer.rs`
     - `pipeline_single_layer_from_process` — route → replicate → process
 - `src/pipelines/two_layer.rs`
-    - `pipeline_two_layer_from_process` — parent route/replicate → leaf route → process
-    - `pipeline_two_layer_from_enveloped` — variant for pre-enveloped operations
+    - `pipeline_two_layer` — parent route/replicate → leaf route → process (accepts either bare operations or envelopes via `Into<KVSOperation<_>>`)
 
 The examples below use both the simple server helpers and the explicit “detail” variants to show the minimal vs explicit Hydro wiring.
 

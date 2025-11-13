@@ -6,21 +6,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Trait for types that contain a KVS operation
-///
-/// This allows routers to work generically over bare operations or enveloped operations.
-pub trait HasOperation<V> {
-    /// Extract the operation for routing decisions
-    fn operation(&self) -> &crate::protocol::KVSOperation<V>;
-}
-
-// Bare operations implement HasOperation trivially
-impl<V> HasOperation<V> for crate::protocol::KVSOperation<V> {
-    fn operation(&self) -> &crate::protocol::KVSOperation<V> {
-        self
-    }
-}
-
 /// Generic envelope wrapping an operation with metadata
 ///
 /// This allows routers to dispatch based on the operation content while
@@ -56,14 +41,10 @@ impl<Meta, Op> Envelope<Meta, Op> {
     }
 
     /// Get a reference to the wrapped operation
-    pub fn operation(&self) -> &Op {
-        &self.operation
-    }
+    pub fn operation(&self) -> &Op { &self.operation }
 
     /// Get a reference to the metadata
-    pub fn metadata(&self) -> &Meta {
-        &self.metadata
-    }
+    pub fn metadata(&self) -> &Meta { &self.metadata }
 
     /// Destructure into metadata and operation
     pub fn into_parts(self) -> (Meta, Op) {
@@ -93,15 +74,13 @@ impl<Meta, Op> Envelope<Meta, Op> {
     }
 }
 
-// Envelopes implement HasOperation by delegating to the wrapped operation
-impl<Meta, V> HasOperation<V> for Envelope<Meta, crate::protocol::KVSOperation<V>> {
-    fn operation(&self) -> &crate::protocol::KVSOperation<V> {
-        &self.operation
-    }
-}
-
 /// Type alias for slot-numbered operations (most common use case)
 pub type SlottedOperation<V> = Envelope<usize, crate::protocol::KVSOperation<V>>;
+
+// Convenience conversion to support generic pipelines over enveloped ops
+impl<Meta, V> From<Envelope<Meta, crate::protocol::KVSOperation<V>>> for crate::protocol::KVSOperation<V> {
+    fn from(env: Envelope<Meta, crate::protocol::KVSOperation<V>>) -> Self { env.operation }
+}
 
 #[cfg(test)]
 mod tests {

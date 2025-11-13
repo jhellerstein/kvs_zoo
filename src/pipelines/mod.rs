@@ -8,4 +8,4 @@ pub mod single_layer;
 pub mod two_layer;
 
 pub use single_layer::pipeline_single_layer_from_process;
-pub use two_layer::{pipeline_two_layer_from_enveloped, pipeline_two_layer_from_process};
+pub use two_layer::pipeline_two_layer;

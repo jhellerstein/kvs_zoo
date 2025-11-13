@@ -64,7 +64,7 @@ fn get_waits_for_prior_put_slot() {
     // Use two-layer slotted wiring: preserves slots through cluster dispatch/replication to leaf SlotOrderEnforcer
     // Wrap slots into envelopes to preserve metadata through wiring
     let enveloped = slotted_ops_process.map(q!(|(slot, op)| kvs_zoo::protocol::Envelope::new(slot, op)));
-    let responses = kvs_zoo::server::wire_two_layer_from_enveloped(&proxy, &layers, &kvs, enveloped);
+    let responses = kvs_zoo::server::wire_two_layer_from_inputs(&proxy, &layers, &kvs, enveloped);
 
     let proxy_responses = responses.send_bincode(&proxy);
     complete_sink.complete(

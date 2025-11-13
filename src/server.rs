@@ -16,7 +16,7 @@ use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::pipelines::{pipeline_single_layer_from_process, pipeline_two_layer_from_enveloped, pipeline_two_layer_from_process};
+use crate::pipelines::{pipeline_single_layer_from_process, pipeline_two_layer};
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -192,7 +192,10 @@ where
 ///
 /// This preserves the standard replication semantics at the cluster layer and then applies
 /// the leaf-level dispatch (e.g., SlotOrderEnforcer) before processing.
-pub fn wire_two_layer_from_operations<'a, V, ClusterName, D, M, LeafName, DLeaf, MLeaf>(
+/// Wire a two-layer KVS from arbitrary inputs convertible into KVSOperation.
+///
+/// Accepts either bare operations or envelopes (e.g., slotted ops from Paxos) via `Into<KVSOperation<V>>`.
+pub fn wire_two_layer_from_inputs<'a, V, ClusterName, D, M, LeafName, DLeaf, MLeaf, In>(
     _proxy: &Process<'a, ()>,
     layers: &crate::kvs_layer::KVSClusters<'a>,
     kvs: &crate::kvs_layer::KVSCluster<
@@ -201,7 +204,7 @@ pub fn wire_two_layer_from_operations<'a, V, ClusterName, D, M, LeafName, DLeaf,
         M,
         crate::kvs_layer::KVSNode<LeafName, DLeaf, MLeaf>,
     >,
-    operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+    inputs: Stream<In, Process<'a, ()>, Unbounded>,
 ) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
 where
     V: Clone
@@ -222,74 +225,15 @@ where
     MLeaf: crate::after_storage::ReplicationStrategy<V> + Clone,
     ClusterName: 'static,
     LeafName: 'static,
+    In: Into<KVSOperation<V>> + 'static,
 {
     let target_cluster = layers.get::<ClusterName>();
-    pipeline_two_layer_from_process(
-        target_cluster,
-        &kvs.dispatch,
-        &kvs.maintenance,
-        &kvs.child.dispatch,
-        operations,
-    )
-}
-
-/// Wire a two-layer KVS with enveloped operations (e.g., slotted from Paxos).
-///
-/// This variant takes operations wrapped in Envelope<Meta, KVSOperation<V>> from a Process stream,
-/// unwraps them for routing through cluster dispatch, rewraps for leaf dispatch, and extracts
-/// the bare operation for processing.
-///
-/// Use case: Paxos produces Stream<(usize, KVSOperation<V>), ...>. Map to Envelope<usize, ...>,
-/// pass here, and slots will be preserved down to the leaf level where SlotOrderEnforcer can use them.
-pub fn wire_two_layer_from_enveloped<'a, V, Meta, ClusterName, D, M, LeafName, DLeaf, MLeaf>(
-    _proxy: &Process<'a, ()>,
-    layers: &crate::kvs_layer::KVSClusters<'a>,
-    kvs: &crate::kvs_layer::KVSCluster<
-        ClusterName,
-        D,
-        M,
-        crate::kvs_layer::KVSNode<LeafName, DLeaf, MLeaf>,
-    >,
-    enveloped_operations: Stream<
-        crate::protocol::Envelope<Meta, KVSOperation<V>>,
-        Process<'a, ()>,
-        Unbounded,
-    >,
-) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
-where
-    V: Clone
-        + Serialize
-        + for<'de> Deserialize<'de>
-        + PartialEq
-        + Eq
-        + Default
-        + std::fmt::Debug
-        + std::fmt::Display
-        + lattices::Merge<V>
-        + Send
-        + Sync
-        + 'static,
-    Meta: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    D: OpDispatch<V> + Clone,
-    M: crate::after_storage::ReplicationStrategy<V> + Clone,
-    DLeaf: OpDispatch<V> + Clone,
-    MLeaf: crate::after_storage::ReplicationStrategy<V> + Clone,
-    ClusterName: 'static,
-    LeafName: 'static,
-{
-    let target_cluster = layers.get::<ClusterName>();
-    pipeline_two_layer_from_enveloped(
-        target_cluster,
-        &kvs.dispatch,
-        &kvs.maintenance,
-        &kvs.child.dispatch,
-        enveloped_operations,
-    )
+    pipeline_two_layer(target_cluster, &kvs.dispatch, &kvs.maintenance, &kvs.child.dispatch, inputs)
 }
 
 // Note: Slotted-specific wiring was removed in favor of the generic pipeline
 // (KVSWire down + AfterWire up). For slotted metadata, wrap ops in Envelope<slot, op>
-// and use wire_two_layer_from_enveloped, letting leaf components (e.g., SlotOrderEnforcer)
+// and use wire_two_layer_from_inputs, letting leaf components (e.g., SlotOrderEnforcer)
 // consume the slot metadata directly.
 
 /// Standalone wiring function: binds a KVS layer specification into Hydro dataflow.

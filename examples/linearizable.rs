@@ -11,7 +11,7 @@ use kvs_zoo::kvs_layer::{KVSSpec, KVSCluster};
 use kvs_zoo::after_storage::replication::{LogBasedDelivery, SlottedBroadcastReplication as BroadcastReplication};
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::protocol::{Envelope, KVSOperation};
-use kvs_zoo::server::wire_two_layer_from_enveloped;
+use kvs_zoo::server::wire_two_layer_from_inputs;
 use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .assume_ordering(nondet!(/** paxos ordered at proxy */));
 
     // Wire: cluster layer routing/replication -> leaf slot enforcement -> core -> after_storage up
-    let responses = wire_two_layer_from_enveloped(&proxy, &layers, &kvs_spec, enveloped_at_proxy);
+    let responses = wire_two_layer_from_inputs(&proxy, &layers, &kvs_spec, enveloped_at_proxy);
 
     // Send responses back to proxy and complete the bidi connection (optional member id stamping)
     let proxy_responses = responses.send_bincode(&proxy);

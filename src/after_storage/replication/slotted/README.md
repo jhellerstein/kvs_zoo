@@ -57,11 +57,11 @@ type LinearizableKVS = KVSCluster<
 >;
 ```
 
-On the server wiring side, preserve slot metadata with `Envelope<slot, op>` and use `wire_two_layer_from_enveloped` so the leaf can enforce ordering:
+On the server wiring side, preserve slot metadata with `Envelope<slot, op>` and use `wire_two_layer_from_inputs` so the leaf can enforce ordering:
 
 ```rust
 let enveloped = slotted_ops.map(q!(|(slot, op)| kvs_zoo::protocol::Envelope::new(slot, op)));
-let responses = kvs_zoo::server::wire_two_layer_from_enveloped(&proxy, &layers, &kvs, enveloped);
+let responses = kvs_zoo::server::wire_two_layer_from_inputs(&proxy, &layers, &kvs, enveloped);
 ```
 
 ## Important behavior notes

@@ -9,10 +9,12 @@
 pub mod admin;
 pub mod envelope;
 pub mod kvs_ops;
+pub mod routing;
 pub mod session;
 pub mod tagged;
 
 // Re-export core KVS types for convenience
-pub use envelope::{Envelope, HasOperation, SlottedOperation};
+pub use envelope::{Envelope, SlottedOperation};
 pub use kvs_ops::{KVSOperation, KVSResponse};
+pub use routing::{RoutingKey, HasSequence};
 pub use tagged::TaggedOperation;

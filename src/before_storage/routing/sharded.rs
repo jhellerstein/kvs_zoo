@@ -3,6 +3,7 @@
 use crate::before_storage::OpDispatch;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
+use crate::protocol::routing::RoutingKey;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -17,6 +18,12 @@ impl ShardedRouter {
     pub fn calculate_shard_id(key: &str, shard_count: usize) -> u32 {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
+        (hasher.finish() % shard_count as u64) as u32
+    }
+
+    pub fn calculate_shard_id_bytes(key_bytes: &[u8], shard_count: usize) -> u32 {
+        let mut hasher = DefaultHasher::new();
+        key_bytes.hash(&mut hasher);
         (hasher.finish() % shard_count as u64) as u32
     }
 }
@@ -34,8 +41,7 @@ where V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Defaul
         let shard_count = self.shard_count;
         operations
             .map(q!(move |op| {
-                let key = match &op { KVSOperation::Get(k) => k, KVSOperation::Put(k, _) => k };
-                let shard_id = ShardedRouter::calculate_shard_id(key, shard_count);
+                let shard_id = ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }))
             .into_keyed()
@@ -53,8 +59,7 @@ where V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Defaul
         let shard_count = self.shard_count;
         operations
             .map(q!(move |op| {
-                let key = match &op { KVSOperation::Get(k) => k, KVSOperation::Put(k, _) => k };
-                let shard_id = ShardedRouter::calculate_shard_id(key, shard_count);
+                let shard_id = ShardedRouter::calculate_shard_id_bytes(op.routing_key(), shard_count);
                 (hydro_lang::location::MemberId::from_raw(shard_id), op)
             }))
             .into_keyed()
