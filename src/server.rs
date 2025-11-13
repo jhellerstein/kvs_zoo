@@ -16,7 +16,7 @@ use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::pipelines::{pipeline_single_layer_from_process, pipeline_two_layer};
+use crate::pipelines::pipeline_two_layer;
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -122,7 +122,7 @@ where
             .entries()
             .map(q!(|(_client_id, op)| op))
             .assume_ordering(nondet!(/** client op stream */));
-        let responses = pipeline_single_layer_from_process(target_cluster, &routing, &replication, initial_ops);
+    let responses = pipeline_two_layer(target_cluster, &routing, &replication, &(), initial_ops);
 
         // Send responses back to clients (optionally stamp member id)
         let proxy_responses = responses.send_bincode(proxy);
@@ -185,7 +185,7 @@ where
     Name: 'static,
 {
     let target_cluster = layers.get::<Name>();
-    pipeline_single_layer_from_process(target_cluster, &kvs.dispatch, &kvs.maintenance, operations)
+    pipeline_two_layer(target_cluster, &kvs.dispatch, &kvs.maintenance, &(), operations)
 }
 
 /// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.
