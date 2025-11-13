@@ -1,34 +1,37 @@
-//! Linearizable KVS (Paxos ordering + standard KVS pipeline)
+//! Linearizable KVS (Paxos ordering as a top layer feeding slotted replication)
 
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*; // macros q!, nondet!, stream/cluster traits
 // Paxos ordering and roles
 use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
-use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
-use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_to_proxy};
-use kvs_zoo::kvs_layer::{AfterWire, KVSCluster, KVSSpec, KVSWire};
+use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, paxos_order_slotted};
+use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
+use kvs_zoo::before_storage::routing::RoundRobinRouter;
+use kvs_zoo::kvs_layer::{KVSSpec, KVSCluster};
 use kvs_zoo::after_storage::replication::{LogBasedDelivery, SlottedBroadcastReplication as BroadcastReplication};
 use kvs_zoo::after_storage::responders::Responder;
-use kvs_zoo::protocol::KVSOperation;
+use kvs_zoo::protocol::{Envelope, KVSOperation};
+use kvs_zoo::server::wire_two_layer_from_enveloped;
 use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
-struct ReplicaCluster;
+struct OrderedCluster;
 #[derive(Clone)]
 struct ReplicaLeaf;
 
-// Single-layer linearizable KVS: RoundRobin routing + LogBased replication.
-// Paxos ordering is applied before entering this layer (not part of the spec).
+// Two-layer linearizable KVS:
+// - Cluster layer: RoundRobin routing + slotted log-based replication (delivery in slot order)
+// - Leaf layer: SlotOrderEnforcer (ensures per-member application in slot order) + simple responder
 type LinearizableKVS = KVSCluster<
-    ReplicaCluster,
+    OrderedCluster,
     RoundRobinRouter,
     LogBasedDelivery<BroadcastReplication<LwwWrapper<String>>>,
-    kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SingleNodeRouter, Responder>,
+    kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
 >;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Linearizable KVS Demo (Paxos + LogBased<Broadcast>)");
+    println!("🚀 Linearizable KVS Demo (Paxos → LogBased<SlottedBroadcast> → SlotEnforce)");
 
     // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
@@ -38,12 +41,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define KVS architecture: routing + replication handled inside KVS Zoo.
+    // Define KVS architecture: cluster replication handles slotted log-based delivery.
     let kvs_spec = LinearizableKVS::new(
         RoundRobinRouter::new(),
-    LogBasedDelivery::new(BroadcastReplication::<LwwWrapper<String>>::new()),
-        kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SingleNodeRouter, Responder>::new(
-            SingleNodeRouter::new(),
+        LogBasedDelivery::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+        kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
+            SlotOrderEnforcer::new(),
             Responder::new(),
         ),
     );
@@ -66,20 +69,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(q!(|(_client_id, op)| op))
         .assume_ordering(nondet!(/** client op stream */));
 
-    // Impose total order via Paxos and bring ordered ops back to the proxy.
+    // Impose total order via Paxos (produce slot-numbered operations at Proposers)
     let dispatcher = PaxosDispatcher::<LwwWrapper<String>>::with_config(PaxosConfig::default());
-    let ordered_ops_at_proxy = paxos_order_to_proxy(
-        &dispatcher,
-        initial_ops,
-        &proposers,
-        &acceptors,
-        &proxy,
-    );
+    let slotted_ops = paxos_order_slotted(&dispatcher, initial_ops, &proposers, &acceptors);
 
-    // Server generic wiring: downward dispatch -> leaf core -> upward maintenance
-    let routed = kvs_spec.wire_from_process(&layers, ordered_ops_at_proxy);
-    let (responses, _puts) = kvs_zoo::kvs_core::KVSCore::process_with_deltas(routed);
-    let responses = kvs_spec.after_responses(&layers, responses);
+    // Preserve slot metadata to the leaf using Envelope<slot, op>, and wire two-layer pipeline.
+    // Note: Convert to the proxy for wiring convenience (Process-located stream).
+    let enveloped_at_proxy = slotted_ops
+        .map(q!(|(slot, op)| Envelope::new(slot, op)))
+        .send_bincode(&proxy)
+        .entries()
+        .map(q!(|(_member_id, env)| env))
+        .assume_ordering(nondet!(/** paxos ordered at proxy */));
+
+    // Wire: cluster layer routing/replication -> leaf slot enforcement -> core -> after_storage up
+    let responses = wire_two_layer_from_enveloped(&proxy, &layers, &kvs_spec, enveloped_at_proxy);
 
     // Send responses back to proxy and complete the bidi connection (optional member id stamping)
     let proxy_responses = responses.send_bincode(&proxy);
@@ -97,11 +101,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     complete_sink.complete(to_complete);
 
-    // Deploy: 3 KVS replicas
+    // Deploy: 3 KVS replicas + 3 proposers + 3 acceptors
     let nodes = flow
         .with_process(&proxy, localhost.clone())
         .with_cluster(
-            layers.get::<ReplicaCluster>(),
+            layers.get::<OrderedCluster>(),
             vec![localhost.clone(), localhost.clone(), localhost.clone()],
         )
         .with_cluster(
