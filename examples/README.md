@@ -2,6 +2,20 @@
 
 This directory contains runnable demos of different KVS topologies, all described with a small, recursive layering API in `kvs_layer` and wired with reusable pipelines.
 
+## Magic vs Detail
+
+We present each idea in two flavors:
+
+- Magic: short demos using helpers/pipelines that hide most Hydro wiring
+- Detail: equivalent demos with explicit Hydro graph wiring for learning
+
+Start here depending on your goal:
+
+- If you want to see the effect quickly, run the Magic examples.
+- If you want to understand how the wiring works, read and run the Detail ones.
+
+See also: `examples/magic/README.md` and `examples/detail/README.md` for curated lists.
+
 ## The layering API (kvs_layer)
 
 Two building blocks you can nest to any depth:
@@ -33,14 +47,16 @@ The examples below use both the simple server helpers and the explicit “detail
 
 ## Examples
 
-- `local.rs` — Single node (no replication)
-- `replicated.rs` — 3 replicas with gossip
-    - `replicated_detail.rs` — same architecture with explicit Hydro wiring
-- `sharded.rs` — 3 shards, single node per shard
-    - `sharded_detail.rs` — same architecture with explicit key-hash routing info
-- `sharded_replicated.rs` — 3 shards × 3 replicas
-- `linearizable.rs` — Paxos + log-based delivery
-- `three_level_recursive.rs` — nested layering demonstration
+- Magic
+    - `local.rs` — Single node (no replication)
+    - `replicated.rs` — 3 replicas with gossip
+    - `sharded.rs` — 3 shards, single node per shard
+    - `sharded_replicated.rs` — 3 shards × 3 replicas
+    - `linearizable.rs` — Paxos + log-based delivery
+    - `three_level_recursive.rs` — nested layering demonstration
+- Detail (explicit Hydro wiring)
+    - `replicated_detail.rs` — same architecture as `replicated.rs`, explicit wiring
+    - `sharded_detail.rs` — same architecture as `sharded.rs`, explicit routing info
 
 ## Run them
 
