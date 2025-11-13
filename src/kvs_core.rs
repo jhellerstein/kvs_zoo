@@ -81,6 +81,7 @@ impl KVSCore {
     ///
     /// This lets replication strategies operate purely on applied state deltas (after storage)
     /// rather than inspecting upstream operations.
+    #[allow(clippy::type_complexity)]
     pub fn process_with_deltas<'a, V, L>(
         operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
     ) -> (

@@ -231,11 +231,8 @@ where
         .interleave(replicated_tagged)
         .assume_ordering(nondet!(/** sequential processing */));
 
-    // Process operations with selective responses
-    let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
-
-    // Keep response stream cluster-located; caller will send to proxy
-    responses
+    // Process operations with selective responses and keep response stream cluster-located
+    crate::kvs_core::KVSCore::process_with_responses(all_tagged)
 }
 
 /// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.

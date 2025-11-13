@@ -14,6 +14,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -28,6 +30,10 @@ jobs:
       - name: Run unit tests (kvs_zoo)
         working-directory: kvs_zoo
         run: cargo test --locked -- --nocapture
+
+      - name: Clippy (kvs_zoo)
+        working-directory: kvs_zoo
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Run smoke tests (ignored)
         working-directory: kvs_zoo

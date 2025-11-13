@@ -59,15 +59,14 @@ impl SimpleGossipConfig {
 impl From<usize> for SimpleGossipConfig {
     /// Interpret usize as milliseconds for the gossip interval; other fields defaulted
     fn from(ms: usize) -> Self {
-        let mut cfg = SimpleGossipConfig::default();
-        cfg.gossip_interval = std::time::Duration::from_millis(ms as u64);
-        cfg
+        SimpleGossipConfig { gossip_interval: std::time::Duration::from_millis(ms as u64), ..Default::default() }
     }
 }
 
 /// Simple gossip replication
 #[derive(Clone, Debug)]
 pub struct SimpleGossip<V> {
+    #[allow(dead_code)]
     config: SimpleGossipConfig,
     _phantom: std::marker::PhantomData<V>,
 }

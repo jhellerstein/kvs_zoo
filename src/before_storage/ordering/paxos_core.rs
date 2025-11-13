@@ -336,7 +336,28 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
 		.map(q!(|(_checkpoint, log)| log))
 		.flatten_unordered()
 		.into_keyed()
-		.fold_commutative::<(usize, Option<LogValue<P>>), _, _>( q!(|| (0, None)), q!(|curr_entry, new_entry| { if let Some(curr_entry_payload) = &mut curr_entry.1 { let same_values = new_entry.value == curr_entry_payload.value; let higher_ballot = new_entry.ballot > curr_entry_payload.ballot; if same_values { curr_entry.0 += 1; } if higher_ballot { curr_entry_payload.ballot = new_entry.ballot; if !same_values { curr_entry.0 = 1; curr_entry_payload.value = new_entry.value; } } } else { *curr_entry = (1, Some(new_entry)); } }), ).map(q!(|(count, entry)| (count, entry.unwrap())));
+		.fold_commutative::<(usize, Option<LogValue<P>>), _, _>(
+			q!(|| (0, None)),
+			q!(|curr_entry, new_entry| {
+				if let Some(curr_entry_payload) = &mut curr_entry.1 {
+					let same_values = new_entry.value == curr_entry_payload.value;
+					let higher_ballot = new_entry.ballot > curr_entry_payload.ballot;
+					if same_values {
+						curr_entry.0 += 1;
+					}
+					if higher_ballot {
+						curr_entry_payload.ballot = new_entry.ballot;
+						if !same_values {
+							curr_entry.0 = 1;
+							curr_entry_payload.value = new_entry.value;
+						}
+					}
+				} else {
+					*curr_entry = (1, Some(new_entry));
+				}
+			}),
+		)
+		.map(q!(|(count, entry)| (count, entry.unwrap())));
 	let p_log_to_try_commit = p_p1b_highest_entries_and_count.clone().entries().cross_singleton(p_ballot.clone()).cross_singleton(p_p1b_max_checkpoint.clone()).filter_map(q!(move |(((slot, (count, entry)), ballot), checkpoint)| { if count > f { return None; } else if let Some(checkpoint) = checkpoint && slot <= checkpoint { return None; } Some(((slot, ballot), entry.value)) }));
 	let p_max_slot = p_p1b_highest_entries_and_count.clone().keys().max();
 	let p_proposed_slots = p_p1b_highest_entries_and_count.clone().keys();
