@@ -1,10 +1,11 @@
-//! Two-layer pipeline: parent routing/replication, then leaf routing, then processing
+//! Two-layer pipeline: parent routing, leaf routing, processing, after_storage
 //!
 //! Steps:
 //! 1) before_storage (parent): route Process ops to the parent Cluster
-//! 2) after_storage (parent): replicate PUT deltas within the parent Cluster
-//! 3) before_storage (leaf): route both local and replicated ops again within the same Cluster
-//! 4) Merge tagged ops and process with KVSCore::process_with_responses
+//! 2) before_storage (leaf): route ops within the parent Cluster to the target leaf
+//! 3) processing: apply ops with KVSCore, emitting (responses, applied PUT deltas)
+//! 4) after_storage (parent): replicate applied PUT deltas across the cluster
+//! 5) before_storage (leaf): route replicated PUTs to the target leaf and apply without responses
 
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -46,28 +47,30 @@ where
     // 1) before_storage (parent)
     let routed_operations = parent_routing.dispatch_from_process(operations, parent_cluster);
 
-    // Split local vs replicate deltas at parent
-    let local_ops = routed_operations.clone();
-    let local_puts = routed_operations.filter_map(q!(|op| match op {
-        KVSOperation::Put(k, v) => Some((k, v)),
-        KVSOperation::Get(_) => None,
-    }));
+    // 2) before_storage (leaf)
+    let leaf_ops =
+        leaf_routing.dispatch_from_cluster(routed_operations, parent_cluster, parent_cluster);
 
-    // 2) after_storage (parent)
+    // Ensure sequential processing at the leaf
+    let leaf_ops_ordered = leaf_ops.assume_ordering(nondet!(/** sequential processing at leaf */));
+
+    // 3) processing: produce client responses and applied PUT deltas
+    let (local_responses, local_puts) =
+        crate::kvs_core::KVSCore::process_with_deltas(leaf_ops_ordered);
+
+    // 4) after_storage (parent): replicate applied PUT deltas
     let replicated_puts = parent_replication.replicate_data(parent_cluster, local_puts);
+
+    // 5) before_storage (leaf): route replicated PUTs, apply without responses
     let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
-
-    // 3) before_storage (leaf): route within the same parent Cluster
-    let leaf_local_ops = leaf_routing.dispatch_from_cluster(local_ops, parent_cluster, parent_cluster);
-    let leaf_replicated_ops =
-        leaf_routing.dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster);
-
-    // Tag and process
-    let local_tagged = leaf_local_ops.map(q!(|op| (true, op)));
+    let leaf_replicated_ops = leaf_routing
+        .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
+        .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
     let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
-        .assume_ordering(nondet!(/** sequential processing at leaf */));
+    let replicate_responses = crate::kvs_core::KVSCore::process_with_responses(replicated_tagged);
 
-    crate::kvs_core::KVSCore::process_with_responses(all_tagged)
+    // Merge to keep the replicate path live; replicate_responses is typically empty
+    local_responses
+        .interleave(replicate_responses)
+        .assume_ordering(nondet!(/** client responses in leaf order */))
 }
