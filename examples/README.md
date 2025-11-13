@@ -33,12 +33,12 @@ See the types and traits in:
 - `src/kvs_layer/wire_up.rs` — `AfterWire` (after_storage replication/responders)
 - `src/kvs_layer/spec.rs` — `KVSSpec` (cluster creation/registration)
 
-## Reusable wiring (pipelines)
+## Reusable wiring (flows)
 
-If you don’t want to wire Hydro by hand, use the pipelines:
+If you don’t want to wire Hydro by hand, use the unified flow:
 
-- `src/pipelines/two_layer.rs`
-    - `pipeline_two_layer` — unified: parent route → optional leaf route (use `()` for no-op) → process → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.
+- `src/layer_flow.rs`
+    - `pipeline_two_layer` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.
 
 The examples below use both the simple server helpers and the explicit “detail” variants to show the minimal vs explicit Hydro wiring.
 

@@ -216,3 +216,11 @@ where
 
 // Convenient root re-exports for common ordering types
 pub use ordering::{PaxosConfig, PaxosDispatcher, SlotOrderEnforcer};
+
+/// Marker alias for “no leaf” dispatcher when using a unified flow.
+///
+/// Use `NoLeaf` anywhere a leaf before_storage component is optional. It is
+/// implemented via the unit type `()` which already implements `OpDispatch<V>`.
+pub type NoLeaf = ();
+/// Singleton value for `NoLeaf` to use in places expecting a reference
+pub const NO_LEAF: NoLeaf = ();

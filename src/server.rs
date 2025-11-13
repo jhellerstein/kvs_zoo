@@ -9,14 +9,14 @@
 //! All higher-level construction flows through `KVSCluster::build_server` and
 //! typical users never touch this module directly.
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::{NO_LEAF, OpDispatch};
 use crate::kvs_layer::{AfterWire, KVSWire};
 use crate::after_storage::ReplicationStrategy;
 use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::pipelines::pipeline_two_layer;
+use crate::layer_flow::pipeline_two_layer;
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -122,7 +122,7 @@ where
             .entries()
             .map(q!(|(_client_id, op)| op))
             .assume_ordering(nondet!(/** client op stream */));
-    let responses = pipeline_two_layer(target_cluster, &routing, &replication, &(), initial_ops);
+    let responses = pipeline_two_layer(target_cluster, &routing, &replication, &NO_LEAF, initial_ops);
 
         // Send responses back to clients (optionally stamp member id)
         let proxy_responses = responses.send_bincode(proxy);
@@ -185,7 +185,7 @@ where
     Name: 'static,
 {
     let target_cluster = layers.get::<Name>();
-    pipeline_two_layer(target_cluster, &kvs.dispatch, &kvs.maintenance, &(), operations)
+    pipeline_two_layer(target_cluster, &kvs.dispatch, &kvs.maintenance, &NO_LEAF, operations)
 }
 
 /// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.
