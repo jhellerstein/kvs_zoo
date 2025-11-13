@@ -5,6 +5,7 @@ pub mod before_storage;
 pub mod after_storage;
 pub mod kvs_core;
 pub mod kvs_layer;
+pub mod pipelines;
 pub mod protocol;
 pub mod server;
 pub mod values;

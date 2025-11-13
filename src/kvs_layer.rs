@@ -1,9 +1,11 @@
 //! KVS architectural layering pattern.
 //!
-//! This module provides the core pattern for composing KVS architectures from
-//! layers of dispatch and maintenance strategies. Each layer pairs a dispatch
-//! strategy (how to route operations) with a maintenance strategy (how to keep
-//! replicas in sync), and can nest recursively.
+//! This module provides the core pattern for composing KVS architectures with
+//! before_storage and after_storage strategies. Each layer pairs:
+//! - a before_storage strategy (routing/ordering: how to route operations)
+//! - an after_storage strategy (replication/responders: how to keep replicas in sync)
+//!
+//! Layers can nest recursively.
 //!
 //! ## Example
 //!
@@ -28,15 +30,16 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-/// A layer in the KVS architecture, pairing dispatch and maintenance strategies.
+/// A layer in the KVS architecture, pairing before_storage and after_storage strategies.
 ///
 /// - `Name`: marker type naming this layer (shared with Hydro location types)
-/// - `D`: dispatch strategy at this level
-/// - `M`: maintenance strategy at this level
+/// - `D`: before_storage strategy (routing/ordering) at this level
+/// - `M`: after_storage strategy (replication/responders) at this level
 /// - `Child`: either another `KVSCluster` or `()` for terminal
 #[derive(Clone)]
 pub struct KVSCluster<Name, D, M, Child> {
     _name: PhantomData<Name>,
+    // Field names retain historical naming; dispatch = before_storage, maintenance = after_storage.
     pub dispatch: D,
     pub maintenance: M,
     pub child: Child,
@@ -148,7 +151,7 @@ pub trait KVSSpec<V> {
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
 }
 
-/// Trait to wire routing across layers using per-layer dispatchers.
+/// Trait to wire routing across layers using per-layer before_storage components (dispatchers/ordering).
 ///
 /// Provides methods to route operations from a proxy process into the first
 /// cluster, and then recursively from cluster to cluster for nested layers.
@@ -259,7 +262,7 @@ where
     }
 }
 
-// Leaf wiring: apply dispatch at the current (leaf) cluster boundary.
+// Leaf wiring: apply before_storage routing at the current (leaf) cluster boundary.
 impl<V, Name, D, M> KVSWire<V> for KVSNode<Name, D, M>
 where
     Name: 'static,
@@ -295,7 +298,7 @@ where
     }
 }
 
-/// Upward wiring for maintenance (After storage): traverse maintenance chain from leaf upward.
+/// Upward wiring for after_storage: traverse replication/responders chain from leaf upward.
 pub trait AfterWire<V> {
     fn after_responses<'a>(
         &self,

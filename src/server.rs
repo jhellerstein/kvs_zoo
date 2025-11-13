@@ -2,9 +2,9 @@
 //!
 //! The public user-facing API is the recursive cluster spec in `cluster_spec.rs`.
 //! This module now provides only the minimal primitives required by that builder:
-//! - `KVSServer` struct (type-level composition of dispatch + maintenance)
-//! - Minimal runtime primitives to bind dispatch + maintenance to Hydro dataflow
-//! - `run` function to bind dispatch + maintenance to Hydro dataflow
+//! - `KVSServer` struct (type-level composition of before_storage + after_storage)
+//! - Minimal runtime primitives to bind before_storage + after_storage to Hydro dataflow
+//! - `run` function to bind before_storage + after_storage to Hydro dataflow
 //!
 //! All higher-level construction flows through `KVSCluster::build_server` and
 //! typical users never touch this module directly.
@@ -16,6 +16,7 @@ use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
+use crate::pipelines::pipeline_single_layer_from_process;
 
 // Type aliases for server ports
 type ServerBidiPort<V> =
@@ -34,7 +35,7 @@ where
     _phantom: std::marker::PhantomData<(V, D, M)>,
 }
 
-/// Readability alias for the most basic server: single node, no maintenance.
+/// Readability alias for the most basic server: single node, no after_storage.
 ///
 /// Equivalent to `KVSServer<V, SingleNodeRouter, ZeroMaintenance>`.
 pub type LocalKVSServer<V> =
@@ -60,11 +61,11 @@ where
 {
     /// Minimal deploy helper kept for internal tests; prefer cluster spec elsewhere.
     pub fn deploy<'a>(flow: &FlowBuilder<'a>) -> (Cluster<'a, crate::kvs_core::KVSNode>, D, M) {
-        let dispatch = D::default();
-        let maintenance = M::default();
+        let routing = D::default();
+        let replication = M::default();
         // In the simplified model, deployments are plain clusters created explicitly.
         let cluster = flow.cluster::<crate::kvs_core::KVSNode>();
-        (cluster, dispatch, maintenance)
+        (cluster, routing, replication)
     }
 
     /// Convenience: deploy and run with defaults. Used by integration tests.
@@ -76,8 +77,8 @@ where
     where
         V: std::fmt::Debug + Send + Sync,
     {
-        let (cluster, dispatch, maintenance) = Self::deploy(flow);
-        let port = Self::run(proxy, &cluster, client_external, dispatch, maintenance);
+        let (cluster, routing, replication) = Self::deploy(flow);
+        let port = Self::run(proxy, &cluster, client_external, routing, replication);
         (cluster, port)
     }
 }
@@ -101,13 +102,13 @@ where
 {
     /// Run the KVS server
     ///
-    /// This is the universal run method that works for all dispatch/maintenance combinations.
+    /// This is the universal run method that works for all before_storage/after_storage combinations.
     pub fn run<'a>(
         proxy: &Process<'a, ()>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         client_external: &External<'a, ()>,
-        dispatch: D,
-        maintenance: M,
+        routing: D,
+        replication: M,
     ) -> ServerPorts<V>
     where
         V: std::fmt::Debug + Send + Sync,
@@ -116,35 +117,12 @@ where
         let (bidi_port, operations_stream, _membership, complete_sink) =
             proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
 
-        // Apply dispatch strategy to route operations
-        let routed_operations = dispatch.dispatch_from_process(
-            operations_stream
-                .entries()
-                .map(q!(|(_client_id, op)| op))
-                .assume_ordering(nondet!(/** operations routing */)),
-            target_cluster,
-        );
-
-        // Tag local operations (respond = true)
-        let local_tagged = routed_operations.clone().map(q!(|op| (true, op)));
-
-        // Extract local PUTs for replication
-        let local_puts = routed_operations.filter_map(q!(|op| match op {
-            KVSOperation::Put(k, v) => Some((k, v)),
-            KVSOperation::Get(_) => None,
-        }));
-
-        // Apply maintenance strategy to replicate data in the target cluster
-        let replicated_puts = maintenance.replicate_data(target_cluster, local_puts);
-        let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
-
-        // Merge local and replicated operations
-        let all_tagged = local_tagged
-            .interleave(replicated_tagged)
-            .assume_ordering(nondet!(/** sequential processing */));
-
-        // Process operations with selective responses
-        let responses = crate::kvs_core::KVSCore::process_with_responses(all_tagged);
+        // Build core single-layer pipeline (before_storage routing + after_storage replication)
+        let initial_ops = operations_stream
+            .entries()
+            .map(q!(|(_client_id, op)| op))
+            .assume_ordering(nondet!(/** client op stream */));
+        let responses = pipeline_single_layer_from_process(target_cluster, &routing, &replication, initial_ops);
 
         // Send responses back to clients (optionally stamp member id)
         let proxy_responses = responses.send_bincode(proxy);
@@ -177,9 +155,9 @@ where
 ///
 /// This helper mirrors the core of `run`, but instead of reading from an
 /// external port it takes a Process-located stream of operations and wires:
-/// - dispatch routing via the spec's dispatcher
-/// - maintenance replication via the spec's maintenance
-/// - processing via KVSCore::process_with_responses
+/// - before_storage: routing/ordering via the spec's component
+/// - after_storage: replication via the spec's component
+/// - processing: KVSCore::process_with_responses
 ///
 /// Returns a cluster-located response stream, suitable for `.send_bincode(proxy)`
 /// and forwarding to a complete sink in the caller (examples/tests).
@@ -207,32 +185,7 @@ where
     Name: 'static,
 {
     let target_cluster = layers.get::<Name>();
-
-    // Route operations via the layer dispatcher
-    let routed_operations = kvs
-        .dispatch
-        .dispatch_from_process(operations, target_cluster);
-
-    // Tag local operations (respond = true)
-    let local_tagged = routed_operations.clone().map(q!(|op| (true, op)));
-
-    // Extract local PUTs for replication
-    let local_puts = routed_operations.filter_map(q!(|op| match op {
-        KVSOperation::Put(k, v) => Some((k, v)),
-        KVSOperation::Get(_) => None,
-    }));
-
-    // Apply maintenance strategy to replicate data in the target cluster
-    let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
-    let replicated_tagged = replicated_puts.map(q!(|(k, v)| (false, KVSOperation::Put(k, v))));
-
-    // Merge local and replicated operations
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
-        .assume_ordering(nondet!(/** sequential processing */));
-
-    // Process operations with selective responses and keep response stream cluster-located
-    crate::kvs_core::KVSCore::process_with_responses(all_tagged)
+    pipeline_single_layer_from_process(target_cluster, &kvs.dispatch, &kvs.maintenance, operations)
 }
 
 /// Wire a two-layer KVS: a cluster layer with dispatch+maintenance, then a leaf layer with its own dispatch.
@@ -272,7 +225,7 @@ where
 {
     let target_cluster = layers.get::<ClusterName>();
 
-    // Route operations via the cluster layer dispatcher
+    // before_storage: route operations via the cluster's routing/ordering
     let routed_operations = kvs
         .dispatch
         .dispatch_from_process(operations, target_cluster);
@@ -284,11 +237,11 @@ where
         KVSOperation::Get(_) => None,
     }));
 
-    // Apply maintenance strategy to replicate data in the target cluster
+    // after_storage: replicate data in the target cluster
     let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
     let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
 
-    // Apply leaf-level dispatch within the same (parent) cluster
+    // before_storage at leaf: apply leaf-level routing within the same (parent) cluster
     let leaf_local_ops =
         kvs.child
             .dispatch
@@ -360,10 +313,10 @@ where
 {
     let target_cluster = layers.get::<ClusterName>();
 
-    // Unwrap envelope for cluster dispatch (routers only see bare operations)
+    // Unwrap envelope for cluster routing (routers only see bare operations)
     let bare_operations = enveloped_operations.clone().map(q!(|env| env.operation));
 
-    // Route via cluster dispatcher
+    // before_storage: route via cluster component
     let routed_operations = kvs
         .dispatch
         .dispatch_from_process(bare_operations, target_cluster);
@@ -375,12 +328,12 @@ where
         KVSOperation::Get(_) => None,
     }));
 
-    // Replicate at cluster layer
+    // after_storage: replicate at cluster layer
     let replicated_puts = kvs.maintenance.replicate_data(target_cluster, local_puts);
     let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
 
     // TODO: Rewrap with preserved metadata for leaf dispatch
-    // For now, just apply leaf dispatch on bare operations
+    // For now, just apply leaf routing on bare operations
     let leaf_local_ops =
         kvs.child
             .dispatch
@@ -450,13 +403,13 @@ where
         .entries()
         .map(q!(|(_client_id, op)| op))
         .assume_ordering(nondet!(/** client op stream */));
-    // Downward pass via dispatch chain (KVSWire)
+    // Downward pass via before_storage chain (KVSWire)
     let routed_ops = kvs.wire_from_process(&layers, initial_ops);
 
-    // Core processing at leaf (assume total order already imposed by dispatch components)
+    // Core processing at leaf (assume total order already imposed by before_storage components)
     let core_responses = crate::kvs_core::KVSCore::process(routed_ops);
 
-    // Upward maintenance pass: traverse maintenance chain from leaf to root.
+    // Upward after_storage pass: traverse replication/responders chain from leaf to root.
     let final_responses = kvs.after_responses(&layers, core_responses);
 
     // Send responses back to proxy (optionally stamp member id)
