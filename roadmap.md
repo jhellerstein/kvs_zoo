@@ -1,6 +1,15 @@
-why do the single_layer.rs and two_layer.rs files both discuss "replication"? Is that just legacy and they should be renamed "after_storage"? 
+Opportunistic slot-aware replication:
+Consider extending after-storage path (e.g., a generic variant of LogBasedDelivery) to accept any message implementing a HasSequence-like trait and sequence when available, bypassing otherwise. This is a slightly larger refactor since current slotted APIs are (usize, String, V)-specific.
+Optional: Audit other routers (RoundRobin, SingleNode) for similar generic affordances. They don’t inspect the op today, so no change is necessary functionally.
 
-And why do these layers split out the puts? First, cloning these streams is expensive and I'd like to avoid it. Second, architecturally it seems to me the payloads to be processed with after_storage should come from the KVSCore, not the layer pipelines. The layer pipelines should just pass the messages up and down and invoke the before/after logic.
+
+---
+B. Layers with multiple clusters (e.g., Paxos roles)
+
+Also not hard; moderate but localized:
+Extend KVSClusters to register/retrieve role-specific clusters for a layer Name. For example: insert/get_role::<Name, Role>() keyed by (Name, RoleTypeId).
+Specialize KVSSpec for the Paxos layer to create and register both Proposers and Acceptors under the same Name.
+The rest of the stack doesn’t need to know these roles exist; the Paxos layer’s KVSWire impl can look them up internally.
 
 ---
 

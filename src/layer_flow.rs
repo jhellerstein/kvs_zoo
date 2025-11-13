@@ -16,7 +16,7 @@ use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
 /// Unified two-layer pipeline over arbitrary input items convertible into KVSOperation
-pub fn pipeline_two_layer<'a, V, DParent, After, DLeaf, In>(
+pub fn layer_flow<'a, V, DParent, After, DLeaf, In>(
     parent_cluster: &Cluster<'a, KVSNode>,
     parent_before: &DParent,
     parent_after: &After,
@@ -73,4 +73,38 @@ where
     local_responses
         .interleave(replicate_responses)
         .assume_ordering(nondet!(/** client responses in leaf order */))
+}
+
+/// Opportunistic slot-aware flow: if inputs carry a sequence (via provided extractor),
+/// replicate deltas with ordering; otherwise fall back to unordered replication.
+pub fn pipeline_two_layer_opportunistic<'a, V, DParent, After, DLeaf, In, F>(
+    parent_cluster: &Cluster<'a, KVSNode>,
+    parent_before: &DParent,
+    parent_after: &After,
+    leaf_before: &DLeaf,
+    inputs: Stream<In, Process<'a, ()>, Unbounded>,
+    _seq_of: F,
+) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>
+where
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + 'static,
+    DParent: OpDispatch<V> + Clone,
+    After: ReplicationStrategy<V> + Clone,
+    DLeaf: OpDispatch<V> + Clone,
+    In: Into<KVSOperation<V>> + 'static,
+    F: Fn(&In) -> Option<usize> + Clone + 'static,
+{
+    // For now, fall back to the unified layer_flow; sequence hints are unused until
+    // routing can preserve/transport tags alongside operations.
+    layer_flow(parent_cluster, parent_before, parent_after, leaf_before, inputs)
 }

@@ -39,6 +39,46 @@ impl<R> LogBasedDelivery<R> {
     }
 }
 
+/// Sequence-aware replication wrapper
+///
+/// Delegates unordered replication to the inner strategy, and when slotted
+/// deltas are available, uses a log-based wrapper to enforce gap-filling
+/// sequencing before returning.
+#[derive(Clone, Debug, Default)]
+pub struct SequenceAwareDelivery<R> {
+    inner: R,
+}
+
+impl<R> SequenceAwareDelivery<R> {
+    pub fn new(inner: R) -> Self { Self { inner } }
+    pub fn into_inner(self) -> R { self.inner }
+    pub fn inner(&self) -> &R { &self.inner }
+}
+
+impl<V, R> crate::after_storage::ReplicationStrategy<V> for SequenceAwareDelivery<R>
+where
+    V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    R: crate::after_storage::ReplicationStrategy<V> + Clone,
+{
+    fn replicate_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        self.inner.replicate_data(cluster, local_data)
+    }
+
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        // Use LogBasedDelivery over the inner strategy to enforce ordering
+        let log_based = LogBasedDelivery::new(self.inner.clone());
+        log_based.replicate_slotted_data(cluster, local_slotted_data)
+    }
+}
+
 impl<R: Default> Default for LogBasedDelivery<R> {
     fn default() -> Self {
         Self { inner: R::default() }
