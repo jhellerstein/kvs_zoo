@@ -1,63 +1,59 @@
 # KVS Zoo Examples
 
-This directory contains examples that demonstrate different KVS architectures, all described with a single, unified, recursive cluster specification API.
+This directory contains runnable demos of different KVS topologies, all described with a small, recursive layering API in `kvs_layer` and wired with reusable pipelines.
 
-## The Cluster Spec (one API for all topologies)
+## The layering API (kvs_layer)
 
-The API is a tiny tree of two building blocks:
+Two building blocks you can nest to any depth:
 
-- `KVSCluster<D, M, Child>` — a cluster level with dispatch `D`, maintenance `M`, and a child (another cluster or a node)
-- `KVSNode<D, M>` — a leaf node with per-node dispatch `D` and maintenance `M`
+- `KVSCluster<Name, D, M, Child>` — a cluster layer pairing:
+    - before_storage `D` (routing/ordering)
+    - after_storage `M` (replication/responders)
+    - `Child` — another `KVSCluster<…>` or `()` at the leaf
+- `KVSNode<Name, D, M>` — per-member (leaf) layer with before/after strategies
 
-You compose these to any depth. A minimal example:
+See the types and traits in:
 
-```rust
-use kvs_zoo::cluster_spec::{KVSCluster, KVSNode};
-use kvs_zoo::dispatch::{SingleNodeRouter, ShardedRouter, RoundRobinRouter};
-use kvs_zoo::maintenance::{BroadcastReplication, ZeroMaintenance};
+- `src/kvs_layer/types.rs` — `KVSCluster`, `KVSNode`, `KVSClusters`
+- `src/kvs_layer/wire_down.rs` — `KVSWire` (before_storage routing/ordering)
+- `src/kvs_layer/wire_up.rs` — `AfterWire` (after_storage replication/responders)
+- `src/kvs_layer/spec.rs` — `KVSSpec` (cluster creation/registration)
 
-// Single node
-let local = KVSCluster::new(SingleNodeRouter, ZeroMaintenance, 1, KVSNode { dispatch: (), maintenance: (), count: 1 });
+## Reusable wiring (pipelines)
 
-// Sharded (3 shards)
-let sharded = KVSCluster::new(ShardedRouter::new(3), ZeroMaintenance, 3, KVSNode { dispatch: (), maintenance: (), count: 1 });
+If you don’t want to wire Hydro by hand, use the pipelines:
 
-// Sharded + Replicated (3 shards × 3 replicas)
-let sharded_repl = KVSCluster::new(
-    ShardedRouter::new(3),
-    BroadcastReplication::default(),
-    3,
-    KVSNode { dispatch: RoundRobinRouter::new(), maintenance: (), count: 3 },
-);
+- `src/pipelines/single_layer.rs`
+    - `pipeline_single_layer_from_process` — route → replicate → process
+- `src/pipelines/two_layer.rs`
+    - `pipeline_two_layer_from_process` — parent route/replicate → leaf route → process
+    - `pipeline_two_layer_from_enveloped` — variant for pre-enveloped operations
 
-// Build and run directly from the spec
-let mut server = sharded_repl.build_server::<kvs_zoo::values::CausalString>().await?;
-server.start().await?;
-```
-
-Auxiliary clusters (for protocols like Paxos) are added with `.with_cluster(count, Option<name>)` and are optional.
+The examples below use both the simple server helpers and the explicit “detail” variants to show the minimal vs explicit Hydro wiring.
 
 ## Examples
 
-- `local.rs` — Single node
+- `local.rs` — Single node (no replication)
 - `replicated.rs` — 3 replicas with gossip
+    - `replicated_detail.rs` — same architecture with explicit Hydro wiring
 - `sharded.rs` — 3 shards, single node per shard
-- `sharded_replicated.rs` — 3 shards × 3 replicas (canonical)
-- `linearizable.rs` — Paxos + log-based replication (proposers/acceptors as auxiliary clusters)
+    - `sharded_detail.rs` — same architecture with explicit key-hash routing info
+- `sharded_replicated.rs` — 3 shards × 3 replicas
+- `linearizable.rs` — Paxos + log-based delivery
+- `three_level_recursive.rs` — nested layering demonstration
 
-## Running
+## Run them
 
 ```bash
 cargo run --example local
-cargo run --example replicated                      # causal by default
-cargo run --example replicated -- --lattice lww     # last-write-wins
+cargo run --example replicated
 cargo run --example sharded
 cargo run --example sharded_replicated
 cargo run --example linearizable
 ```
 
-Outputs are intentionally terse and uniform:
+Output style is intentionally consistent:
 
-- Header: `🚀 ...`
-- Operations: `→ ...`
-- Footer: `✅ ... complete`
+- Header: `🚀 …`
+- Per-op: `→ …`
+- Footer: `✅ … complete`
