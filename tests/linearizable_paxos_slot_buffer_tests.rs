@@ -7,7 +7,7 @@ use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, pax
 use kvs_zoo::before_storage::ordering::paxos_core::{Acceptor, Proposer};
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode, KVSSpec};
-use kvs_zoo::after_storage::replication::{LogBasedDelivery as LogBased, SlottedBroadcastReplication as BroadcastReplication};
+use kvs_zoo::after_storage::replication::{SequencedReplication as Sequenced, BroadcastReplication};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
@@ -19,7 +19,7 @@ struct ReplicaLeaf;
 type LinearizableKVS = KVSCluster<
     ReplicaCluster,
     RoundRobinRouter,
-    LogBased<BroadcastReplication<LwwWrapper<String>>>,
+    Sequenced<BroadcastReplication<LwwWrapper<String>>>,
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
@@ -31,7 +31,7 @@ fn get_waits_for_prior_put_slot() {
 
     let kvs = LinearizableKVS::new(
         RoundRobinRouter::new(),
-    LogBased::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+        Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::new()),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 

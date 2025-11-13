@@ -45,14 +45,14 @@ use serde::{Deserialize, Serialize};
 ///
 /// ## Example
 /// ```rust,ignore
-/// use kvs_zoo::after_storage::replication::{LogBasedDelivery, BroadcastReplication};
+/// use kvs_zoo::after_storage::replication::{SequencedReplication, BroadcastReplication};
 /// use kvs_zoo::values::CausalString;
 ///
 /// // Wrap broadcast replication with log-based ordering
-/// let replication = LogBasedDelivery::new(BroadcastReplication::<CausalString>::new());
+/// let replication = SequencedReplication::new(BroadcastReplication::<CausalString>::new());
 /// ```
 #[derive(Clone, Debug)]
-#[deprecated(note = "Use after_storage::replication::LogBasedDelivery instead")]
+#[deprecated(note = "Use after_storage::replication::SequencedReplication instead")]
 pub struct LogBased<R> {
     inner: R,
 }

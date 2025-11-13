@@ -124,6 +124,28 @@ where
         // Use simplified gossip - immediate forwarding
         self.handle_gossip_simple(cluster, local_data)
     }
+
+    fn replicate_slotted_data<'a>(
+        &self,
+        cluster: &Cluster<'a, KVSNode>,
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        // Forward slotted tuples to all peers preserving the slot
+        let cluster_members = Self::get_cluster_members(cluster)
+            .assume_retries(nondet!(/** member list OK */));
+
+        let sent = local_slotted_data
+            .clone()
+            .cross_product(cluster_members)
+            .map(q!(|((slot, tuple_k, tuple_v), member_id)| (member_id, (slot, tuple_k, tuple_v))))
+            .into_keyed()
+            .demux_bincode(cluster);
+
+        sent
+            .values()
+            .assume_ordering(nondet!(/** gossip messages unordered */))
+            .assume_retries(nondet!(/** gossip retries OK */))
+    }
 }
 
 impl<V> SimpleGossip<V>

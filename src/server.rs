@@ -325,7 +325,7 @@ pub mod common {
     use crate::before_storage::ordering::PaxosDispatcher;
     use crate::before_storage::Pipeline;
     use crate::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
-    use crate::after_storage::replication::{BroadcastReplication, LogBasedDelivery, SimpleGossip};
+    use crate::after_storage::replication::{BroadcastReplication, SequencedReplication, SimpleGossip};
     use crate::after_storage::NoReplication;
     use crate::values::{CausalString, LwwWrapper};
 
@@ -350,7 +350,7 @@ pub mod common {
     pub type ShardedReplicated<V = CausalString> =
         KVSServer<V, Pipeline<ShardedRouter, RoundRobinRouter>, BroadcastReplication<V>>;
 
-    /// Linearizable server with Paxos and log-based replication
+    /// Linearizable server with Paxos and sequenced replication
     pub type Linearizable<V = LwwWrapper<String>> =
-        KVSServer<V, PaxosDispatcher<V>, LogBasedDelivery<BroadcastReplication<V>>>;
+        KVSServer<V, PaxosDispatcher<V>, SequencedReplication<BroadcastReplication<V>>>;
 }

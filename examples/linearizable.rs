@@ -8,7 +8,7 @@ use kvs_zoo::before_storage::ordering::paxos::{PaxosConfig, PaxosDispatcher, pax
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::{KVSSpec, KVSCluster};
-use kvs_zoo::after_storage::replication::{LogBasedDelivery, SlottedBroadcastReplication as BroadcastReplication};
+use kvs_zoo::after_storage::replication::{SequencedReplication as Sequenced, BroadcastReplication};
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::protocol::{Envelope, KVSOperation};
 use kvs_zoo::server::wire_two_layer_from_inputs;
@@ -25,13 +25,13 @@ struct ReplicaLeaf;
 type LinearizableKVS = KVSCluster<
     OrderedCluster,
     RoundRobinRouter,
-    LogBasedDelivery<BroadcastReplication<LwwWrapper<String>>>,
+    Sequenced<BroadcastReplication<LwwWrapper<String>>>,
     kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
 >;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Linearizable KVS Demo (Paxos → LogBased<SlottedBroadcast> → SlotEnforce)");
+    println!("🚀 Linearizable KVS Demo (Paxos → Sequenced<Broadcast> → SlotEnforce)");
 
     // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define KVS architecture: cluster replication handles slotted log-based delivery.
     let kvs_spec = LinearizableKVS::new(
         RoundRobinRouter::new(),
-        LogBasedDelivery::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+    Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::new()),
         kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
             SlotOrderEnforcer::new(),
             Responder::new(),
