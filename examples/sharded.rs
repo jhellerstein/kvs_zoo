@@ -4,7 +4,7 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::wire_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
 
 // Marker type naming this KVS layer
@@ -26,16 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define KVS architecture
-    let kvs_spec = ShardedKVS::new(
-        ShardedRouter::new(3), // route to shard by key hash
-        (),                    // no maintenance
-        (),
-    );
+    // Define KVS architecture via defaults (Sharded-only)
+    let mut kvs_spec: ShardedKVS = Default::default();
+    kvs_spec.before = ShardedRouter::new(3); // 3 shards. this is the default but here to demonstrate how to override defaults.
 
     // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
     // Deploy: 3 shards, 1 node each
     let nodes = flow

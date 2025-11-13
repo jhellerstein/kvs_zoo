@@ -1,12 +1,12 @@
 //! Sharded + Replicated KVS (shards × replicas)
 
 use futures::{SinkExt, StreamExt};
-use kvs_zoo::after_storage::replication::BroadcastReplication;
+use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::CausalString;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 // Hydro location types = KVS layer types (no duplication!)
 #[derive(Clone)]
@@ -35,24 +35,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define KVS architecture: nested layers
-    let kvs_spec = ShardedReplicatedKVS::new(
-        ShardedRouter::new(3), // route to shard by key hash
-        (),                    // no maintenance at shard level
-        KVSCluster::new(
-            RoundRobinRouter::new(),         // load-balance within shard
-            BroadcastReplication::default(), // replicate within each shard
-            (),
-        ),
-    );
+    // Define KVS architecture via defaults (Sharded → RR → Broadcast)
+    let mut kvs_spec: ShardedReplicatedKVS = Default::default();
+    // An example of overriding defaults down the layers
+    kvs_spec.child.after =
+        BroadcastReplication::with_config(BroadcastReplicationConfig::low_latency());
 
     // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        wire_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
 
     // Deploy: one cluster per layer
-    // - Shard cluster: 3 members
-    // - Replica cluster: 3 members
+    // - Shard cluster: 3 members (default)
+    // - Replica cluster: 3 members (default)
     let nodes = flow
         .with_process(&proxy, localhost.clone())
         .with_cluster(

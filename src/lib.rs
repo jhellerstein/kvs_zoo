@@ -1,16 +1,32 @@
 stageleft::stageleft_no_entry_crate!();
 
-// Legacy dispatch module has been migrated to `before_storage` and removed from the public API.
+// Terminology: legacy "dispatch" → `before_storage`; legacy "maintenance" → `after_storage`.
 pub mod after_storage;
 pub mod before_storage;
 pub mod kvs_core;
-// The kvs_layer module is implemented as a directory of submodules (mod.rs + files)
-// to keep the types/traits (spec, wire_down, wire_up) small and readable.
-pub mod kvs_layer;
-pub mod layer_flow;
+
+// Inline module declaration to avoid ambiguity between `kvs_layer.rs` and `kvs_layer/` dir.
+// Re-export the directory-based module structure explicitly.
+pub mod kvs_layer {
+    #[path = "spec.rs"]
+    pub mod spec;
+    #[path = "types.rs"]
+    pub mod types;
+    #[path = "plumb_after.rs"]
+    pub mod plumb_after;
+    #[path = "plumb_before.rs"]
+    pub mod plumb_before;
+
+    pub use spec::KVSSpec;
+    pub use types::{KVSCluster, KVSClusters, KVSNode};
+    pub use plumb_after::AfterPlumb;
+    pub use plumb_before::KVSPlumb;
+}
+
+pub mod cross_layer_flow;
 pub mod protocol;
-pub mod server;
 pub mod values;
+pub mod plumbing;
 
 #[cfg(test)]
 mod test_init {

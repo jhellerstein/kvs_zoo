@@ -1,6 +1,6 @@
-//! Sharded Router Operation dispatcher
+//! Sharded router (Before stage)
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use crate::protocol::routing::RoutingKey;
@@ -34,7 +34,14 @@ impl ShardedRouter {
     }
 }
 
-impl<V> OpDispatch<V> for ShardedRouter
+impl Default for ShardedRouter {
+    fn default() -> Self {
+        // Sensible default for examples and tests; callers can override count as needed
+        ShardedRouter::new(3)
+    }
+}
+
+impl<V> Before<V> for ShardedRouter
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {

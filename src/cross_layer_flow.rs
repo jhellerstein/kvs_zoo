@@ -11,12 +11,14 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::after_storage::ReplicationStrategy;
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
-/// Unified two-layer pipeline over arbitrary input items convertible into KVSOperation
-pub fn layer_flow<'a, V, DParent, After, DLeaf, In>(
+/// Pipeline over arbitrary input items convertible into KVSOperation
+/// Works across ClusterKVS<ClusterKVS<...>> layers as well as
+/// ClusterKVS<KVSNode> (which is two different kinds of layers)
+pub fn cross_layer_flow<'a, V, DParent, After, DLeaf, In>(
     parent_cluster: &Cluster<'a, KVSNode>,
     parent_before: &DParent,
     parent_after: &After,
@@ -36,9 +38,9 @@ where
         + Send
         + Sync
         + 'static,
-    DParent: OpDispatch<V> + Clone,
+    DParent: Before<V> + Clone,
     After: ReplicationStrategy<V> + Clone,
-    DLeaf: OpDispatch<V> + Clone,
+    DLeaf: Before<V> + Clone,
     In: Into<KVSOperation<V>> + 'static,
 {
     // Convert inputs to bare operations
@@ -54,9 +56,12 @@ where
     // Ensure sequential processing at the leaf
     let leaf_ops_ordered = leaf_ops.assume_ordering(nondet!(/** sequential processing at leaf */));
 
-    // 3) processing: produce client responses and applied PUT deltas
-    let (local_responses, applied_puts) =
-        crate::kvs_core::KVSCore::process_with_deltas(leaf_ops_ordered);
+    // 3) processing: client responses via minimal core + applied PUT deltas via helper
+    let local_tagged = leaf_ops_ordered
+        .clone()
+        .map(q!(|op| crate::protocol::Envelope::new(true, op)));
+    let local_responses = crate::kvs_core::KVSCore::process(local_tagged);
+    let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops_ordered);
 
     // 4) after_storage (parent): replicate applied PUT deltas
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
@@ -66,8 +71,9 @@ where
     let leaf_replicated_ops = leaf_before
         .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
-    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
-    let replicate_responses = crate::kvs_core::KVSCore::process_with_responses(replicated_tagged);
+    let replicated_tagged = leaf_replicated_ops
+        .map(q!(|op| crate::protocol::Envelope::new(false, op)));
+    let replicate_responses = crate::kvs_core::KVSCore::process(replicated_tagged);
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     local_responses

@@ -1,17 +1,17 @@
-Sequenced, slot-aware replication (DONE):
-We unified the after-storage replication path with a single API that accepts mixed updates via `ReplicationUpdate<V>` and a `replicate_updates` entrypoint. Ordering is handled by a single wrapper `SequencedReplication<R>` that gap-fills and enforces slot order when available and delegates unchanged otherwise. This replaces prior mentions of “opportunistic” and removes the `LogBasedDelivery` variant.
-Optional: Audit other routers (RoundRobin, SingleNode) for similar generic affordances. They don’t inspect the op today, so no change is necessary functionally.
 
+Optional: Audit other routers (RoundRobin, SingleNode) for generic affordances to unify sequenced and non-sequenced streams. They don’t inspect the op today, so no change is necessary functionally.
 
 ---
-B. Layers with multiple clusters (e.g., Paxos roles)
 
-Also not hard; moderate but localized:
-Extend KVSClusters to register/retrieve role-specific clusters for a layer Name. For example: insert/get_role::<Name, Role>() keyed by (Name, RoleTypeId).
-Specialize KVSSpec for the Paxos layer to create and register both Proposers and Acceptors under the same Name.
-The rest of the stack doesn’t need to know these roles exist; the Paxos layer’s KVSWire impl can look them up internally.
+KVSCore has gotten complicated with multiple `process` variants. It used to be extremely minimalist, which I liked. Can we get back there?
 
 ---
+
+the tip of main for hydro now has good support for tombstoned sets. Let's use them in KVSCore, and then implement a proper Cluster-layer tombstone cleanup.  We need to think about how we want to implement that. We can use our vector clock implementation in src/values to ensure a given node knows a high-watermark on other node's clocks. Then the question is how we efficiently track timestamps for the tombstone sets... 
+
+An open design question is whether this logic should be in Hydro's lattice crate as part of the tombstone sets, or here.
+
+--- 
 
 Let's think about learning goals. This will affect the organization of the book as well as the repo.
 

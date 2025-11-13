@@ -2,7 +2,7 @@
 
 use hydro_lang::prelude::*;
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
+use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
 use serde::{Deserialize, Serialize};
 
@@ -43,7 +43,7 @@ impl LeafAfterHook for Responder {
 
 /// Responder also customizes the upward response pass: already handled filtering
 /// in `respond`, so we just pass through here (explicit override for clarity).
-impl MaintenanceAfterResponses for Responder {
+impl AfterResponses for Responder {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,

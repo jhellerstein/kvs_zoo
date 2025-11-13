@@ -2,15 +2,15 @@
 
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 // Marker type for Hydro location type / KVS layer type
 #[derive(Clone)]
 struct LocalStorage;
 
 // Architecture: single layer, single node
-type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>; // KVSCluster<Marker type, Dispatch, Maintenance, Nested layer>
+type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>; // KVSCluster<Marker type, Before, After, Nested layer>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Build a Hydro graph for the LocalKVS type, return layer handles and client I/O ports
-    let (layers, port) = wire_kvs_dataflow::<LwwWrapper<String>, _>(
+    let (layers, port) = plumb_kvs_dataflow::<LwwWrapper<String>, _>(
         &proxy,
         &client_external,
         &flow,

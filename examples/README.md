@@ -29,8 +29,8 @@ Two building blocks you can nest to any depth:
 See the types and traits in:
 
 - `src/kvs_layer/types.rs` — `KVSCluster`, `KVSNode`, `KVSClusters`
-- `src/kvs_layer/wire_down.rs` — `KVSWire` (before_storage routing/ordering)
-- `src/kvs_layer/wire_up.rs` — `AfterWire` (after_storage replication/responders)
+- `src/kvs_layer/wire_before.rs` — `KVSWire` (before_storage routing/ordering)
+- `src/kvs_layer/wire_after.rs` — `AfterWire` (after_storage replication/responders)
 - `src/kvs_layer/spec.rs` — `KVSSpec` (cluster creation/registration)
 
 ## Reusable wiring (flows)
@@ -38,7 +38,7 @@ See the types and traits in:
 If you don’t want to wire Hydro by hand, use the unified flow:
 
 - `src/layer_flow.rs`
-    - `pipeline_two_layer` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.
+    - `layer_flow` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.
 
 The examples below use both the simple server helpers and the explicit “detail” variants to show the minimal vs explicit Hydro wiring.
 
@@ -49,7 +49,7 @@ The examples below use both the simple server helpers and the explicit “detail
     - `replicated.rs` — 3 replicas with gossip
     - `sharded.rs` — 3 shards, single node per shard
     - `sharded_replicated.rs` — 3 shards × 3 replicas
-    - `linearizable.rs` — Paxos + log-based delivery
+    - `linearizable.rs` — Paxos + Sequenced<Broadcast> (slot-ordered replication)
     - `three_level_recursive.rs` — nested layering demonstration
 - Detail (explicit Hydro wiring)
     - `replicated_detail.rs` — same architecture as `replicated.rs`, explicit wiring

@@ -4,8 +4,8 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 // Marker type naming this KVS layer
 #[derive(Clone)]
@@ -26,16 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define KVS architecture
-    let kvs_spec = ReplicatedKVS::new(
-        RoundRobinRouter::new(),
-        SimpleGossip::new(100usize), // 100ms gossip interval
-        (),
-    );
+    // Define KVS architecture via defaults; override only the gossip interval
+    let mut kvs_spec: ReplicatedKVS = Default::default();
+    kvs_spec.after = SimpleGossip::new(100usize); // 100ms gossip interval
 
     // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
     // Deploy: 3 replicas for the cluster
     let nodes = flow

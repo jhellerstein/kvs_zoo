@@ -3,7 +3,7 @@
 //! Implements the unified `replicate_updates` API, splitting unslotted and
 //! slotted updates internally to avoid code duplication.
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy, ReplicationUpdate};
+use crate::after_storage::{AfterResponses, ReplicationStrategy, ReplicationUpdate};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -109,11 +109,14 @@ where
         cluster: &Cluster<'a, KVSNode>,
         updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
-        let unslotted_in = updates
-            .clone()
-            .filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }));
-        let slotted_in = updates
-            .filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }));
+        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
+            ReplicationUpdate::Unslotted(t) => Some(t),
+            _ => None,
+        }));
+        let slotted_in = updates.filter_map(q!(|u| match u {
+            ReplicationUpdate::Slotted(t) => Some(t),
+            _ => None,
+        }));
 
         let unslotted_out_raw = if self.config.enable_batching {
             self.handle_replication_periodic(cluster, unslotted_in)
@@ -201,7 +204,7 @@ where
 }
 
 // Upward pass hook: Broadcast replication doesn't modify responses by default
-impl<V> MaintenanceAfterResponses for BroadcastReplication<V> {
+impl<V> AfterResponses for BroadcastReplication<V> {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,

@@ -1,6 +1,6 @@
-//! Round Robin Router Operation dispatcher
+//! Round-robin router (Before stage)
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -15,7 +15,7 @@ impl RoundRobinRouter {
     }
 }
 
-impl<V> OpDispatch<V> for RoundRobinRouter {
+impl<V> Before<V> for RoundRobinRouter {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
@@ -75,7 +75,7 @@ impl<V> OpDispatch<V> for RoundRobinRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::before_storage::OpDispatchExt;
+    use crate::before_storage::BeforeExt;
 
     #[test]
     fn test_round_robin_router_creation() {
@@ -86,14 +86,14 @@ mod tests {
     #[test]
     fn test_round_robin_router_implements_dispatch() {
         let router = RoundRobinRouter::new();
-        fn _test_dispatch<V>(_dispatcher: impl OpDispatch<V>) {}
+        fn _test_dispatch<V>(_dispatcher: impl Before<V>) {}
         _test_dispatch::<String>(router);
     }
 
     #[test]
     fn test_round_robin_router_implements_dispatch_ext() {
         let router = RoundRobinRouter::new();
-        fn _test_dispatch_ext<V>(_dispatcher: impl OpDispatchExt<V>) {}
+        fn _test_dispatch_ext<V>(_dispatcher: impl BeforeExt<V>) {}
         _test_dispatch_ext::<String>(router);
     }
 }

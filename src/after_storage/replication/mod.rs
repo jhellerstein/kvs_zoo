@@ -5,7 +5,7 @@ pub mod gossip;
 pub use broadcast::*;
 pub use gossip::*;
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy};
+use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -63,7 +63,7 @@ where
 }
 
 // Upward pass hook: by default, this wrapper doesn't alter responses
-impl<R> MaintenanceAfterResponses for SequencedReplication<R> {
+impl<R> AfterResponses for SequencedReplication<R> {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,

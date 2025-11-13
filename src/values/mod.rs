@@ -36,15 +36,17 @@
 //!
 //! ## Architecture Integration
 //!
-//! These value wrappers work seamlessly with the KVS storage implementations:
+//! These value wrappers plug into any KVS wiring built with the composable
+//! before_storage/after_storage layers. See the examples for end-to-end
+//! configurations (local, replicated, sharded, linearizable) using
+//! `wire_kvs_dataflow` (in `kvs_zoo::wiring`) and the KVS cluster spec.
 //!
 //! ```rust
-//! use kvs_zoo::values::{LwwWrapper, CausalWrapper};
-//! use kvs_zoo::server::LocalKVSServer;
-//!
-//! // Use with any storage type
-//! type LwwKVS = LocalKVSServer<LwwWrapper<String>>;
-//! // Note: For more complex examples, see the individual module documentation
+//! use kvs_zoo::values::{LwwWrapper, CausalWrapper, VCWrapper};
+//! // Values are generic over the server wiring; pick the wrapper that matches
+//! // your desired consistency semantics and use it in your KVS spec.
+//! let _v1: LwwWrapper<String> = LwwWrapper::new("hello".to_string());
+//! let _v2: CausalWrapper<String> = CausalWrapper::new(VCWrapper::new(), "hi".to_string());
 //! ```
 
 pub mod causal;

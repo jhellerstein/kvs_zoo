@@ -9,7 +9,7 @@ use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::KVSOperation;
+use crate::protocol::{KVSOperation, Envelope};
 
 /// Represents an individual KVS node in the cluster
 ///
@@ -31,7 +31,7 @@ impl KVSCore {
     /// ## Returns
     /// Stream of responses in the same order as operations
     pub fn process<'a, V, L>(
-        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
+        operations: Stream<Envelope<bool, KVSOperation<V>>, L, Unbounded, TotalOrder>,
     ) -> Stream<String, L, Unbounded, TotalOrder>
     where
         V: Clone
@@ -49,127 +49,13 @@ impl KVSCore {
         L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
         // Use scan to maintain state and emit responses for each operation
-        operations.scan(
-            q!(|| std::collections::HashMap::new()),
-            q!(|state, op| {
-                let response = match op {
-                    KVSOperation::Put(key, value) => {
-                        // Use lattice merge semantics
-                        state
-                            .entry(key.clone())
-                            .and_modify(|existing| {
-                                lattices::Merge::merge(existing, value.clone());
-                            })
-                            .or_insert(value);
-                        format!("PUT {} = OK", key)
-                    }
-                    KVSOperation::Get(key) => match state.get(&key) {
-                        Some(value) => format!("GET {} = {}", key, value),
-                        None => format!("GET {} = NOT FOUND", key),
-                    },
-                };
-                Some(response) // Always emit the response
-            }),
-        )
-    }
-
-    /// Process operations and also emit a side-channel of applied PUT deltas.
-    ///
-    /// Returns a tuple (responses, puts) where:
-    /// - responses: total order stream of client-visible responses (PUT ack / GET value)
-    /// - puts: total order stream of (key, value) for each applied PUT in the same order
-    ///
-    /// This lets replication strategies operate purely on applied state deltas (after storage)
-    /// rather than inspecting upstream operations.
-    #[allow(clippy::type_complexity)]
-    pub fn process_with_deltas<'a, V, L>(
-        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
-    ) -> (
-        Stream<String, L, Unbounded, TotalOrder>,
-        Stream<(String, V), L, Unbounded, TotalOrder>,
-    )
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let scanned = operations.scan(
-            q!(|| (std::collections::HashMap::new(), Vec::new())),
-            q!(|state_and_deltas, op| {
-                let (state, deltas) = state_and_deltas;
-                deltas.clear();
-                let response = match op {
-                    KVSOperation::Put(key, value) => {
-                        state
-                            .entry(key.clone())
-                            .and_modify(|existing| {
-                                lattices::Merge::merge(existing, value.clone());
-                            })
-                            .or_insert(value.clone());
-                        deltas.push((key.clone(), value));
-                        format!("PUT {} = OK", key)
-                    }
-                    KVSOperation::Get(key) => match state.get(&key) {
-                        Some(value) => format!("GET {} = {}", key, value),
-                        None => format!("GET {} = NOT FOUND", key),
-                    },
-                };
-                Some((response, deltas.clone()))
-            }),
-        );
-
-        let responses = scanned.clone().map(q!(|(resp, _d)| resp));
-        let puts = scanned.flat_map_ordered(q!(|(_resp, deltas)| deltas));
-        (responses, puts)
-    }
-
-    /// Process operations with selective responses (for replication)
-    ///
-    /// Takes tagged operations where the boolean indicates whether to generate
-    /// a response. This allows distinguishing local operations (respond) from
-    /// replicated operations (don't respond).
-    ///
-    /// ## Parameters
-    /// - `tagged_operations`: Stream of (should_respond, operation) pairs
-    ///
-    /// ## Returns
-    /// Stream of responses only for operations marked with should_respond=true
-    pub fn process_with_responses<'a, V, L>(
-        tagged_operations: Stream<(bool, KVSOperation<V>), L, Unbounded, TotalOrder>,
-    ) -> Stream<String, L, Unbounded, TotalOrder>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        // Use scan to maintain state and conditionally emit responses
-        tagged_operations
+        operations
             .scan(
                 q!(|| std::collections::HashMap::new()),
-                q!(|state, (should_respond, op)| {
-                    match op {
+                q!(|state, envelope| {
+                    let should_respond = envelope.metadata; // bool flag
+                    match envelope.operation {
                         KVSOperation::Put(key, value) => {
-                            // Use lattice merge semantics
                             state
                                 .entry(key.clone())
                                 .and_modify(|existing| {
@@ -179,88 +65,23 @@ impl KVSCore {
                             if should_respond {
                                 Some(Some(format!("PUT {} = OK", key)))
                             } else {
-                                Some(None) // No response for replicated PUTs
+                                Some(None)
                             }
                         }
                         KVSOperation::Get(key) => {
-                            // GETs are always local (we don't replicate reads)
                             let response = match state.get(&key) {
                                 Some(value) => format!("GET {} = {}", key, value),
                                 None => format!("GET {} = NOT FOUND", key),
                             };
+                            // GETs always respond (reads are local)
                             Some(Some(response))
                         }
                     }
                 }),
             )
-            .filter_map(q!(|opt| opt)) // Remove None responses
+            .filter_map(q!(|opt| opt))
     }
-}
 
-impl KVSCore {
-    /// Process tagged operations but return the tag alongside the response.
-    ///
-    /// Tag semantics: `is_replica == true` means the op arrived via replication
-    /// and should NOT be ACKed to the client. `is_replica == false` means the op
-    /// is the original locally-routed op and SHOULD be ACKed.
-    pub fn process_tagged<'a, V>(
-        tagged_operations: Stream<
-            (bool, KVSOperation<V>),
-            Cluster<'a, KVSNode>,
-            Unbounded,
-            TotalOrder,
-        >,
-    ) -> Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded, TotalOrder>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-    {
-        let indexed = tagged_operations.enumerate();
-        indexed.scan(
-            q!(|| (std::collections::HashMap::new(), 0u32)),
-            q!(|(state, counter), (_idx, (is_via_replication, op))| {
-                let response = match op {
-                    KVSOperation::Put(key, value) => {
-                        state
-                            .entry(key.clone())
-                            .and_modify(|existing| {
-                                lattices::Merge::merge(existing, value.clone());
-                            })
-                            .or_insert(value);
-                        *counter += 1;
-                        format!(
-                            "[op{}:rep={}] PUT {} = OK",
-                            counter, is_via_replication, key
-                        )
-                    }
-                    KVSOperation::Get(key) => {
-                        *counter += 1;
-                        match state.get(&key) {
-                            Some(value) => format!(
-                                "[op{}:rep={}] GET {} = {}",
-                                counter, is_via_replication, key, value
-                            ),
-                            None => format!(
-                                "[op{}:rep={}] GET {} = NOT FOUND",
-                                counter, is_via_replication, key
-                            ),
-                        }
-                    }
-                };
-                Some((is_via_replication, response))
-            }),
-        )
-    }
 }
 
 #[cfg(test)]

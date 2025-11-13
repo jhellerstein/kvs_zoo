@@ -1,4 +1,4 @@
-// Native SlotOrderEnforcer (migrated from legacy dispatch::ordering::slot_enforcer)
+// Native SlotOrderEnforcer (before-storage ordering; migrated from legacy dispatch::ordering::slot_enforcer)
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SlotOrderEnforcer;
 
@@ -8,13 +8,13 @@ impl SlotOrderEnforcer {
     }
 }
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-impl<V> OpDispatch<V> for SlotOrderEnforcer {
+impl<V> Before<V> for SlotOrderEnforcer {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,

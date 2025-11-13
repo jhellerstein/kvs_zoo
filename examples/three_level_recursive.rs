@@ -4,8 +4,8 @@ use kvs_zoo::after_storage::{cleanup::TombstoneCleanup, replication::SimpleGossi
 use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::wire_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 #[derive(Clone)]
 struct Region;
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the GeoKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        wire_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
     // Deploy clusters per layer
     let nodes = flow

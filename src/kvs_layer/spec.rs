@@ -1,7 +1,7 @@
 use hydro_lang::prelude::*;
 
 use crate::after_storage::ReplicationStrategy;
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 
 /// Trait for KVS specifications that can create and register clusters.
 pub trait KVSSpec<V> {
@@ -31,12 +31,12 @@ impl<V> KVSSpec<V> for () {
 }
 
 // Recursive case: KVSCluster
-impl<V, Name, D, M, Child> KVSSpec<V> for crate::kvs_layer::KVSCluster<Name, D, M, Child>
+impl<V, Name, B, A, Child> KVSSpec<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-    D: OpDispatch<V> + Clone,
-    M: ReplicationStrategy<V> + Clone,
+    B: Before<V> + Clone,
+    A: ReplicationStrategy<V> + Clone,
     Child: KVSSpec<V>,
 {
     fn create_clusters<'a>(
@@ -49,18 +49,20 @@ where
     {
         let my_cluster = flow.cluster::<crate::kvs_core::KVSNode>();
         layers.insert::<Name>(my_cluster.clone());
+        // Allow the dispatcher to register any role-specific sub-clusters for this layer.
+        self.before.register_role_clusters::<Name>(flow, layers);
         let _child_entry = self.child.create_clusters(flow, layers);
         my_cluster
     }
 }
 
 // Leaf case: KVSNode (current behavior: creates a cluster; future: reuse parent cluster)
-impl<V, Name, D, M> KVSSpec<V> for crate::kvs_layer::KVSNode<Name, D, M>
+impl<V, Name, B, A> KVSSpec<V> for crate::kvs_layer::KVSNode<Name, B, A>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-    D: OpDispatch<V> + Clone,
-    M: ReplicationStrategy<V> + Clone,
+    B: Before<V> + Clone,
+    A: ReplicationStrategy<V> + Clone,
 {
     fn create_clusters<'a>(
         &self,

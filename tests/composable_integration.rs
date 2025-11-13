@@ -8,9 +8,10 @@
 use futures::{SinkExt, StreamExt};
 
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
+use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use std::collections::HashSet;
 use tokio::time::{Duration, timeout};
 
@@ -40,13 +41,15 @@ async fn test_local_kvs_service() {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Create local KVS server with unified API
-    type LocalKVS = KVSServer<LwwWrapper<String>, SingleNodeRouter, ()>;
-    let (kvs_cluster, client_port) = LocalKVS::deploy_and_run(&flow, &proxy, &client_external);
+    // Build spec and wire dataflow
+    struct Root;
+    let spec = KVSCluster::<Root, SingleNodeRouter, (), ()>::new(SingleNodeRouter::new(), (), ());
+    let (layers, client_port) =
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, spec);
     // Deploy
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); 1])
+        .with_cluster(layers.get::<Root>(), vec![localhost.clone(); 1])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
@@ -91,7 +94,7 @@ async fn test_local_kvs_service() {
         }
     }
 
-    println!("✅ LocalKVSServer test passed!");
+    println!("✅ Local KVS test passed!");
     // Clean up processes to avoid cross-test interference
     deployment.stop().await.unwrap();
 }
@@ -99,7 +102,7 @@ async fn test_local_kvs_service() {
 #[tokio::test]
 #[ignore = "Flaky test - replication timing issues"]
 async fn test_replicated_kvs_service() {
-    println!("🧪 Testing ReplicatedKVSServer");
+    println!("🧪 Testing Replicated KVS");
 
     // Set up deployment
     let mut deployment = hydro_deploy::Deployment::new();
@@ -110,14 +113,15 @@ async fn test_replicated_kvs_service() {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Create replicated KVS server with unified API
-    type ReplicatedKVS =
-        KVSServer<CausalString, RoundRobinRouter, kvs_zoo::after_storage::NoReplication>;
-    let (kvs_cluster, client_port) = ReplicatedKVS::deploy_and_run(&flow, &proxy, &client_external);
+    // Build spec and wire dataflow (no replication for simplicity)
+    struct Root;
+    let spec = KVSCluster::<Root, RoundRobinRouter, (), ()>::new(RoundRobinRouter::new(), (), ());
+    let (layers, client_port) =
+        plumb_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, spec);
     // Deploy with 3 replicas
     let nodes = flow
         .with_process(&proxy, localhost.clone())
-        .with_cluster(&kvs_cluster, vec![localhost.clone(); 3])
+        .with_cluster(layers.get::<Root>(), vec![localhost.clone(); 3])
         .with_external(&client_external, localhost)
         .deploy(&mut deployment);
 
@@ -173,7 +177,7 @@ async fn test_replicated_kvs_service() {
         }
     }
 
-    println!("✅ ReplicatedKVSServer test passed!");
+    println!("✅ Replicated KVS test passed!");
     // Clean up processes to avoid cross-test interference
     deployment.stop().await.unwrap();
 }
@@ -193,25 +197,21 @@ async fn test_sharded_kvs_service() {
 
     // Create sharded KVS server with unified API
     use kvs_zoo::before_storage::{Pipeline, routing::ShardedRouter};
-    type ShardedKVS = KVSServer<LwwWrapper<String>, Pipeline<ShardedRouter, SingleNodeRouter>, ()>;
-
-    let dispatch = Pipeline::new(ShardedRouter::new(3), SingleNodeRouter::new());
-    let maintenance = ();
-    let kvs_cluster = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
-    let client_port = ShardedKVS::run(
-        &proxy,
-        &kvs_cluster,
-        &client_external,
-        dispatch,
-        maintenance,
+    struct Root;
+    let spec = KVSCluster::<Root, Pipeline<ShardedRouter, SingleNodeRouter>, (), ()>::new(
+        Pipeline::new(ShardedRouter::new(3), SingleNodeRouter::new()),
+        (),
+        (),
     );
+    let (layers, client_port) =
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, spec);
     // Deploy with multiple shards
     let mut flow_builder = flow
         .with_process(&proxy, localhost.clone())
         .with_external(&client_external, localhost.clone());
 
-    // Add the shard deployment (now a single cluster)
-    flow_builder = flow_builder.with_cluster(&kvs_cluster, vec![localhost.clone(); 3]);
+    // Add the shard deployment (single Root cluster with 3 members)
+    flow_builder = flow_builder.with_cluster(layers.get::<Root>(), vec![localhost.clone(); 3]);
 
     let nodes = flow_builder.deploy(&mut deployment);
 
@@ -309,7 +309,7 @@ async fn test_sharded_kvs_service() {
     }
 
     println!(
-        "✅ ShardedKVSServer test completed (partial functionality due to simplified implementation)"
+        "✅ Sharded KVS test completed (partial functionality due to simplified implementation)"
     );
     // Clean up processes to avoid cross-test interference
     deployment.stop().await.unwrap();
@@ -330,29 +330,21 @@ async fn test_sharded_replicated_kvs_service() {
 
     // Create sharded + replicated KVS server with unified API
     use kvs_zoo::before_storage::{Pipeline, routing::ShardedRouter};
-    type ShardedReplicatedKVS = KVSServer<
-        CausalString,
-        Pipeline<ShardedRouter, RoundRobinRouter>,
-        kvs_zoo::after_storage::NoReplication,
-    >;
-
-    let dispatch = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
-    let maintenance = kvs_zoo::after_storage::NoReplication::new();
-    let kvs_cluster = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
-    let client_port = ShardedReplicatedKVS::run(
-        &proxy,
-        &kvs_cluster,
-        &client_external,
-        dispatch,
-        maintenance,
+    struct Root;
+    let spec = KVSCluster::<Root, Pipeline<ShardedRouter, RoundRobinRouter>, (), ()>::new(
+        Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new()),
+        (),
+        (),
     );
+    let (layers, client_port) =
+        plumb_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, spec);
     // Deploy with multiple shards (each shard has 3 replicas)
     let mut flow_builder = flow
         .with_process(&proxy, localhost.clone())
         .with_external(&client_external, localhost.clone());
 
-    // Add the shard deployment (now a single cluster)
-    flow_builder = flow_builder.with_cluster(&kvs_cluster, vec![localhost.clone(); 9]); // 3 shards × 3 replicas
+    // Add the shard deployment (single Root cluster with 9 members = 3 shards × 3 replicas)
+    flow_builder = flow_builder.with_cluster(layers.get::<Root>(), vec![localhost.clone(); 9]);
 
     let nodes = flow_builder.deploy(&mut deployment);
 
@@ -406,7 +398,7 @@ async fn test_sharded_replicated_kvs_service() {
         }
     }
 
-    println!("✅ ShardedKVSServer<ReplicatedKVSServer> test completed!");
+    println!("✅ Sharded + Replicated KVS test completed!");
     println!(
         "🎯 Demonstrated: True composable server architecture with 9 total nodes (3 shards × 3 replicas)"
     );

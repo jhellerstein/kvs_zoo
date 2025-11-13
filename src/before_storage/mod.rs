@@ -10,11 +10,11 @@ pub mod ordering;
 pub mod routing;
 
 /* ------------------------------------------------------------------------- */
-/* Dispatch Core (moved from crate::dispatch)                                */
+/* Before-storage core (formerly `dispatch`)                                  */
 /* ------------------------------------------------------------------------- */
 
-/// Dispatcher for routing operations from proxy to cluster.
-pub trait OpDispatch<V> {
+/// Before-stage component for routing operations from proxy to cluster.
+pub trait Before<V> {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
@@ -22,6 +22,19 @@ pub trait OpDispatch<V> {
     ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
+
+    /// Optional variant that has access to the layer registry. Default forwards to `dispatch_from_process`.
+    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+        &self,
+        _layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        self.dispatch_from_process(operations, target_cluster)
+    }
 
     fn dispatch_slotted_from_process<'a>(
         &self,
@@ -55,10 +68,35 @@ pub trait OpDispatch<V> {
             .values()
             .assume_ordering(nondet!(/** cluster hop routed */))
     }
+
+    /// Optional variant that has access to the layer registry. Default forwards to `dispatch_from_cluster`.
+    fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+        _layers: &crate::kvs_layer::KVSClusters<'a>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        self.dispatch_from_cluster(operations, source_cluster, target_cluster)
+    }
+
+    /// Hook to allow a dispatcher to register role-specific sub-clusters during cluster creation.
+    /// Most dispatchers have nothing to register; default does nothing.
+    fn register_role_clusters<'a, Name: 'static>(
+        &self,
+        _flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        _layers: &mut crate::kvs_layer::KVSClusters<'a>,
+    ) {
+    }
 }
 
-/// Unit (No‑Op) Dispatch for Leaf Nodes
-impl<V> OpDispatch<V> for () {
+// (Trait renamed to `Before`; legacy alias removed.)
+
+/// Unit (No‑Op) Before-stage for leaf nodes
+impl<V> Before<V> for () {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
@@ -106,7 +144,7 @@ impl IdentityDispatch {
     }
 }
 
-impl<V> OpDispatch<V> for IdentityDispatch {
+impl<V> Before<V> for IdentityDispatch {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
@@ -154,10 +192,10 @@ impl<A: Default, B: Default> Default for Pipeline<A, B> {
     }
 }
 
-impl<A, B, V> OpDispatch<V> for Pipeline<A, B>
+impl<A, B, V> Before<V> for Pipeline<A, B>
 where
-    A: OpDispatch<V>,
-    B: OpDispatch<V>,
+    A: Before<V>,
+    B: Before<V>,
 {
     fn dispatch_from_process<'a>(
         &self,
@@ -187,40 +225,95 @@ where
         self.second
             .dispatch_from_cluster(mid, target_cluster, target_cluster)
     }
+
+    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        target_cluster: &Cluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        let first_out = self.first.dispatch_from_process_with_layers::<Name>(
+            layers,
+            operations,
+            target_cluster,
+        );
+        self.second.dispatch_from_cluster_with_layers::<Name>(
+            first_out,
+            target_cluster,
+            target_cluster,
+            layers,
+        )
+    }
+
+    fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        source_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &Cluster<'a, KVSNode>,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        let mid = self.first.dispatch_from_cluster_with_layers::<Name>(
+            operations,
+            source_cluster,
+            target_cluster,
+            layers,
+        );
+        self.second.dispatch_from_cluster_with_layers::<Name>(
+            mid,
+            target_cluster,
+            target_cluster,
+            layers,
+        )
+    }
+
+    fn register_role_clusters<'a, Name: 'static>(
+        &self,
+        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        layers: &mut crate::kvs_layer::KVSClusters<'a>,
+    ) {
+        self.first.register_role_clusters::<Name>(flow, layers);
+        self.second.register_role_clusters::<Name>(flow, layers);
+    }
 }
 
 /// Fluent extension for chaining.
-pub trait OpDispatchExt<V>: OpDispatch<V> + Sized {
-    fn then<N: OpDispatch<V>>(self, next: N) -> Pipeline<Self, N> {
+pub trait BeforeExt<V>: Before<V> + Sized {
+    fn then<N: Before<V>>(self, next: N) -> Pipeline<Self, N> {
         Pipeline::new(self, next)
     }
 }
-impl<V, T: OpDispatch<V>> OpDispatchExt<V> for T {}
+impl<V, T: Before<V>> BeforeExt<V> for T {}
 
 /* ------------------------------------------------------------------------- */
 /* Marker trait to forbid `()` at cluster level                               */
 /* ------------------------------------------------------------------------- */
-pub trait ClusterLevelDispatch {}
+pub trait ClusterLevelBefore {}
 
-impl ClusterLevelDispatch for routing::SingleNodeRouter {}
-impl ClusterLevelDispatch for routing::ShardedRouter {}
-impl ClusterLevelDispatch for routing::RoundRobinRouter {}
-impl<V> ClusterLevelDispatch for ordering::PaxosDispatcher<V> {}
-impl ClusterLevelDispatch for IdentityDispatch {}
-impl<A, B> ClusterLevelDispatch for Pipeline<A, B>
+impl ClusterLevelBefore for routing::SingleNodeRouter {}
+impl ClusterLevelBefore for routing::ShardedRouter {}
+impl ClusterLevelBefore for routing::RoundRobinRouter {}
+impl<V> ClusterLevelBefore for ordering::PaxosDispatcher<V> {}
+impl ClusterLevelBefore for IdentityDispatch {}
+impl<A, B> ClusterLevelBefore for Pipeline<A, B>
 where
-    A: ClusterLevelDispatch,
-    B: ClusterLevelDispatch,
+    A: ClusterLevelBefore,
+    B: ClusterLevelBefore,
 {
 }
 
 // Convenient root re-exports for common ordering types
 pub use ordering::{PaxosConfig, PaxosDispatcher, SlotOrderEnforcer};
 
-/// Marker alias for “no leaf” dispatcher when using a unified flow.
+/// Marker alias for “no leaf” before-stage when using a unified flow.
 ///
 /// Use `NoLeaf` anywhere a leaf before_storage component is optional. It is
-/// implemented via the unit type `()` which already implements `OpDispatch<V>`.
+/// implemented via the unit type `()` which already implements `Before<V>`.
 pub type NoLeaf = ();
 /// Singleton value for `NoLeaf` to use in places expecting a reference
 pub const NO_LEAF: NoLeaf = ();
