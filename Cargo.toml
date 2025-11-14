@@ -11,7 +11,7 @@ name = "kvs_zoo"
 hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = ["deploy"] }
 hydro_std = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
 hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-lattices = { version = "0.6.1", features = ["serde"] }
+lattices = { git = "https://github.com/hydro-project/hydro.git", package = "lattices", branch = "main", features = ["serde"] }
 stageleft = "0.10.0"
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.8.0"
@@ -23,7 +23,7 @@ tokio = { version = "1.29.0", features = ["full"] }
 default = ["tombstone_hashset"]
 # Use a HashSet<String> as the tombstone set
 tombstone_hashset = []
-# Use a compressed FST-based tombstone set (String keys). Requires lattices crate to have fst enabled internally.
+# Placeholder for future FST-based tombstones (String keys); currently maps to HashSet in code.
 tombstone_fst = []
 
 [build-dependencies]
@@ -41,6 +41,7 @@ tokio = { version = "1.29.0", features = ["full"] }
 tokio-stream = { version = "0.1.3", default-features = false }
 futures = "0.3.0"
 insta = { version = "1", features = ["json"] }
+proptest = "1.4"
 
 [lints.clippy]
 uninlined_format_args = "allow"

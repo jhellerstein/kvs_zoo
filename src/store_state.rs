@@ -10,15 +10,15 @@ use std::collections::HashMap;
 
 use lattices::map_union_with_tombstones::MapUnionWithTombstones;
 
-// Select tombstone set implementation by feature flag. Default uses HashSet to
-// avoid depending on internal FST types from lattices unless explicitly enabled.
+// Select tombstone set implementation by feature flag.
+// Temporarily use HashSet for both variants until Hydro exposes FST tombstones.
 #[cfg(feature = "tombstone_fst")]
-use lattices::tombstone::FstTombstoneSet;
-
-#[cfg(feature = "tombstone_fst")]
-type TombSet = FstTombstoneSet<String>;
+type TombSet = std::collections::HashSet<String>;
 
 #[cfg(feature = "tombstone_hashset")]
+type TombSet = std::collections::HashSet<String>;
+
+#[cfg(not(any(feature = "tombstone_fst", feature = "tombstone_hashset")))]
 type TombSet = std::collections::HashSet<String>;
 
 /// Primary store state lattice: map of live values paired with a compressed FST tombstone set.
