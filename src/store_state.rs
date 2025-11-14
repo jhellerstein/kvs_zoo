@@ -9,17 +9,27 @@
 use std::collections::HashMap;
 
 use lattices::map_union_with_tombstones::MapUnionWithTombstones;
+
+// Select tombstone set implementation by feature flag. Default uses HashSet to
+// avoid depending on internal FST types from lattices unless explicitly enabled.
+#[cfg(feature = "tombstone_fst")]
 use lattices::tombstone::FstTombstoneSet;
 
+#[cfg(feature = "tombstone_fst")]
+type TombSet = FstTombstoneSet<String>;
+
+#[cfg(feature = "tombstone_hashset")]
+type TombSet = std::collections::HashSet<String>;
+
 /// Primary store state lattice: map of live values paired with a compressed FST tombstone set.
-pub type StoreState<V> = MapUnionWithTombstones<HashMap<String, V>, FstTombstoneSet<String>>;
+pub type StoreState<V> = MapUnionWithTombstones<HashMap<String, V>, TombSet>;
 
 /// Construct a PUT delta: singleton map entry, empty tombstone set.
 pub fn delta_put<V>(key: String, value: V) -> StoreState<V>
 where
     V: Clone,
 {
-    StoreState::new_from([(key, value)], FstTombstoneSet::default())
+    StoreState::new_from([(key, value)], TombSet::default())
 }
 
 /// Construct a DELETE delta: empty map, singleton tombstone set.
@@ -27,8 +37,8 @@ pub fn delta_del<V>(key: String) -> StoreState<V>
 where
     V: Clone,
 {
-    // FstTombstoneSet implements FromIterator<String>
-    StoreState::new_from([], std::iter::once(key))
+    // Tombstone set implements FromIterator<String>
+    StoreState::new_from([], std::iter::once(key).collect::<TombSet>())
 }
 
 /// Lookup helper: returns Some(&V) only if key is live (present and not tombstoned).

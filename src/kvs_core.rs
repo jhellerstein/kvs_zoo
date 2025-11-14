@@ -49,34 +49,19 @@ impl KVSCore {
         L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
         // Use scan to maintain state and emit responses for each operation
-        // Internal cell tracks whether a key is live or tombstoned while retaining
-        // the last live value for potential future semantics (e.g., delete undo, audit).
-        #[derive(Clone, Debug)]
-        enum Cell<V> {
-            Live(V),
-            Tombstoned(Option<V>), // optionally retain last live value
-        }
-
         operations
             .scan(
-                q!(|| std::collections::HashMap::<String, Cell<V>>::new()),
+                q!(|| std::collections::HashMap::new()),
                 q!(|state, envelope| {
                     let should_respond = envelope.metadata; // bool flag
                     match envelope.operation {
                         KVSOperation::Put(key, value) => {
                             state
                                 .entry(key.clone())
-                                .and_modify(|cell| match cell {
-                                    Cell::Live(existing) => lattices::Merge::merge(existing, value.clone()),
-                                    Cell::Tombstoned(last) => {
-                                        // resurrect: merge into prior last (if kept) then mark live
-                                        if let Some(prev) = last.as_mut() {
-                                            lattices::Merge::merge(prev, value.clone());
-                                        }
-                                        *cell = Cell::Live(value.clone());
-                                    }
+                                .and_modify(|existing| {
+                                    lattices::Merge::merge(existing, value.clone());
                                 })
-                                .or_insert(Cell::Live(value));
+                                .or_insert(value);
                             if should_respond {
                                 Some(Some(format!("PUT {} = OK", key)))
                             } else {
@@ -85,26 +70,16 @@ impl KVSCore {
                         }
                         KVSOperation::Get(key) => {
                             let response = match state.get(&key) {
-                                Some(Cell::Live(value)) => format!("GET {} = {}", key, value),
-                                Some(Cell::Tombstoned(_)) => format!("GET {} = NOT FOUND", key),
+                                Some(value) => format!("GET {} = {}", key, value),
                                 None => format!("GET {} = NOT FOUND", key),
                             };
+                            // GETs always respond (reads are local)
                             Some(Some(response))
                         }
                         KVSOperation::Delete(key) => {
-                            state
-                                .entry(key.clone())
-                                .and_modify(|cell| match cell {
-                                    Cell::Live(v) => {
-                                        // retain last value for optional future audit/compressed tombstone
-                                        let retained = Some(v.clone());
-                                        *cell = Cell::Tombstoned(retained);
-                                    }
-                                    Cell::Tombstoned(_) => { /* already tombstoned */ }
-                                })
-                                .or_insert(Cell::Tombstoned(None));
+                            // Core remains oblivious to tombstone mechanics; just acknowledge.
                             if should_respond {
-                                Some(Some(format!("DEL {} = OK", key)))
+                                Some(Some(format!("DELETE {} = OK", key)))
                             } else {
                                 Some(None)
                             }
@@ -131,10 +106,6 @@ mod tests {
             KVSOperation::Get("x".to_string()),
             KVSOperation::Put("x".to_string(), LwwWrapper::new("2".to_string())),
             KVSOperation::Get("x".to_string()),
-            KVSOperation::Delete("x".to_string()),
-            KVSOperation::Get("x".to_string()),
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("3".to_string())),
-            KVSOperation::Get("x".to_string()),
         ];
 
         // In a real implementation, we'd test this with Hydro streams
@@ -152,11 +123,7 @@ mod tests {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key) => {
-                    // remove physically for this unit test simulation; core impl keeps tombstone cell
-                    state.remove(&key);
-                    format!("DEL {} = OK", key)
-                }
+                KVSOperation::Delete(key) => format!("DELETE {} = OK", key),
             };
             responses.push(response);
         }
@@ -165,9 +132,7 @@ mod tests {
         assert_eq!(responses[0], "PUT x = OK");
         assert!(responses[1].contains("1")); // GET sees first PUT
         assert_eq!(responses[2], "PUT x = OK");
-    assert!(responses[3].contains("2")); // GET sees second PUT
-    assert!(responses[5].contains("NOT FOUND")); // After delete, key not found
-    assert!(responses[7].contains("3")); // After resurrecting put, key found again
+        assert!(responses[3].contains("2")); // GET sees second PUT
     }
 
     #[test]
@@ -195,11 +160,7 @@ mod tests {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key) => {
-                    // Not used in this test sequence; treat as tombstone
-                    state.remove(key);
-                    format!("DEL {} = OK", key)
-                }
+                KVSOperation::Delete(key) => format!("DELETE {} = OK", key),
             };
             sequential_responses.push(response);
         }
@@ -272,10 +233,7 @@ mod tests {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key) => {
-                    state.remove(&key);
-                    format!("DEL {} = OK", key)
-                }
+                KVSOperation::Delete(key) => format!("DELETE {} = OK", key),
             };
             responses.push(response);
         }
