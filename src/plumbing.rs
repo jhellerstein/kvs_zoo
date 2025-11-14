@@ -70,7 +70,9 @@ where
         + Send
         + Sync
         + 'static,
-    K: crate::kvs_layer::KVSSpec<V> + crate::kvs_layer::KVSPlumb<V> + crate::kvs_layer::AfterPlumb<V>,
+    K: crate::kvs_layer::KVSSpec<V>
+        + crate::kvs_layer::KVSPlumb<V>
+        + crate::kvs_layer::AfterPlumb<V>,
 {
     // Create all clusters for all layers
     let mut layers = crate::kvs_layer::KVSClusters::new();
@@ -85,7 +87,7 @@ where
         .entries()
         .map(q!(|(_client_id, op)| op))
         .assume_ordering(nondet!(/** client op stream */));
-    // Downward pass via before_storage chain (KVSWire)
+    // Downward pass via before_storage chain (KVSPlumb)
     let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
 
     // Core processing at leaf (assume total order already imposed by before_storage components)
@@ -122,5 +124,5 @@ where
 }
 
 // Re-export types used in the signature to minimize import churn in examples
-use crate::protocol::{KVSOperation, Envelope};
+use crate::protocol::KVSOperation;
 use hydro_lang::location::external_process::ExternalBincodeBidi;

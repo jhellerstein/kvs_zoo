@@ -4,8 +4,8 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::values::LwwWrapper;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::values::LwwWrapper;
 
 // Marker type naming this KVS layer
 #[derive(Clone)]

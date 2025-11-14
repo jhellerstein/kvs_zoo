@@ -4,9 +4,9 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::CausalString;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 // Hydro location types = KVS layer types (no duplication!)
 #[derive(Clone)]

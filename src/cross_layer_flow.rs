@@ -71,8 +71,8 @@ where
     let leaf_replicated_ops = leaf_before
         .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
-    let replicated_tagged = leaf_replicated_ops
-        .map(q!(|op| crate::protocol::Envelope::new(false, op)));
+    let replicated_tagged =
+        leaf_replicated_ops.map(q!(|op| crate::protocol::Envelope::new(false, op)));
     let replicate_responses = crate::kvs_core::KVSCore::process(replicated_tagged);
 
     // Merge to keep the replicate path live; replicate_responses is typically empty

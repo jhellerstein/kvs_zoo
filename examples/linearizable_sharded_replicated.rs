@@ -9,9 +9,9 @@ use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 #[derive(Clone)]
 struct OrderedCluster; // Paxos ordering layer
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define the nested KVS architecture via defaults (Paxos → Sharded → RR → Sequenced<Broadcast> → Slot/Responder)
     let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
 
-    // Wire full dataflow with external I/O using the standard helper
+    // Plumb full dataflow with external I/O using the standard helper
     let (layers, bidi_port) =
         plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 

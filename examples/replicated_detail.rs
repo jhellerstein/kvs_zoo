@@ -65,8 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let local_tagged = ordered_ops
         .clone()
         .map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
-    let replicated_tagged = replicated_puts
-        .map(q!(|(k, v)| kvs_zoo::protocol::Envelope::new(false, KVSOperation::Put(k, v))));
+    let replicated_tagged = replicated_puts.map(q!(|(k, v)| kvs_zoo::protocol::Envelope::new(
+        false,
+        KVSOperation::Put(k, v)
+    )));
     let all_tagged = local_tagged
         .interleave(replicated_tagged)
         .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(

@@ -39,7 +39,7 @@
 //! These value wrappers plug into any KVS wiring built with the composable
 //! before_storage/after_storage layers. See the examples for end-to-end
 //! configurations (local, replicated, sharded, linearizable) using
-//! `wire_kvs_dataflow` (in `kvs_zoo::wiring`) and the KVS cluster spec.
+//! `plumb_kvs_dataflow` (in `kvs_zoo::wiring`) and the KVS cluster spec.
 //!
 //! ```rust
 //! use kvs_zoo::values::{LwwWrapper, CausalWrapper, VCWrapper};

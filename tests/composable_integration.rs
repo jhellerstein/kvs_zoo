@@ -9,9 +9,9 @@ use futures::{SinkExt, StreamExt};
 
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use std::collections::HashSet;
 use tokio::time::{Duration, timeout};
 
@@ -41,7 +41,7 @@ async fn test_local_kvs_service() {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Build spec and wire dataflow
+    // Build spec and plumb dataflow
     struct Root;
     let spec = KVSCluster::<Root, SingleNodeRouter, (), ()>::new(SingleNodeRouter::new(), (), ());
     let (layers, client_port) =
@@ -113,7 +113,7 @@ async fn test_replicated_kvs_service() {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Build spec and wire dataflow (no replication for simplicity)
+    // Build spec and plumb dataflow (no replication for simplicity)
     struct Root;
     let spec = KVSCluster::<Root, RoundRobinRouter, (), ()>::new(RoundRobinRouter::new(), (), ());
     let (layers, client_port) =

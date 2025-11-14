@@ -7,6 +7,8 @@ pub enum KVSOperation<V> {
     Put(String, V),
     /// Retrieve the value for a key
     Get(String),
+    /// Tombstone (logically delete) a key
+    Delete(String),
 }
 
 /// Response types that the server sends back to clients
@@ -14,6 +16,8 @@ pub enum KVSOperation<V> {
 pub enum KVSResponse<V> {
     /// Successful PUT operation
     PutOk,
-    /// GET operation result - Some(value) if found, None if not found
+    /// Successful DELETE (tombstone) operation
+    DeleteOk,
+    /// GET operation result - Some(value) if found and live, None if not found or tombstoned
     GetResult(Option<V>),
 }

@@ -23,7 +23,7 @@ The zoo showcases a composable architecture where dispatch strategies, maintenan
 - **Composable layers**:
   - Before storage (routing/ordering): `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`, and `Pipeline<...>` to compose them
   - After storage (replication/responders): `NoReplication`, `SimpleGossip`, `BroadcastReplication`, and `SequencedReplication<R>` wrapper for slot-ordered delivery
-- **Single entrypoint**: `layer_flow` (for focused wiring) and `wire_kvs_dataflow` (for end-to-end server wiring with external I/O)
+- **Single entrypoint**: `layer_flow` (for focused wiring) and `plumb_kvs_dataflow` (for end-to-end server wiring with external I/O)
 - **Unified replication API**: all strategies implement `replicate_updates` over `ReplicationUpdate<V>` so the same code handles slotted (sequenced) and unslotted updates
 - **Value Types**: `LwwWrapper<T>` (last-writer-wins), `CausalWrapper<T>` (causal with vector clocks)
 
@@ -100,8 +100,8 @@ Strong consistency via Paxos consensus with sequenced replication.
 KVS architectures are built by composing before_storage and after_storage layers, then wiring them with a single entrypoint:
 
 ```rust
-// Create external I/O and wire the full stack
-let (layers, port) = wire_kvs_dataflow::<LwwWrapper<String>, _>(
+// Create external I/O and plumb the full stack
+let (layers, port) = plumb_kvs_dataflow::<LwwWrapper<String>, _>(
   &proxy,
   &client_external,
   &flow,
@@ -109,7 +109,7 @@ let (layers, port) = wire_kvs_dataflow::<LwwWrapper<String>, _>(
 );
 ```
 
-For focused scenarios (e.g., tests), `layer_flow` wires a single cluster with selected routing and replication over a stream of `KVSOperation<V>`.
+For focused scenarios (e.g., tests), `layer_flow` plumbs a single cluster with selected routing and replication over a stream of `KVSOperation<V>`.
 
 ### Value Semantics (`src/values/`)
 

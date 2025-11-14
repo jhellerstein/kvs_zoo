@@ -18,6 +18,14 @@ rand = "0.8.0"
 futures = "0.3.0"
 tokio = { version = "1.29.0", features = ["full"] }
 
+[features]
+# Default: simple HashSet tombstones (no extra dependencies)
+default = ["tombstone_hashset"]
+# Use a HashSet<String> as the tombstone set
+tombstone_hashset = []
+# Use a compressed FST-based tombstone set (String keys). Requires lattices crate to have fst enabled internally.
+tombstone_fst = []
+
 [build-dependencies]
 stageleft_tool = "0.10.0"
 

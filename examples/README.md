@@ -1,6 +1,6 @@
 # KVS Zoo Examples
 
-This directory contains runnable demos of different KVS topologies, all described with a small, recursive layering API in `kvs_layer` and wired with reusable pipelines.
+This directory contains runnable demos of different KVS topologies, all described with a small, recursive layering API in `kvs_layer` and plumbed with reusable pipelines.
 
 ## Magic vs Detail
 
@@ -29,13 +29,13 @@ Two building blocks you can nest to any depth:
 See the types and traits in:
 
 - `src/kvs_layer/types.rs` — `KVSCluster`, `KVSNode`, `KVSClusters`
-- `src/kvs_layer/wire_before.rs` — `KVSWire` (before_storage routing/ordering)
-- `src/kvs_layer/wire_after.rs` — `AfterWire` (after_storage replication/responders)
+- `src/kvs_layer/plumb_before.rs` — `KVSPlumb` (before_storage routing/ordering)
+- `src/kvs_layer/plumb_after.rs` — `AfterPlumb` (after_storage replication/responders)
 - `src/kvs_layer/spec.rs` — `KVSSpec` (cluster creation/registration)
 
 ## Reusable wiring (flows)
 
-If you don’t want to wire Hydro by hand, use the unified flow:
+If you don’t want to plumb Hydro by hand, use the unified flow:
 
 - `src/layer_flow.rs`
     - `layer_flow` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.

@@ -8,25 +8,26 @@ pub mod kvs_core;
 // Inline module declaration to avoid ambiguity between `kvs_layer.rs` and `kvs_layer/` dir.
 // Re-export the directory-based module structure explicitly.
 pub mod kvs_layer {
-    #[path = "spec.rs"]
-    pub mod spec;
-    #[path = "types.rs"]
-    pub mod types;
     #[path = "plumb_after.rs"]
     pub mod plumb_after;
     #[path = "plumb_before.rs"]
     pub mod plumb_before;
+    #[path = "spec.rs"]
+    pub mod spec;
+    #[path = "types.rs"]
+    pub mod types;
 
-    pub use spec::KVSSpec;
-    pub use types::{KVSCluster, KVSClusters, KVSNode};
     pub use plumb_after::AfterPlumb;
     pub use plumb_before::KVSPlumb;
+    pub use spec::KVSSpec;
+    pub use types::{KVSCluster, KVSClusters, KVSNode};
 }
 
 pub mod cross_layer_flow;
+pub mod plumbing;
 pub mod protocol;
 pub mod values;
-pub mod plumbing;
+pub mod store_state;
 
 #[cfg(test)]
 mod test_init {

@@ -8,8 +8,8 @@ use kvs_zoo::after_storage::replication::{
 use kvs_zoo::before_storage::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
-use kvs_zoo::values::LwwWrapper;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
 struct OrderedCluster;
@@ -38,7 +38,7 @@ fn get_waits_for_prior_put_slot() {
     let (layers, bidi_port) =
         plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs);
 
-    // Responses are already wired inside wire_kvs_dataflow; nothing to add here.
+    // Responses are already plumbed inside plumb_kvs_dataflow; nothing to add here.
 
     // Deploy
     let mut deployment = hydro_deploy::Deployment::new();

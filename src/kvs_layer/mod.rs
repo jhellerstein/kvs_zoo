@@ -2,8 +2,8 @@
 //!
 //! This module re-exports types and traits from submodules:
 //! - types: KVSCluster, KVSNode, KVSClusters
-//! - wire_before: KVSWire (before_storage routing/ordering)
-//! - wire_after: AfterWire (after_storage replication/responders)
+//! - plumb_before: KVSPlumb (before_storage routing/ordering)
+//! - plumb_after: AfterPlumb (after_storage replication/responders)
 //! - spec: KVSSpec (cluster creation/registration)
 //!
 //! Note: This directory-based split replaces the former single-file `kvs_layer.rs`.
@@ -13,13 +13,13 @@
 
 pub mod spec;
 pub mod types;
-pub mod wire_before;
-pub mod wire_after;
+pub mod plumb_before;
+pub mod plumb_after;
 
 pub use spec::KVSSpec;
 pub use types::{KVSCluster, KVSClusters, KVSNode};
-pub use wire_before::KVSWire;
-pub use wire_after::AfterWire;
+pub use plumb_before::KVSPlumb;
+pub use plumb_after::AfterPlumb;
 
 #[cfg(test)]
 mod tests {

@@ -2,8 +2,8 @@
 
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::values::LwwWrapper;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::values::LwwWrapper;
 
 // Marker type for Hydro location type / KVS layer type
 #[derive(Clone)]

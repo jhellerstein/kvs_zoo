@@ -3,9 +3,9 @@ use futures::{SinkExt, StreamExt};
 use kvs_zoo::after_storage::{cleanup::TombstoneCleanup, replication::SimpleGossip};
 use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
+use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
 
 #[derive(Clone)]
 struct Region;
