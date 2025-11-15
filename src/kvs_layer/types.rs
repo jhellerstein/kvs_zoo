@@ -10,28 +10,33 @@ use std::marker::PhantomData;
 /// - `A`: after_storage strategy (replication/responders) at this level
 /// - `Child`: either another `KVSCluster` or `()` for terminal
 #[derive(Clone)]
-pub struct KVSCluster<Name, B, A, Child> {
+pub struct KVSCluster<Name, B, A, Child, Bg = ()> {
     _name: PhantomData<Name>,
     // Generic names: before = before_storage stage (e.g., routing/ordering); after = after_storage (e.g., replication/responders)
     pub before: B,
     pub after: A,
     pub child: Child,
+    /// Optional background maintenance pipeline (tomb indexing, anti-entropy, etc.)
+    pub background: Bg,
 }
 
-impl<Name, B, A, Child> KVSCluster<Name, B, A, Child> {
-    pub fn new(before: B, after: A, child: Child) -> Self {
+impl<Name, B, A, Child, Bg> KVSCluster<Name, B, A, Child, Bg> {
+    pub fn new(before: B, after: A, child: Child, background: Bg) -> Self {
         Self {
             _name: PhantomData,
             before,
             after,
             child,
+            background,
         }
     }
 }
 
-impl<Name, B: Default, A: Default, Child: Default> Default for KVSCluster<Name, B, A, Child> {
+impl<Name, B: Default, A: Default, Child: Default, Bg: Default> Default
+    for KVSCluster<Name, B, A, Child, Bg>
+{
     fn default() -> Self {
-        Self::new(B::default(), A::default(), Child::default())
+        Self::new(B::default(), A::default(), Child::default(), Bg::default())
     }
 }
 

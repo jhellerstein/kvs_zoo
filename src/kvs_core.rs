@@ -10,6 +10,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::protocol::{Envelope, KVSOperation};
+use crate::events::{DataEvent, MetaEvent};
 
 /// Represents an individual KVS node in the cluster
 ///
@@ -77,7 +78,13 @@ impl KVSCore {
                             Some(Some(response))
                         }
                         KVSOperation::Delete(key) => {
-                            // Core remains oblivious to tombstone mechanics; just acknowledge.
+                            // Phase 0 tomb semantics: remove value if present, emit logical delete response.
+                            // Future phases: also emit DataEvent::Delete + MetaEvent::Tomb to subscribed pipelines.
+                            // For now we only produce the textual response.
+                            state.remove(&key); // logical removal
+                            // Placeholder emission (discarded):
+                            let _data_ev: DataEvent<V> = DataEvent::Delete { key: key.clone() };
+                            let _meta_ev: MetaEvent = MetaEvent::Tomb { key: key.clone() };
                             if should_respond {
                                 Some(Some(format!("DELETE {} = OK", key)))
                             } else {
