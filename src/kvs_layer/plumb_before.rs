@@ -55,7 +55,7 @@ impl<V> KVSPlumb<V> for () {
     }
 }
 
-impl<V, Name, B, A, Child> KVSPlumb<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child>
+impl<V, Name, B, A, Child, Bg> KVSPlumb<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,

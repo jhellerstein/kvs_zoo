@@ -31,7 +31,7 @@ impl<V> KVSSpec<V> for () {
 }
 
 // Recursive case: KVSCluster
-impl<V, Name, B, A, Child> KVSSpec<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child>
+impl<V, Name, B, A, Child, Bg> KVSSpec<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,

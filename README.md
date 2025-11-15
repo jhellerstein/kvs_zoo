@@ -16,7 +16,24 @@ The implementations showcase Hydro's approach to building distributed systems: e
 
 ## 🏗️ Architecture
 
-The zoo showcases a composable architecture where dispatch strategies, maintenance strategies, and value semantics can be mixed and matched:
+The zoo showcases a composable architecture where dispatch strategies, maintenance strategies, and value semantics can be mixed and matched.
+
+### New (Metadata + Background) Direction
+
+The ongoing refactor introduces two orthogonal event streams from the core:
+
+- `DataEvent<V>`: observable effects (Put/Delete/Get responses, later Scan chunks)
+- `MetaEvent`: system/maintenance metadata (Tomb, future Reclaim)
+
+Pipelines:
+
+- **Before**: routes and orders `KVSOperation<V>`.
+- **After**: consumes `DataEvent<V>`; may optionally subscribe to `MetaEvent`.
+- **Background** (optional): maintenance tasks subscribing to one or both streams (e.g., tomb indexing, anti-entropy).
+
+Early phases keep dispatch simple: borrowed references passed synchronously; cloning deferred until a stage explicitly needs ownership.
+
+See `docs/background_pipeline_plan.md` for the phased migration plan.
 
 ### Core Abstractions
 
@@ -81,6 +98,20 @@ Combines sharding and replication for both scalability and fault tolerance.
   - Partitioning across shards for capacity
 
 ### 5. **Linearizable KVS** (`examples/linearizable.rs`)
+### 6. **Replicated Tombstone KVS (Phase 0)** (`examples/replicated_with_tombstone.rs`)
+
+Demonstrates Delete + Tomb semantics with the Phase 0 tomb index background stage.
+
+- **Routing**: `RoundRobinRouter`
+- **Replication**: `SimpleGossip`
+- **Background**: `TombIndexBackground` (logs tomb stats + emits summary metadata)
+- **Status**: Core emits Tomb metadata; summaries ride the same stream for downstream consumers.
+
+Run:
+```bash
+cargo run --example replicated_with_tombstone
+```
+Expect a DELETE followed by a GET showing `NOT FOUND`, plus tomb logs like `[bg] tomb_index total=1 last=Some("alpha")` and `MetaEvent::TombSummary` entries.
 
 Strong consistency via Paxos consensus with sequenced replication.
 

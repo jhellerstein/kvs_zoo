@@ -60,7 +60,13 @@ where
     let local_tagged = leaf_ops_ordered
         .clone()
         .map(q!(|op| crate::protocol::Envelope::new(true, op)));
-    let local_responses = crate::kvs_core::KVSCore::process(local_tagged);
+    let crate::kvs_core::CoreOutput {
+        responses: local_responses,
+        data: local_data,
+        meta: local_meta,
+    } = crate::kvs_core::KVSCore::process(local_tagged);
+    local_data.for_each(q!(|_data| ()));
+    local_meta.for_each(q!(|_meta| ())); // TODO: wire to background pipeline for this helper
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops_ordered);
 
     // 4) after_storage (parent): replicate applied PUT deltas
@@ -73,7 +79,13 @@ where
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
     let replicated_tagged =
         leaf_replicated_ops.map(q!(|op| crate::protocol::Envelope::new(false, op)));
-    let replicate_responses = crate::kvs_core::KVSCore::process(replicated_tagged);
+    let crate::kvs_core::CoreOutput {
+        responses: replicate_responses,
+        data: replicate_data,
+        meta: replicate_meta,
+    } = crate::kvs_core::KVSCore::process(replicated_tagged);
+    replicate_data.for_each(q!(|_data| ()));
+    replicate_meta.for_each(q!(|_meta| ())); // replicate path currently discards meta events
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     local_responses

@@ -54,7 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // No replication: just process operations and emit responses
     let tagged = ordered_ops.map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
-    let responses = KVSCore::process(tagged);
+    let kvs_zoo::kvs_core::CoreOutput {
+        responses,
+        data,
+        meta,
+    } = KVSCore::process(tagged);
+    data.for_each(q!(|_data| ())); // Local demo currently ignores data events
+    meta.for_each(q!(|_meta| ())); // Local demo currently ignores metadata
 
     // Send responses back to proxy and complete the client request
     let proxy_responses = responses.send_bincode(&proxy);

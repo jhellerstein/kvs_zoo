@@ -53,7 +53,7 @@ pub fn plumb_kvs_dataflow<'a, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
     flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
-    kvs: K,
+    mut kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
     ExternalBincodeBidi<KVSOperation<V>, String, hydro_lang::location::external_process::Many>,
@@ -73,7 +73,8 @@ where
         + 'static,
     K: crate::kvs_layer::KVSSpec<V>
         + crate::kvs_layer::KVSPlumb<V>
-        + crate::kvs_layer::AfterPlumb<V>,
+        + crate::kvs_layer::AfterPlumb<V>
+        + crate::background::BackgroundPlumb<V>,
 {
     // Create all clusters for all layers
     let mut layers = crate::kvs_layer::KVSClusters::new();
@@ -93,10 +94,19 @@ where
 
     // Core processing at leaf (assume total order already imposed by before_storage components)
     let tagged_routed = routed_ops.map(q!(|op| crate::protocol::Envelope::new(true, op)));
-    let core_responses = crate::kvs_core::KVSCore::process(tagged_routed);
+    let crate::kvs_core::CoreOutput {
+        responses: core_responses,
+        data: data_events,
+        meta: meta_stream,
+    } = crate::kvs_core::KVSCore::process(tagged_routed);
 
     // Upward after_storage pass: traverse replication/responders chain from leaf to root.
     let final_responses = kvs.after_responses(&layers, core_responses);
+
+    // Background plumbing (returns streams for potential chaining, sink locally for now)
+    let (bg_data, bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
+    bg_data.for_each(q!(|_data| ()));
+    bg_meta.for_each(q!(|_meta| ()));
 
     // Send responses back to proxy (optionally stamp member id)
     let proxy_responses = final_responses.send_bincode(proxy);

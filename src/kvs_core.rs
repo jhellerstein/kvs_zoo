@@ -9,8 +9,25 @@ use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::protocol::{Envelope, KVSOperation};
 use crate::events::{DataEvent, MetaEvent};
+use crate::protocol::{Envelope, KVSOperation};
+
+#[derive(Clone)]
+struct CoreEmission<V> {
+    response: Option<String>,
+    data: Option<DataEvent<V>>,
+    meta: Option<MetaEvent>,
+}
+
+/// Output bundle produced by `KVSCore::process`.
+pub struct CoreOutput<V, L> {
+    /// Sequential response stream for client-visible results.
+    pub responses: Stream<String, L, Unbounded, TotalOrder>,
+    /// Data event stream describing applied operations.
+    pub data: Stream<DataEvent<V>, L, Unbounded, TotalOrder>,
+    /// Metadata stream for maintenance/background pipelines.
+    pub meta: Stream<MetaEvent, L, Unbounded, TotalOrder>,
+}
 
 /// Represents an individual KVS node in the cluster
 ///
@@ -30,10 +47,11 @@ impl KVSCore {
     /// - `operations`: Stream of operations in total order
     ///
     /// ## Returns
-    /// Stream of responses in the same order as operations
+    /// Structured response containing both the response stream (for clients)
+    /// and a metadata stream suitable for background maintenance wiring.
     pub fn process<'a, V, L>(
         operations: Stream<Envelope<bool, KVSOperation<V>>, L, Unbounded, TotalOrder>,
-    ) -> Stream<String, L, Unbounded, TotalOrder>
+    ) -> CoreOutput<V, L>
     where
         V: Clone
             + Serialize
@@ -49,52 +67,76 @@ impl KVSCore {
             + 'static,
         L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
-        // Use scan to maintain state and emit responses for each operation
-        operations
-            .scan(
-                q!(|| std::collections::HashMap::new()),
-                q!(|state, envelope| {
-                    let should_respond = envelope.metadata; // bool flag
-                    match envelope.operation {
-                        KVSOperation::Put(key, value) => {
-                            state
-                                .entry(key.clone())
-                                .and_modify(|existing| {
-                                    lattices::Merge::merge(existing, value.clone());
-                                })
-                                .or_insert(value);
-                            if should_respond {
-                                Some(Some(format!("PUT {} = OK", key)))
-                            } else {
-                                Some(None)
-                            }
-                        }
-                        KVSOperation::Get(key) => {
-                            let response = match state.get(&key) {
-                                Some(value) => format!("GET {} = {}", key, value),
-                                None => format!("GET {} = NOT FOUND", key),
-                            };
-                            // GETs always respond (reads are local)
-                            Some(Some(response))
-                        }
-                        KVSOperation::Delete(key) => {
-                            // Phase 0 tomb semantics: remove value if present, emit logical delete response.
-                            // Future phases: also emit DataEvent::Delete + MetaEvent::Tomb to subscribed pipelines.
-                            // For now we only produce the textual response.
-                            state.remove(&key); // logical removal
-                            // Placeholder emission (discarded):
-                            let _data_ev: DataEvent<V> = DataEvent::Delete { key: key.clone() };
-                            let _meta_ev: MetaEvent = MetaEvent::Tomb { key: key.clone() };
-                            if should_respond {
-                                Some(Some(format!("DELETE {} = OK", key)))
-                            } else {
-                                Some(None)
-                            }
-                        }
+        let combined = operations.scan(
+            q!(|| std::collections::HashMap::new()),
+            q!(|state, envelope| {
+                let should_respond = envelope.metadata; // bool flag
+                let (response, data, meta) = match envelope.operation {
+                    KVSOperation::Put(key, value) => {
+                        let value_for_event = value.clone();
+                        state
+                            .entry(key.clone())
+                            .and_modify(|existing| {
+                                lattices::Merge::merge(existing, value.clone());
+                            })
+                            .or_insert(value);
+
+                        let response = if should_respond {
+                            Some(format!("PUT {} = OK", key))
+                        } else {
+                            None
+                        };
+                        let data = Some(DataEvent::Put {
+                            key: key.clone(),
+                            value: value_for_event,
+                        });
+                        (response, data, None)
                     }
-                }),
-            )
-            .filter_map(q!(|opt| opt))
+                    KVSOperation::Get(key) => {
+                        let value = state.get(&key).cloned();
+                        let msg = match value.as_ref() {
+                            Some(v) => format!("GET {} = {}", key, v),
+                            None => format!("GET {} = NOT FOUND", key),
+                        };
+                        let data = Some(DataEvent::Get {
+                            key: key.clone(),
+                            value,
+                        });
+                        (Some(msg), data, None)
+                    }
+                    KVSOperation::Delete(key) => {
+                        state.remove(&key);
+                        let response = if should_respond {
+                            Some(format!("DELETE {} = OK", key))
+                        } else {
+                            None
+                        };
+                        let data = Some(DataEvent::Delete { key: key.clone() });
+                        let meta = Some(MetaEvent::Tomb { key: key.clone() });
+                        (response, data, meta)
+                    }
+                };
+                Some(CoreEmission {
+                    response,
+                    data,
+                    meta,
+                })
+            }),
+        );
+
+        let responses = combined
+            .clone()
+            .filter_map(q!(|emission: CoreEmission<V>| emission.response));
+        let data = combined
+            .clone()
+            .filter_map(q!(|emission: CoreEmission<V>| emission.data));
+        let meta = combined.filter_map(q!(|emission: CoreEmission<V>| emission.meta));
+
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
     }
 }
 

@@ -27,9 +27,9 @@ use crate::protocol::{Envelope, KVSOperation};
 impl<V> RoutingKey for KVSOperation<V> {
     fn routing_key(&self) -> &[u8] {
         match self {
-            KVSOperation::Put(k, _)
-            | KVSOperation::Get(k)
-            | KVSOperation::Delete(k) => k.as_bytes(),
+            KVSOperation::Put(k, _) | KVSOperation::Get(k) | KVSOperation::Delete(k) => {
+                k.as_bytes()
+            }
         }
     }
 }

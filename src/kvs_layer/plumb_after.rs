@@ -26,7 +26,7 @@ impl<V> AfterPlumb<V> for () {
     }
 }
 
-impl<V, Name, B, A, Child> AfterPlumb<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child>
+impl<V, Name, B, A, Child, Bg> AfterPlumb<V> for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,

@@ -53,6 +53,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KVSOperation::Get(k),
                     )
                 }
+                KVSOperation::Delete(k) => {
+                    let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
+                    (
+                        hydro_lang::location::MemberId::from_raw(idx),
+                        KVSOperation::Delete(k),
+                    )
+                }
             }
         }))
         .into_keyed()
@@ -68,7 +75,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
     let tagged = ordered_ops.map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
-    let responses = KVSCore::process(tagged);
+    let kvs_zoo::kvs_core::CoreOutput {
+        responses,
+        data,
+        meta,
+    } = KVSCore::process(tagged);
+    data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
+    meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
 
     // Send responses back to proxy and complete the client request
     let proxy_responses = responses.send_bincode(&proxy);
@@ -120,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _) | KVSOperation::Get(key) => {
+        KVSOperation::Put(key, _) | KVSOperation::Get(key) | KVSOperation::Delete(key) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

@@ -5,7 +5,8 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 pub mod cleanup;
-pub mod control;
+pub mod meta;
+pub mod pipeline;
 pub mod replication;
 pub mod responders;
 

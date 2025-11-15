@@ -1,9 +1,11 @@
 //! Skeleton events & consumer traits for the metadata-background-pipeline restart.
 //! Phase 0: minimal enums + borrow-first consumer traits.
 
+use serde::{Deserialize, Serialize};
+
 /// DataEvent captures the observable outcome of an operation.
 /// (Future: add Scan variants.)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataEvent<V> {
     Put { key: String, value: V },
     Delete { key: String },
@@ -11,11 +13,17 @@ pub enum DataEvent<V> {
 }
 
 /// MetaEvent carries maintenance/system metadata.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetaEvent {
-    Tomb { key: String },
+    Tomb {
+        key: String,
+    },
+    TombSummary {
+        total_tombs: usize,
+        last_tomb_key: Option<String>,
+    },
     // Future: Reclaim { key: String },
-    // Future: TombSummary { format_id: u16, bytes: Vec<u8> },
+    // Future: TombDigest { format_id: u16, bytes: Vec<u8> },
 }
 
 /// A consumer of DataEvents (After or Background pipeline stage).
@@ -26,6 +34,14 @@ pub trait DataConsumer<D> {
 /// A consumer of MetaEvents.
 pub trait MetaConsumer<M> {
     fn on_meta(&mut self, meta: &M);
+}
+
+impl<D> DataConsumer<D> for () {
+    fn on_data(&mut self, _ev: &D) {}
+}
+
+impl<M> MetaConsumer<M> for () {
+    fn on_meta(&mut self, _meta: &M) {}
 }
 
 /// Convenience trait for stages that consume both.
@@ -62,19 +78,30 @@ pub struct EventDispatcher<D, M> {
 
 impl<D, M> Default for EventDispatcher<D, M> {
     fn default() -> Self {
-        Self { data_consumers: Vec::new(), meta_consumers: Vec::new() }
+        Self {
+            data_consumers: Vec::new(),
+            meta_consumers: Vec::new(),
+        }
     }
 }
 
 impl<D: Clone, M: Clone> EventDispatcher<D, M> {
     #[allow(dead_code)]
     pub fn emit_data(&mut self, ev: D) {
-        if self.data_consumers.is_empty() { return; }
-        for c in &mut self.data_consumers { c.on_data(&ev); }
+        if self.data_consumers.is_empty() {
+            return;
+        }
+        for c in &mut self.data_consumers {
+            c.on_data(&ev);
+        }
     }
     #[allow(dead_code)]
     pub fn emit_meta(&mut self, meta: M) {
-        if self.meta_consumers.is_empty() { return; }
-        for c in &mut self.meta_consumers { c.on_meta(&meta); }
+        if self.meta_consumers.is_empty() {
+            return;
+        }
+        for c in &mut self.meta_consumers {
+            c.on_meta(&meta);
+        }
     }
 }

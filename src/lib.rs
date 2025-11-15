@@ -2,6 +2,7 @@ stageleft::stageleft_no_entry_crate!();
 
 // Terminology: legacy "dispatch" → `before_storage`; legacy "maintenance" → `after_storage`.
 pub mod after_storage;
+pub mod background;
 pub mod before_storage;
 pub mod kvs_core;
 
@@ -26,8 +27,13 @@ pub mod kvs_layer {
 pub mod cross_layer_flow;
 pub mod plumbing;
 pub mod protocol;
-pub mod values;
 pub mod store_state;
+pub mod values;
+
+// New Phase 0 events & consumer traits.
+pub mod events;
+pub use background::{BackgroundPlumb, MetaBackground};
+pub use events::{DataConsumer, DataEvent, DataMetaConsumer, MetaConsumer, MetaEvent, TeeAfter};
 
 #[cfg(test)]
 mod test_init {

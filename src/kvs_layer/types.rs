@@ -20,8 +20,37 @@ pub struct KVSCluster<Name, B, A, Child, Bg = ()> {
     pub background: Bg,
 }
 
+impl<Name, B, A, Child> KVSCluster<Name, B, A, Child> {
+    /// Construct a cluster without a background pipeline (defaults to `()`).
+    pub fn new(before: B, after: A, child: Child) -> Self {
+        Self {
+            _name: PhantomData,
+            before,
+            after,
+            child,
+            background: (),
+        }
+    }
+
+    /// Construct a cluster while explicitly providing a background pipeline.
+    pub fn with_background<Bg>(
+        before: B,
+        after: A,
+        child: Child,
+        background: Bg,
+    ) -> KVSCluster<Name, B, A, Child, Bg> {
+        KVSCluster {
+            _name: PhantomData,
+            before,
+            after,
+            child,
+            background,
+        }
+    }
+}
+
 impl<Name, B, A, Child, Bg> KVSCluster<Name, B, A, Child, Bg> {
-    pub fn new(before: B, after: A, child: Child, background: Bg) -> Self {
+    pub fn new_with_background(before: B, after: A, child: Child, background: Bg) -> Self {
         Self {
             _name: PhantomData,
             before,
@@ -36,7 +65,13 @@ impl<Name, B: Default, A: Default, Child: Default, Bg: Default> Default
     for KVSCluster<Name, B, A, Child, Bg>
 {
     fn default() -> Self {
-        Self::new(B::default(), A::default(), Child::default(), Bg::default())
+        Self {
+            _name: PhantomData,
+            before: B::default(),
+            after: A::default(),
+            child: Child::default(),
+            background: Bg::default(),
+        }
     }
 }
 
