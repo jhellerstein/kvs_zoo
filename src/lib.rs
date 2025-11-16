@@ -18,7 +18,7 @@ pub mod kvs_layer {
     #[path = "types.rs"]
     pub mod types;
 
-    pub use plumb_after::AfterPlumb;
+    pub use plumb_after::{AfterPlumb, ReplicationPlumb};
     pub use plumb_before::KVSPlumb;
     pub use spec::KVSSpec;
     pub use types::{KVSCluster, KVSClusters, KVSNode};

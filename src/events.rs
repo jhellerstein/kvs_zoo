@@ -74,6 +74,14 @@ where
     Next: DataConsumer<D>,
     BgData: DataConsumer<D>,
 {
+    pub fn new(next: Next, bg_data: Option<BgData>) -> Self {
+        Self {
+            next,
+            bg_data,
+            _pd: std::marker::PhantomData,
+        }
+    }
+
     pub fn on_data(&mut self, ev: &D) {
         self.next.on_data(ev);
         if let Some(bg) = &mut self.bg_data {
@@ -94,6 +102,14 @@ where
     Next: MetaConsumer<M>,
     BgMeta: MetaConsumer<M>,
 {
+    pub fn new(next: Next, bg_meta: Option<BgMeta>) -> Self {
+        Self {
+            next,
+            bg_meta,
+            _pm: std::marker::PhantomData,
+        }
+    }
+
     pub fn on_meta(&mut self, meta: &M) {
         self.next.on_meta(meta);
         if let Some(bg) = &mut self.bg_meta {

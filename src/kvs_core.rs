@@ -39,6 +39,58 @@ pub struct KVSNode {}
 pub struct KVSCore;
 
 impl KVSCore {
+    /// Convenience wrapper for processing client-originated operations.
+    ///
+    /// Client requests expect responses, so metadata is auto-tagged `true` before
+    /// delegating to the main envelope-based processor.
+    pub fn process_client_ops<'a, V, L>(
+        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
+    ) -> CoreOutput<V, L>
+    where
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + Clone + 'a,
+    {
+        let enveloped = operations.map(q!(|op| Envelope::new(true, op)));
+        Self::process(enveloped)
+    }
+
+    /// Convenience wrapper for processing replicated operations.
+    ///
+    /// Replicated updates should not emit client responses, so metadata is
+    /// auto-tagged `false` before delegating to the main processor.
+    pub fn process_replicated_ops<'a, V, L>(
+        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
+    ) -> CoreOutput<V, L>
+    where
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + Clone + 'a,
+    {
+        let enveloped = operations.map(q!(|op| Envelope::new(false, op)));
+        Self::process(enveloped)
+    }
+
     /// This function takes a stream of operations and processes them one by one
     /// in order, ensuring that each read sees the exact state at its position
     /// in the sequence. Uses lattice merge semantics for combining values.

@@ -23,22 +23,24 @@ jobs:
           workspaces: |
             kvs_zoo
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Build (kvs_zoo)
         working-directory: kvs_zoo
         run: cargo build --locked --examples --tests
-
-      - name: Run unit tests (kvs_zoo)
-        working-directory: kvs_zoo
-        run: cargo test --locked -- --nocapture
 
       - name: Clippy (kvs_zoo)
         working-directory: kvs_zoo
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
+      - name: Run unit tests (kvs_zoo)
+        working-directory: kvs_zoo
+        run: cargo nextest run --locked --nocapture
+
       - name: Run smoke tests (ignored)
         working-directory: kvs_zoo
-        run: cargo test --locked --test examples_smoke -- --ignored --nocapture
+        run: cargo nextest run --locked --test examples_smoke --run-ignored ignored-only --nocapture
 
-      - name: Run insta snapshot tests
-        working-directory: kvs_zoo
-        run: cargo test --locked --test examples_snapshots -- --nocapture

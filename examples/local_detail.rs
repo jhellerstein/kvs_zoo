@@ -1,13 +1,22 @@
 //! Local KVS (detailed wiring, single node)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Local KVS Demo (detailed)");
 
     // Standard Hydro deployment
@@ -53,12 +62,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
     // No replication: just process operations and emit responses
-    let tagged = ordered_ops.map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
     let kvs_zoo::kvs_core::CoreOutput {
         responses,
         data,
         meta,
-    } = KVSCore::process(tagged);
+    } = KVSCore::process_client_ops(ordered_ops);
     data.for_each(q!(|_data| ())); // Local demo currently ignores data events
     meta.for_each(q!(|_meta| ())); // Local demo currently ignores metadata
 
@@ -70,8 +78,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_keyed();
     complete_sink.complete(to_complete);
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: single node
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(&local, vec![localhost.clone()])
         .with_external(&client_external, localhost)

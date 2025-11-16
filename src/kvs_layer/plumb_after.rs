@@ -1,6 +1,12 @@
+use std::any::TypeId;
+
+use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy};
+use crate::after_storage::{AfterResponses, NoReplication, ReplicationStrategy};
+use crate::protocol::KVSOperation;
+
+type ClusterStream<'a, T> = Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
 
 /// After-stage plumbing: traverse replication/responders chain from leaf upward.
 pub trait AfterPlumb<V> {
@@ -65,5 +71,216 @@ where
     {
         let my_cluster = layers.get::<Name>();
         self.after.after_responses(my_cluster, responses)
+    }
+}
+
+/* ------------------------------------------------------------------------- */
+/* Replication plumbing: walk After layers to fan out PUT deltas             */
+/* ------------------------------------------------------------------------- */
+
+/// Helper trait used by `plumb_kvs_dataflow` to invoke any configured
+/// replication strategies in the After stack.
+pub trait ReplicationPlumb<V> {
+    fn replicate_puts<'a>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        deltas: ClusterStream<'a, (String, V)>,
+    ) -> (
+        ClusterStream<'a, (String, V)>,
+        ClusterStream<'a, KVSOperation<V>>,
+    )
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static;
+}
+
+impl<V> ReplicationPlumb<V> for () {
+    fn replicate_puts<'a>(
+        &self,
+        _layers: &crate::kvs_layer::KVSClusters<'a>,
+        deltas: ClusterStream<'a, (String, V)>,
+    ) -> (
+        ClusterStream<'a, (String, V)>,
+        ClusterStream<'a, KVSOperation<V>>,
+    )
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let pass_up = deltas;
+        let empty = pass_up
+            .clone()
+            .filter_map(q!(|_kv| None))
+            .assume_ordering::<TotalOrder>(nondet!(/** no replication (unit) */));
+        (pass_up, empty)
+    }
+}
+
+fn should_skip_replication<A, V>() -> bool
+where
+    A: ReplicationStrategy<V> + 'static,
+    V: Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + 'static,
+{
+    TypeId::of::<A>() == TypeId::of::<()>() || TypeId::of::<A>() == TypeId::of::<NoReplication>()
+}
+
+impl<V, Name, B, A, Child, Bg> ReplicationPlumb<V>
+    for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
+where
+    Name: 'static,
+    B: crate::before_storage::Before<V> + Clone,
+    A: ReplicationStrategy<V> + Clone + 'static,
+    Child: ReplicationPlumb<V> + crate::kvs_layer::KVSPlumb<V>,
+    Bg: Clone,
+    V: Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + 'static,
+{
+    fn replicate_puts<'a>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        deltas: ClusterStream<'a, (String, V)>,
+    ) -> (
+        ClusterStream<'a, (String, V)>,
+        ClusterStream<'a, KVSOperation<V>>,
+    )
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let my_cluster = layers.get::<Name>();
+
+        let (pass_up_from_child, child_ops) = self.child.replicate_puts(layers, deltas);
+        let mut combined_ops = child_ops;
+
+        if !should_skip_replication::<A, V>() {
+            let replication_input = pass_up_from_child.clone();
+            let replicated = self
+                .after
+                .replicate_data(my_cluster, replication_input)
+                .map(q!(|(k, v)| KVSOperation::Put(k, v)))
+                .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at layer */));
+
+            let routed = self
+                .child
+                .plumb_from_cluster(layers, my_cluster, replicated)
+                .assume_ordering::<TotalOrder>(nondet!(/** routed replicated ops to leaf */));
+
+            combined_ops = combined_ops
+                .interleave(routed)
+                .assume_ordering::<TotalOrder>(nondet!(/** combined replication ops */));
+        }
+
+        (pass_up_from_child, combined_ops)
+    }
+}
+
+impl<V, Name, B, A> ReplicationPlumb<V> for crate::kvs_layer::KVSNode<Name, B, A>
+where
+    Name: 'static,
+    B: crate::before_storage::Before<V> + Clone,
+    A: ReplicationStrategy<V> + Clone + 'static,
+    V: Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + 'static,
+{
+    fn replicate_puts<'a>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        deltas: ClusterStream<'a, (String, V)>,
+    ) -> (
+        ClusterStream<'a, (String, V)>,
+        ClusterStream<'a, KVSOperation<V>>,
+    )
+    where
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let my_cluster = layers.get::<Name>();
+        if should_skip_replication::<A, V>() {
+            let pass_up = deltas;
+            let empty = pass_up
+                .clone()
+                .filter_map(q!(|_kv| None))
+                .assume_ordering::<TotalOrder>(nondet!(/** no replication at node */));
+            (pass_up, empty)
+        } else {
+            let pass_up = deltas.clone();
+            let replicated = self
+                .after
+                .replicate_data(my_cluster, deltas)
+                .map(q!(|(k, v)| KVSOperation::Put(k, v)))
+                .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at node */));
+            (pass_up, replicated)
+        }
     }
 }

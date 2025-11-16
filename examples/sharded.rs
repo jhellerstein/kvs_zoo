@@ -1,6 +1,8 @@
 //! Sharded KVS (hash-partitioned)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
@@ -14,8 +16,15 @@ struct Shard;
 // KVS architecture type: single layer with sharded routing
 type ShardedKVS = KVSCluster<Shard, ShardedRouter, (), ()>;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Sharded Local KVS Demo");
 
     // Standard Hydro deployment
@@ -34,8 +43,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (layers, port) =
         plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: 3 shards, 1 node each
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(
             layers.get::<Shard>(),

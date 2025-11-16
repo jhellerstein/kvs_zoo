@@ -1,7 +1,9 @@
 //! Replicated KVS (single shard + After-stage gossip replication)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::ReplicationStrategy;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::kvs_core::KVSCore;
@@ -9,8 +11,15 @@ use kvs_zoo::plumbing::extract_put_deltas;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Replicated KVS Demo (gossip)");
 
     // Standard Hydro deployment
@@ -90,8 +99,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_keyed();
     complete_sink.complete(to_complete);
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: 3 replicas for the cluster
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(
             &replicas,

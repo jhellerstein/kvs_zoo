@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 
 pub mod cleanup;
 pub mod meta;
-pub mod pipeline;
 pub mod replication;
 pub mod responders;
 

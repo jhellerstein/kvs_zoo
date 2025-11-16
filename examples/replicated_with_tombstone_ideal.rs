@@ -1,8 +1,7 @@
-//! Replicated KVS with tombstone deletes (Phase 0 demo)
+//! Replicated KVS with tombstone deletes (idealized ergonomic target)
 //!
-//! Mirrors the style of existing demos while showcasing Delete + Tomb semantics.
-//! Core already emits `DataEvent::Delete` and `MetaEvent::Tomb`; this example
-//! focuses on client-observable behavior (Delete → subsequent Get = NOT FOUND).
+//! This is the clean target style we want to support. It mirrors `replicated.rs`
+//! and adds a Delete demonstrating eventual NOT FOUND plus live Tomb metadata.
 
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
@@ -13,7 +12,6 @@ use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
-use tokio::time::Duration;
 
 #[derive(Clone)]
 struct Replica;
@@ -22,8 +20,8 @@ type ReplicatedKVS = KVSCluster<
     Replica,
     RoundRobinRouter,
     SimpleGossip<LwwWrapper<String>>,
-    (),
-    TombIndexBackground,
+    (),                  // no nested child layer
+    TombIndexBackground, // background tomb indexer
 >;
 
 #[derive(Parser, Debug)]
@@ -35,7 +33,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    println!("🚀 Replicated KVS Tombstone Demo (gossip)");
+    println!("🚀 Replicated KVS Tombstone Demo (idealized)");
 
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
@@ -44,14 +42,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    let mut kvs_spec: ReplicatedKVS = Default::default();
-    kvs_spec.after = SimpleGossip::new(100usize); // 100ms gossip interval for visibility
-    kvs_spec.background = TombIndexBackground::new()
+    let mut spec: ReplicatedKVS = Default::default();
+    spec.after = SimpleGossip::new(100); // faster gossip for demo
+    spec.background = TombIndexBackground::new()
         .with_logging(true)
         .with_summaries(true);
 
     let (layers, port) =
-        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
@@ -71,16 +69,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     deployment.deploy().await?;
     let (mut out, mut input) = nodes.connect_bincode(port).await;
-
     deployment.start().await?;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
         Op::Put("alpha".into(), LwwWrapper::new("one".into())),
         Op::Get("alpha".into()),
-        Op::Delete("alpha".into()),
-        Op::Get("alpha".into()),
+        Op::Delete("alpha".into()), // emits MetaEvent::Tomb("alpha") to background stage
+        Op::Get("alpha".into()),    // expect NOT FOUND
     ];
 
     for (i, op) in ops.into_iter().enumerate() {
@@ -89,13 +86,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("→ {}", resp);
         }
         if i == 0 {
-            tokio::time::sleep(Duration::from_millis(350)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         }
     }
 
-    tokio::time::sleep(Duration::from_millis(350)).await;
+    // TODO(phase-2): Replace stdout logging with structured metrics collection.
 
     deployment.stop().await?;
-    println!("✅ Replicated tombstone demo complete (meta emission pending)");
+    println!("✅ Idealized tombstone demo complete (meta pending)");
     Ok(())
 }

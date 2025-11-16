@@ -7,6 +7,8 @@ use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::kvs_layer::ReplicationPlumb;
+
 type OperationStream<V, L> = Stream<crate::protocol::KVSOperation<V>, L, Unbounded>;
 type PutDeltaStream<V, L> = Stream<(String, V), L, Unbounded>;
 
@@ -75,6 +77,7 @@ where
     K: crate::kvs_layer::KVSSpec<V>
         + crate::kvs_layer::KVSPlumb<V>
         + crate::kvs_layer::AfterPlumb<V>
+        + ReplicationPlumb<V>
         + crate::background::BackgroundPlumb<V>,
 {
     // Create all clusters for all layers
@@ -93,21 +96,42 @@ where
     // Downward pass via before_storage chain (KVSPlumb)
     let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
 
-    // Core processing at leaf (assume total order already imposed by before_storage components)
-    let tagged_routed = routed_ops.map(q!(|op| crate::protocol::Envelope::new(true, op)));
-    let crate::kvs_core::CoreOutput {
-        responses: core_responses,
-        data: local_data_events,
-        meta: local_meta_stream,
-    } = crate::kvs_core::KVSCore::process(tagged_routed);
+    // Split client operations so we can extract PUT deltas for replication.
+    let (client_ops, local_put_deltas) = extract_put_deltas(routed_ops);
 
-    let data_events = local_data_events
-        .assume_ordering::<TotalOrder>(nondet!(/** core data events in op order */));
-    let meta_stream = local_meta_stream
-        .assume_ordering::<TotalOrder>(nondet!(/** core meta events in op order */));
+    // Fan out PUT deltas through any configured replication layers. Replicas generate
+    // operations that enter the core without triggering client responses.
+    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+
+    // Core processing for client-originating operations.
+    let crate::kvs_core::CoreOutput {
+        responses: client_responses,
+        data: client_data_events,
+        meta: client_meta_stream,
+    } = crate::kvs_core::KVSCore::process_client_ops(client_ops);
+
+    // Replicated operations flow through the same core path but skip response emission.
+    let crate::kvs_core::CoreOutput {
+        responses: replica_responses,
+        data: replica_data_events,
+        meta: replica_meta_stream,
+    } = crate::kvs_core::KVSCore::process_replicated_ops(
+        replication_ops.assume_ordering::<TotalOrder>(nondet!(/** replicated op order */)),
+    );
+
+    let combined_responses = client_responses
+        .interleave(replica_responses)
+        .assume_ordering(nondet!(/** combined client+replica responses */));
+
+    let data_events = client_data_events
+        .interleave(replica_data_events)
+        .assume_ordering::<TotalOrder>(nondet!(/** combined data events */));
+    let meta_stream = client_meta_stream
+        .interleave(replica_meta_stream)
+        .assume_ordering::<TotalOrder>(nondet!(/** combined meta events */));
 
     // Upward after_storage pass: traverse replication/responders chain from leaf to root.
-    let final_responses = kvs.after_responses(&layers, core_responses);
+    let final_responses = kvs.after_responses(&layers, combined_responses);
 
     // Background plumbing (returns streams for potential chaining, sink locally for now)
     let (bg_data, bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);

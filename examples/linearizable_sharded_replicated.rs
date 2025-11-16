@@ -1,6 +1,8 @@
 //! Linearizable Sharded+Replicated KVS (Paxos → Sharded → RR → Sequenced<Broadcast> → SlotEnforce)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::{
     BroadcastReplication, SequencedReplication as Sequenced,
 };
@@ -45,8 +47,15 @@ type LinearizableShardedReplicatedKVS = KVSCluster<
     >,
 >;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!(
         "🚀 Linearizable Sharded+Replicated KVS Demo (Paxos → Sharded → Sequenced<Broadcast> → SlotEnforce)"
     );
@@ -66,8 +75,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (layers, bidi_port) =
         plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: paxos roles + outer cluster + shard cluster + per-shard replica cluster + leaf
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(
             layers.get_role::<OrderedCluster, kvs_zoo::before_storage::ordering::Proposer>(),

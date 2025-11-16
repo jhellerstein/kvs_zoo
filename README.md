@@ -3,7 +3,7 @@
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
 The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a composable server architecture that allows mixing and matching
-message dispatch strategies, data maintenance strategies, and value semantics to create sophisticated distributed key-value stores from reusable components.
+request-routing layers, replication/cleanup layers, and value semantics to create sophisticated distributed key-value stores from reusable components.
 
 ## 📚 Background
 
@@ -16,24 +16,22 @@ The implementations showcase Hydro's approach to building distributed systems: e
 
 ## 🏗️ Architecture
 
-The zoo showcases a composable architecture where dispatch strategies, maintenance strategies, and value semantics can be mixed and matched.
+The zoo showcases a composable architecture where routing layers, replication/cleanup layers, and value semantics can be mixed and matched.
 
-### New (Metadata + Background) Direction
+### Data and Metadata Streams
 
-The ongoing refactor introduces two orthogonal event streams from the core:
+The core emits two orthogonal event streams:
 
-- `DataEvent<V>`: observable effects (Put/Delete/Get responses, later Scan chunks)
-- `MetaEvent`: system/maintenance metadata (Tomb, future Reclaim)
+- `DataEvent<V>` captures observable effects such as put/delete responses (and future streaming reads).
+- `MetaEvent` carries background metadata such as tomb notifications or summary statistics.
 
-Pipelines:
+Pipeline stages subscribe to the streams they care about:
 
-- **Before**: routes and orders `KVSOperation<V>`.
-- **After**: consumes `DataEvent<V>`; may optionally subscribe to `MetaEvent`.
-- **Background** (optional): maintenance tasks subscribing to one or both streams (e.g., tomb indexing, anti-entropy).
+- **Before** stages run sequentially just before storage, routing and ordering `KVSOperation<V>` requests.
+- **After** stages run sequentially just after storage, consuming `DataEvent<V>` and optionally `MetaEvent` when replication or cleanup needs the extra context.
+- **Background** stages (opt-in) attach to either `DataEvent<V>` or `MetaEvent` streams for longer-lived background work, as demonstrated by the tombstone indexer in `examples/replicated_with_tombstone.rs`.
 
-Early phases keep dispatch simple: borrowed references passed synchronously; cloning deferred until a stage explicitly needs ownership.
-
-See `docs/background_pipeline_plan.md` for the phased migration plan and `docs/metadata_background_quickstart.md` for hands-on wiring guidance (data vs meta streams, background stage attachment).
+Stages branch by cloning Hydro streams, which could potentially be optimized in future.
 
 ### Core Abstractions
 
@@ -98,31 +96,32 @@ Combines sharding and replication for both scalability and fault tolerance.
   - Partitioning across shards for capacity
 
 ### 5. **Linearizable KVS** (`examples/linearizable.rs`)
-### 6. **Replicated Tombstone KVS (Phase 0)** (`examples/replicated_with_tombstone.rs`)
 
-Demonstrates Delete + Tomb semantics with the Phase 0 tomb index background stage.
+Imposes a total order with Paxos while keeping background replication pluggable.
 
-- **Routing**: `RoundRobinRouter`
-- **Replication**: `SimpleGossip`
-- **Background**: `TombIndexBackground` (logs tomb stats + emits summary metadata)
-- **Status**: Core emits Tomb metadata; summaries ride the same stream for downstream consumers.
-
-Run:
-```bash
-cargo run --example replicated_with_tombstone
-```
-Expect a DELETE followed by a GET showing `NOT FOUND`, plus tomb logs like `[bg] tomb_index total=1 last=Some("alpha")` and `MetaEvent::TombSummary` entries.
-
-Strong consistency via Paxos consensus with sequenced replication.
-
-- **Routing/Ordering**: `PaxosDispatcher` (total order before execution)
-- **Replication**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery at replicas)
+- **Routing/Ordering**: `PaxosDispatcher` (consensus before execution)
+- **Replication**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery)
 - **Nodes**: 3 Paxos proposers + 3 Paxos acceptors + 3 KVS replicas = 9 total
 - **Concepts**: Consensus, linearizability, slot-preserving replication
 - **Features**:
   - Paxos imposes a global slot order on operations
   - Replication preserves slots and enforces in-order application per replica
   - Strong consistency guarantees
+
+### 6. **Replicated Tombstone KVS** (`examples/replicated_with_tombstone.rs`)
+
+Highlights Delete + Tomb semantics backed by a metadata-aware background stage.
+
+- **Routing**: `RoundRobinRouter`
+- **Replication**: `SimpleGossip`
+- **Background**: `TombIndexBackground` (logs tomb statistics and emits summaries via `MetaEvent`)
+- **Concepts**: Metadata stream consumption, background processing, tombstone indexing
+
+Run:
+```bash
+cargo run --example replicated_with_tombstone
+```
+Expect a DELETE followed by a GET showing `NOT FOUND`, plus tomb logs like `[bg] tomb_index total=1 last=Some("alpha")` and `MetaEvent::TombSummary` entries that downstream consumers can observe.
 
 ## 🧪 Core Components
 
@@ -283,9 +282,9 @@ Epidemic gossip separates metadata from values:
 - **Lattice Store**: Holds actual merged values
 - **Optimization**: Only gossip keys, fetch values from local store
 
-### 4. **Pipeline Dispatch**
+### 4. **Routing Pipelines**
 
-Compose dispatch strategies for multi-level architectures:
+Compose routing layers for multi-level architectures:
 
 ```rust
 // First route by shard, then by replica within shard

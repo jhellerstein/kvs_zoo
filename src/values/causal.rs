@@ -5,7 +5,7 @@
 //! on their causal relationships rather than simple overwrite.
 
 use super::VCWrapper;
-use lattices::{DomPair, Merge, set_union::SetUnionHashSet};
+use lattices::{DomPair, LatticeFrom, Merge, set_union::SetUnionHashSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
@@ -149,6 +149,15 @@ where
 {
     fn merge(&mut self, other: CausalWrapper<T>) -> bool {
         self.inner.merge(other.inner)
+    }
+}
+
+impl<T> LatticeFrom<CausalWrapper<T>> for CausalWrapper<T>
+where
+    T: Clone + Hash + Eq + std::fmt::Debug,
+{
+    fn lattice_from(other: CausalWrapper<T>) -> Self {
+        other
     }
 }
 

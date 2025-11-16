@@ -1,14 +1,23 @@
 //! Sharded KVS (hash-partitioned)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_core::{KVSCore, KVSNode};
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Sharded Local KVS Demo");
 
     // Standard Hydro deployment
@@ -74,12 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             nondet!(/** sequential processing per node */),
         );
 
-    let tagged = ordered_ops.map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
     let kvs_zoo::kvs_core::CoreOutput {
         responses,
         data,
         meta,
-    } = KVSCore::process(tagged);
+    } = KVSCore::process_client_ops(ordered_ops);
     data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
     meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
 
@@ -91,8 +99,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into_keyed();
     complete_sink.complete(to_complete);
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: 3 shards, 1 node each
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(
             &shards,

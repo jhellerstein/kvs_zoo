@@ -23,7 +23,8 @@ pub trait Before<V> {
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 
-    /// Optional variant that has access to the layer registry. Default forwards to `dispatch_from_process`.
+    /// Hook for dispatchers that need to inspect sibling layers before routing.
+    /// Most implementations ignore the additional cluster handles and fall back to `dispatch_from_process`.
     fn dispatch_from_process_with_layers<'a, Name: 'static>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
@@ -69,7 +70,8 @@ pub trait Before<V> {
             .assume_ordering(nondet!(/** cluster hop routed */))
     }
 
-    /// Optional variant that has access to the layer registry. Default forwards to `dispatch_from_cluster`.
+    /// Mirrors `dispatch_from_process_with_layers` for inter-cluster routing with layer handles.
+    /// Default implementations fall back to `dispatch_from_cluster`.
     fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
         &self,
         operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,

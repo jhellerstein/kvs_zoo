@@ -19,7 +19,7 @@ pub mod plumb_after;
 pub use spec::KVSSpec;
 pub use types::{KVSCluster, KVSClusters, KVSNode};
 pub use plumb_before::KVSPlumb;
-pub use plumb_after::AfterPlumb;
+pub use plumb_after::{AfterPlumb, ReplicationPlumb};
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,7 @@
 //! Local KVS (single node)
 
+use clap::Parser;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
@@ -12,8 +14,15 @@ struct LocalStorage;
 // Architecture: single layer, single node
 type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>; // KVSCluster<Marker type, Before, After, Nested layer>
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Local KVS Demo (single node)");
 
     // Standard Hydro deployment
@@ -32,8 +41,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LocalKVS::default(),
     );
 
+    let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
+
     // Deploy: cluster of 1 node for local storage
-    let nodes = flow
+    let nodes = built
+        .with_default_optimize()
         .with_process(&proxy, localhost.clone())
         .with_cluster(layers.get::<LocalStorage>(), vec![localhost.clone()])
         .with_external(&client_external, localhost)
