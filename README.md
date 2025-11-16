@@ -3,7 +3,7 @@
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
 The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a composable server architecture that allows mixing and matching
-message dispatch strategies, data maintenance strategies, and value semantics to create sophisticated distributed key-value stores from reusable components.
+request-routing layers, replication/cleanup layers, and value semantics to create sophisticated distributed key-value stores from reusable components.
 
 ## 📚 Background
 
@@ -16,14 +16,31 @@ The implementations showcase Hydro's approach to building distributed systems: e
 
 ## 🏗️ Architecture
 
-The zoo showcases a composable architecture where dispatch strategies, maintenance strategies, and value semantics can be mixed and matched:
+The zoo showcases a composable architecture where routing layers, replication/cleanup layers, and value semantics can be mixed and matched.
+
+### Data and Metadata Streams
+
+The core emits two orthogonal event streams:
+
+- `DataEvent<V>` captures observable effects such as put/delete responses (and future streaming reads).
+- `MetaEvent` carries background metadata such as tomb notifications or summary statistics.
+
+Pipeline stages subscribe to the streams they care about:
+
+- **Before** stages run sequentially just before storage, routing and ordering `KVSOperation<V>` requests.
+- **After** stages run sequentially just after storage, consuming `DataEvent<V>` and optionally `MetaEvent` when replication or cleanup needs the extra context.
+- **Background** stages (opt-in) attach to either `DataEvent<V>` or `MetaEvent` streams for longer-lived background work, as demonstrated by the tombstone indexer in `examples/replicated_with_tombstone.rs`.
+
+Stages branch by cloning Hydro streams, which could potentially be optimized in future.
 
 ### Core Abstractions
 
-- **`KVSServer<V>`**: Trait defining how to deploy and run a KVS architecture
-- **Routing/Dispatch Strategies**: `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`
-- **Replication Strategies**: `NoReplication`, `EpidemicGossip`, `BroadcastReplication`, `LogBased`
-- **Value Types**: `LwwWrapper<T>` (last-write-wins), `CausalWrapper<T>` (causal with vector clocks)
+- **Composable layers**:
+  - Before storage (routing/ordering): `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`, and `Pipeline<...>` to compose them
+  - After storage (replication/responders): `NoReplication`, `SimpleGossip`, `BroadcastReplication`, and `SequencedReplication<R>` wrapper for slot-ordered delivery
+- **Single entrypoint**: `layer_flow` (for focused wiring) and `plumb_kvs_dataflow` (for end-to-end server wiring with external I/O)
+- **Unified replication API**: all strategies implement `replicate_updates` over `ReplicationUpdate<V>` so the same code handles slotted (sequenced) and unslotted updates
+- **Value Types**: `LwwWrapper<T>` (last-writer-wins), `CausalWrapper<T>` (causal with vector clocks)
 
 ### Example Architectures
 
@@ -31,9 +48,8 @@ The zoo showcases a composable architecture where dispatch strategies, maintenan
 
 Single-node key-value store with sequential semantics.
 
-- **Server**: `LocalKVSServer<LwwWrapper<String>>`
-- **Dispatch**: `SingleNodeRouter`
-- **Maintenance**: None
+- **Routing**: `SingleNodeRouter`
+- **Replication**: `NoReplication`
 - **Nodes**: 1
 - **Concepts**: Basic Hydro dataflow, external interfaces, process/cluster abstraction
 
@@ -41,9 +57,8 @@ Single-node key-value store with sequential semantics.
 
 Multi-node replication with selectable eventual consistency model.
 
-- **Server**: `ReplicatedKVSServer<V, EpidemicGossip<V>>`
-- **Dispatch**: `RoundRobinRouter`
-- **Maintenance**: `EpidemicGossip` (epidemic rumor-mongering)
+- **Routing**: `RoundRobinRouter`
+- **Replication**: `SimpleGossip` (epidemic rumor-mongering)
 - **Value Types**:
   - `CausalString` (default) - _causal_ consistency with vector clocks
   - `LwwWrapper<String>` (via `--lattice lww`) - last-writer-wins _non-deterministic_ consistency
@@ -58,9 +73,8 @@ Multi-node replication with selectable eventual consistency model.
 
 Horizontal partitioning via consistent hashing for scalability.
 
-- **Server**: `ShardedKVSServer<LocalKVSServer<LwwWrapper<String>>>`
-- **Dispatch**: `Pipeline<ShardedRouter, SingleNodeRouter>`
-- **Maintenance**: None (per-shard)
+- **Routing**: `Pipeline<ShardedRouter, SingleNodeRouter>`
+- **Replication**: `NoReplication` (per-shard)
 - **Nodes**: 3 shards
 - **Concepts**: Data partitioning, hash-based routing, independent shards
 - **Features**:
@@ -72,9 +86,8 @@ Horizontal partitioning via consistent hashing for scalability.
 
 Combines sharding and replication for both scalability and fault tolerance.
 
-- **Server**: `ShardedKVSServer<ReplicatedKVSServer<CausalString, BroadcastReplication>>`
-- **Dispatch**: `Pipeline<ShardedRouter, RoundRobinRouter>`
-- **Maintenance**: `BroadcastReplication` (within each shard)
+- **Routing**: `Pipeline<ShardedRouter, RoundRobinRouter>`
+- **Replication**: `BroadcastReplication` (within each shard)
 - **Nodes**: 3 shards × 3 replicas = 9 total nodes
 - **Concepts**: Hybrid architecture, multi-level composition
 - **Features**:
@@ -84,11 +97,10 @@ Combines sharding and replication for both scalability and fault tolerance.
 
 ### 5. **Linearizable KVS** (`examples/linearizable.rs`)
 
-Strong consistency via Paxos consensus with sequenced replication.
+Imposes a total order with Paxos while keeping background replication pluggable.
 
-- **Server**: `LinearizableKVSServer<LwwWrapper<String>, SequencedReplication<BroadcastReplication>>`
-- **Dispatch**: `PaxosDispatcher` (total order before execution)
-- **Maintenance**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery at replicas)
+- **Routing/Ordering**: `PaxosDispatcher` (consensus before execution)
+- **Replication**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery)
 - **Nodes**: 3 Paxos proposers + 3 Paxos acceptors + 3 KVS replicas = 9 total
 - **Concepts**: Consensus, linearizability, slot-preserving replication
 - **Features**:
@@ -96,27 +108,38 @@ Strong consistency via Paxos consensus with sequenced replication.
   - Replication preserves slots and enforces in-order application per replica
   - Strong consistency guarantees
 
+### 6. **Replicated Tombstone KVS** (`examples/replicated_with_tombstone.rs`)
+
+Highlights Delete + Tomb semantics backed by a metadata-aware background stage.
+
+- **Routing**: `RoundRobinRouter`
+- **Replication**: `SimpleGossip`
+- **Background**: `TombIndexBackground` (logs tomb statistics and emits summaries via `MetaEvent`)
+- **Concepts**: Metadata stream consumption, background processing, tombstone indexing
+
+Run:
+```bash
+cargo run --example replicated_with_tombstone
+```
+Expect a DELETE followed by a GET showing `NOT FOUND`, plus tomb logs like `[bg] tomb_index total=1 last=Some("alpha")` and `MetaEvent::TombSummary` entries that downstream consumers can observe.
+
 ## 🧪 Core Components
 
-### Composable Server Framework (`src/server.rs`)
+### Composable wiring (`src/wiring.rs` and `src/layer_flow.rs`)
 
-The `KVSServer<V>` trait enables architectural composition:
+KVS architectures are built by composing before_storage and after_storage layers, then wiring them with a single entrypoint:
 
 ```rust
-pub trait KVSServer<V> {
-    type Deployment<'a>;
-    fn create_deployment<'a>(flow: &FlowBuilder<'a>, ...) -> Self::Deployment<'a>;
-    fn run<'a>(...) -> ServerPorts<V>;
-    fn size() -> usize;
-}
+// Create external I/O and plumb the full stack
+let (layers, port) = plumb_kvs_dataflow::<LwwWrapper<String>, _>(
+  &proxy,
+  &client_external,
+  &flow,
+  kvs_spec, // e.g., a nested KVSCluster spec built from routing/replication components
+);
 ```
 
-Implementations include:
-
-- `LocalKVSServer<V>` - Single node
-- `ReplicatedKVSServer<V, R>` - Multiple replicas with replication strategy `R`
-- `ShardedKVSServer<S>` - Sharding wrapper over inner server type `S`
-- `LinearizableKVSServer<V, R>` - Paxos consensus with replication strategy `R`
+For focused scenarios (e.g., tests), `layer_flow` plumbs a single cluster with selected routing and replication over a stream of `KVSOperation<V>`.
 
 ### Value Semantics (`src/values/`)
 
@@ -124,18 +147,18 @@ Implementations include:
 - **`CausalWrapper<T>`**: Causal consistency using `DomPair<VCWrapper, SetUnionHashSet<T>>`
 - **`VCWrapper`**: Vector clock primitive for causality tracking
 
-### Maintenance Strategies (`src/after_storage/`)
+### Replication Strategies (`src/after_storage/`)
 
 - **`NoReplication`**: No background synchronization
-- **`EpidemicGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
+- **`SimpleGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
 - **`BroadcastReplication<V>`**: Eager broadcast of all updates
 - **`SequencedReplication<R>`**: Slot-ordered delivery wrapper over another replication strategy (gap-filling based on sequence/slot)
-- **`TombstoneCleanup`**: Elimination of globally-known tombstones.
+- Unified over `ReplicationUpdate<V>` via `replicate_updates`
 
 Notes:
 - Replication strategies implement a unified `replicate_updates` API over `ReplicationUpdate<V>` so they can handle both slotted and unslotted updates without duplication.
 
-### Dispatch Strategies (`src/dispatch/`)
+### Routing/Ordering Strategies (`src/before_storage/`)
 
 - **`SingleNodeRouter`**: Direct to single node
 - **`RoundRobinRouter`**: Load balance across replicas
@@ -201,7 +224,7 @@ cargo run --example replicated -- --lattice causal
 
 The example:
 
-1. **Deploys** a 3-node replicated cluster with `EpidemicGossip`
+1. **Deploys** a 3-node replicated cluster with `SimpleGossip`
 2. **Sends** operations with causal values (vector clock + value):
    ```rust
    PUT "doc" => CausalString { vc: {node1: 1}, val: "v1" }
@@ -226,13 +249,16 @@ The example:
 Servers, routing, replication, and values are independent dimensions:
 
 ```rust
-// Mix and match components
-type MyServer = ShardedKVSServer<
-    ReplicatedKVSServer<CausalString, EpidemicGossip<CausalString>>
+// Mix and match components (spec-style)
+type MyKVS = KVSCluster<
+  ShardCluster,
+  Pipeline<ShardedRouter, RoundRobinRouter>,        // before_storage
+  BroadcastReplication<CausalString>,               // after_storage
+  ()                                                // leaf
 >;
 
 let routing = Pipeline::new(ShardedRouter::new(3), RoundRobinRouter::new());
-let replication = EpidemicGossip::default();
+let replication = BroadcastReplication::<CausalString>::default();
 ```
 
 ### 2. **Lattice Merge Semantics**
@@ -256,9 +282,9 @@ Epidemic gossip separates metadata from values:
 - **Lattice Store**: Holds actual merged values
 - **Optimization**: Only gossip keys, fetch values from local store
 
-### 4. **Pipeline Dispatch**
+### 4. **Routing Pipelines**
 
-Compose dispatch strategies for multi-level architectures:
+Compose routing layers for multi-level architectures:
 
 ```rust
 // First route by shard, then by replica within shard

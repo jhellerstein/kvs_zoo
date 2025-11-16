@@ -4,7 +4,7 @@
 //! This is the simplest conflict resolution strategy but provides no guarantees
 //! about which "write" is actually more recent in distributed systems.
 
-use lattices::Merge;
+use lattices::{IsBot, LatticeFrom, Merge};
 use serde::{Deserialize, Serialize};
 
 /// Wrapper type that implements last-writer-wins semantics via the Merge trait
@@ -65,6 +65,12 @@ impl<T: PartialEq> Merge<LwwWrapper<T>> for LwwWrapper<T> {
     }
 }
 
+impl<T: Default> IsBot for LwwWrapper<T> {
+    fn is_bot(&self) -> bool {
+        false
+    }
+}
+
 impl<T> From<T> for LwwWrapper<T> {
     fn from(value: T) -> Self {
         LwwWrapper(value)
@@ -88,5 +94,11 @@ impl<T> std::ops::DerefMut for LwwWrapper<T> {
 impl<T: std::fmt::Display> std::fmt::Display for LwwWrapper<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl<T> LatticeFrom<LwwWrapper<T>> for LwwWrapper<T> {
+    fn lattice_from(other: LwwWrapper<T>) -> Self {
+        other
     }
 }

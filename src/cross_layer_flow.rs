@@ -7,22 +7,35 @@
 //! 4) after_storage (parent): replicate applied PUT deltas across the cluster
 //! 5) before_storage (leaf): route replicated PUTs to the target leaf and apply without responses
 
+use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::after_storage::ReplicationStrategy;
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
+use crate::events::{DataEvent, MetaEvent};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 
-/// Unified two-layer pipeline over arbitrary input items convertible into KVSOperation
-pub fn layer_flow<'a, V, DParent, After, DLeaf, In>(
+/// Composite output from the cross-layer helper so background stages can
+/// subscribe to the same data/meta feed without relying on legacy control
+/// helpers.
+pub struct CrossLayerFlowResult<'a, V> {
+    pub responses: Stream<String, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
+    pub data: Stream<DataEvent<V>, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
+    pub meta: Stream<MetaEvent, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
+}
+
+/// Pipeline over arbitrary input items convertible into KVSOperation
+/// Works across ClusterKVS<ClusterKVS<...>> layers as well as
+/// ClusterKVS<KVSNode> (which is two different kinds of layers)
+pub fn cross_layer_flow<'a, V, DParent, After, DLeaf, In>(
     parent_cluster: &Cluster<'a, KVSNode>,
     parent_before: &DParent,
     parent_after: &After,
     leaf_before: &DLeaf,
     inputs: Stream<In, Process<'a, ()>, Unbounded>,
-) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>
+) -> CrossLayerFlowResult<'a, V>
 where
     V: Clone
         + Serialize
@@ -36,9 +49,9 @@ where
         + Send
         + Sync
         + 'static,
-    DParent: OpDispatch<V> + Clone,
+    DParent: Before<V> + Clone,
     After: ReplicationStrategy<V> + Clone,
-    DLeaf: OpDispatch<V> + Clone,
+    DLeaf: Before<V> + Clone,
     In: Into<KVSOperation<V>> + 'static,
 {
     // Convert inputs to bare operations
@@ -54,9 +67,13 @@ where
     // Ensure sequential processing at the leaf
     let leaf_ops_ordered = leaf_ops.assume_ordering(nondet!(/** sequential processing at leaf */));
 
-    // 3) processing: produce client responses and applied PUT deltas
-    let (local_responses, applied_puts) =
-        crate::kvs_core::KVSCore::process_with_deltas(leaf_ops_ordered);
+    // 3) processing: client responses via minimal core + applied PUT deltas via helper
+    let crate::kvs_core::CoreOutput {
+        responses: local_responses,
+        data: local_data,
+        meta: local_meta,
+    } = crate::kvs_core::KVSCore::process_client_ops(leaf_ops_ordered.clone());
+    let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops_ordered);
 
     // 4) after_storage (parent): replicate applied PUT deltas
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
@@ -66,11 +83,28 @@ where
     let leaf_replicated_ops = leaf_before
         .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
-    let replicated_tagged = leaf_replicated_ops.map(q!(|op| (false, op)));
-    let replicate_responses = crate::kvs_core::KVSCore::process_with_responses(replicated_tagged);
+    let crate::kvs_core::CoreOutput {
+        responses: replicate_responses,
+        data: replicate_data,
+        meta: replicate_meta,
+    } = crate::kvs_core::KVSCore::process_replicated_ops(leaf_replicated_ops);
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
-    local_responses
+    let responses = local_responses
         .interleave(replicate_responses)
-        .assume_ordering(nondet!(/** client responses in leaf order */))
+        .assume_ordering(nondet!(/** client responses in leaf order */));
+
+    let data = local_data
+        .interleave(replicate_data)
+        .assume_ordering(nondet!(/** combined data events for background */));
+
+    let meta = local_meta
+        .interleave(replicate_meta)
+        .assume_ordering(nondet!(/** combined meta events for background */));
+
+    CrossLayerFlowResult {
+        responses,
+        data,
+        meta,
+    }
 }

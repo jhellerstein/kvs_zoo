@@ -3,7 +3,9 @@
 //! Implements the unified `replicate_updates` API, splitting unslotted and slotted
 //! updates internally to avoid code duplication.
 
-use crate::after_storage::{MaintenanceAfterResponses, ReplicationStrategy, ReplicationUpdate};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
+};
 use crate::kvs_core::KVSNode;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::location::MemberId;
@@ -128,14 +130,17 @@ where
         cluster: &Cluster<'a, KVSNode>,
         updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
-        let cluster_members = Self::get_cluster_members(cluster)
-            .assume_retries(nondet!(/** member list OK */));
+        let cluster_members =
+            Self::get_cluster_members(cluster).assume_retries(nondet!(/** member list OK */));
 
-        let unslotted_in = updates
-            .clone()
-            .filter_map(q!(|u| match u { ReplicationUpdate::Unslotted(t) => Some(t), _ => None }));
-        let slotted_in = updates
-            .filter_map(q!(|u| match u { ReplicationUpdate::Slotted(t) => Some(t), _ => None }));
+        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
+            ReplicationUpdate::Unslotted(t) => Some(t),
+            _ => None,
+        }));
+        let slotted_in = updates.filter_map(q!(|u| match u {
+            ReplicationUpdate::Slotted(t) => Some(t),
+            _ => None,
+        }));
 
         // Unslotted: reuse simple immediate gossip
         let unslotted_out = self
@@ -166,6 +171,12 @@ where
             .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
                 nondet!(/** consumers expect exactly-once semantics */),
             )
+    }
+}
+
+impl<V> ClusterCommunication for SimpleGossip<V> {
+    fn requires_cluster_scope() -> bool {
+        true
     }
 }
 
@@ -212,7 +223,7 @@ where
 }
 
 // Upward pass hook: Simple gossip doesn't modify responses by default
-impl<V> MaintenanceAfterResponses for SimpleGossip<V> {
+impl<V> AfterResponses for SimpleGossip<V> {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,

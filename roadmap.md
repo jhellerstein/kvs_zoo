@@ -1,16 +1,17 @@
-Sequenced, slot-aware replication (DONE):
-We unified the after-storage replication path with a single API that accepts mixed updates via `ReplicationUpdate<V>` and a `replicate_updates` entrypoint. Ordering is handled by a single wrapper `SequencedReplication<R>` that gap-fills and enforces slot order when available and delegates unchanged otherwise. This replaces prior mentions of “opportunistic” and removes the `LogBasedDelivery` variant.
-Optional: Audit other routers (RoundRobin, SingleNode) for similar generic affordances. They don’t inspect the op today, so no change is necessary functionally.
 
+Optional: Audit other routers (RoundRobin, SingleNode) for generic affordances to unify sequenced and non-sequenced streams. They don’t inspect the op today, so no change is necessary functionally.
 
 ---
-B. Layers with multiple clusters (e.g., Paxos roles)
 
-Also not hard; moderate but localized:
-Extend KVSClusters to register/retrieve role-specific clusters for a layer Name. For example: insert/get_role::<Name, Role>() keyed by (Name, RoleTypeId).
-Specialize KVSSpec for the Paxos layer to create and register both Proposers and Acceptors under the same Name.
-The rest of the stack doesn’t need to know these roles exist; the Paxos layer’s KVSWire impl can look them up internally.
+It's not pretty that the examples have to wrap an Envelope around the requests to get responses. Let's make that happen in a common place.
 
+--- 
+
+Right now the crate hard-wires TombSet to a HashSet<String> even when you flip the tombstone_fst feature, so the FST path is effectively just a placeholder. I left the HashSet feature as the default for two reasons:
+
+The FST-backed lattices::FstTombstoneSet only works for String keys and pulls in the heavier fst dependency; the HashSet fallback is still the simplest “just works everywhere” option while the FST plumbing is being finished.
+We haven’t actually switched StoreState over to use FstTombstoneSet<String> yet, so flipping the default feature today wouldn’t change behavior—it would just suggest we’re shipping the compressed implementation when we aren’t.
+Once we update StoreState (and the rest of the pipeline) to instantiate FstTombstoneSet<String> under the tombstone_fst flag and confirm there aren’t performance or build regressions, we can drop the HashSet default and make the FST feature the norm, keeping the HashSet version only as a fallback for non-String keys or minimal builds.
 ---
 
 Let's think about learning goals. This will affect the organization of the book as well as the repo.

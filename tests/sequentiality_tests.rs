@@ -38,6 +38,10 @@ fn test_strict_sequential_order() {
                 Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }
@@ -84,6 +88,10 @@ fn test_ordering_violation_detection() {
                 Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                sequential_state.remove(key);
+                format!("DELETE {} = OK", key)
+            }
         };
         sequential_responses.push(response);
     }
@@ -155,6 +163,10 @@ fn test_interleaved_operations_ordering() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }
@@ -199,6 +211,10 @@ fn test_missing_keys_sequential_order() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }
@@ -259,6 +275,10 @@ fn test_concurrent_clients_sequential_processing() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }
@@ -305,6 +325,10 @@ fn test_linearizability_violation_regression() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }

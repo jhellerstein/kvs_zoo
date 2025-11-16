@@ -1,6 +1,6 @@
-//! Single-Node Router Operation dispatcher
+//! Single-node router (Before stage)
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -15,7 +15,7 @@ impl SingleNodeRouter {
     }
 }
 
-impl<V> OpDispatch<V> for SingleNodeRouter {
+impl<V> Before<V> for SingleNodeRouter {
     fn dispatch_from_process<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,

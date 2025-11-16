@@ -1,12 +1,12 @@
-//! Paxos-based operation dispatcher (before-storage)
+//! Paxos-based ordering (Before stage)
 
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-use crate::before_storage::OpDispatch;
+use crate::before_storage::Before;
 pub use crate::before_storage::ordering::paxos_core::PaxosConfig;
-use crate::before_storage::ordering::paxos_core::{Acceptor, PaxosPayload, Proposer, paxos_core};
+use crate::before_storage::ordering::paxos_core::{PaxosPayload, paxos_core};
 use crate::before_storage::ordering::sequence_payloads::{SequencedPayload, sequence_payloads};
 use crate::protocol::KVSOperation;
 
@@ -33,9 +33,9 @@ impl<V> PaxosDispatcher<V> {
     pub fn paxos_run<'a>(
         &self,
         operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-        proposers: &Cluster<'a, Proposer>,
-        acceptors: &Cluster<'a, Acceptor>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, Proposer>, Unbounded>
+        proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+        acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: PaxosPayload + Eq,
     {
@@ -83,7 +83,7 @@ impl<V> Default for PaxosDispatcher<V> {
     }
 }
 
-impl<V> OpDispatch<V> for PaxosDispatcher<V>
+impl<V> Before<V> for PaxosDispatcher<V>
 where
     V: PaxosPayload + Eq,
 {
@@ -101,6 +101,60 @@ where
             .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
             .assume_ordering(nondet!(/** fallback ordered */))
             .map(q!(|(_i, op)| op))
+    }
+
+    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // Look up role-specific clusters for this layer (stored as KVSNode-tagged clusters).
+        let proposers = layers.get_role::<Name, crate::before_storage::ordering::Proposer>();
+        let acceptors = layers.get_role::<Name, crate::before_storage::ordering::Acceptor>();
+
+        // Run Paxos to impose a total order at the proposers cluster.
+        let ordered_at_proposers = self.paxos_run(operations, proposers, acceptors);
+
+        // Deliver ordered operations to the target KVS cluster for further processing.
+        ordered_at_proposers
+            .map(q!(|op| (
+                hydro_lang::location::MemberId::from_raw(0u32),
+                op
+            )))
+            .into_keyed()
+            .demux_bincode(target_cluster)
+            .values()
+            .assume_ordering(nondet!(/** paxos-ordered routed to KVS layer */))
+    }
+
+    fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
+        &self,
+        operations: Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        _layers: &crate::kvs_layer::KVSClusters<'a>,
+    ) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    where
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    {
+        // For inter-cluster hops within the same layer, assume ordering is preserved.
+        self.dispatch_from_cluster(operations, source_cluster, target_cluster)
+    }
+
+    fn register_role_clusters<'a, Name: 'static>(
+        &self,
+        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        layers: &mut crate::kvs_layer::KVSClusters<'a>,
+    ) {
+        // Create role clusters as KVSNode-tagged so they can be stored in KVSClusters
+        let proposers = flow.cluster::<crate::kvs_core::KVSNode>();
+        let acceptors = flow.cluster::<crate::kvs_core::KVSNode>();
+        layers.insert_role::<Name, crate::before_storage::ordering::Proposer>(proposers);
+        layers.insert_role::<Name, crate::before_storage::ordering::Acceptor>(acceptors);
     }
 
     fn dispatch_from_cluster<'a>(
@@ -122,9 +176,9 @@ pub fn paxos_order<
 >(
     dispatcher: &PaxosDispatcher<V>,
     operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-    proposers: &Cluster<'a, Proposer>,
-    acceptors: &Cluster<'a, Acceptor>,
-) -> Stream<KVSOperation<V>, Cluster<'a, Proposer>, Unbounded> {
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+) -> Stream<KVSOperation<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
     dispatcher.paxos_run(operations, proposers, acceptors)
 }
 
@@ -134,8 +188,8 @@ pub fn paxos_order_to_proxy<
 >(
     dispatcher: &PaxosDispatcher<V>,
     operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-    proposers: &Cluster<'a, Proposer>,
-    acceptors: &Cluster<'a, Acceptor>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     proxy: &Process<'a, ()>,
 ) -> Stream<KVSOperation<V>, Process<'a, ()>, Unbounded> {
     dispatcher
@@ -152,9 +206,9 @@ pub fn paxos_order_slotted<
 >(
     dispatcher: &PaxosDispatcher<V>,
     operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
-    proposers: &Cluster<'a, Proposer>,
-    acceptors: &Cluster<'a, Acceptor>,
-) -> Stream<(usize, KVSOperation<V>), Cluster<'a, Proposer>, Unbounded> {
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+) -> Stream<(usize, KVSOperation<V>), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
     dispatcher
         .paxos_run(operations, proposers, acceptors)
         .enumerate()

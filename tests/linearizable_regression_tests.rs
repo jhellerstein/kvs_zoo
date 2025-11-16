@@ -4,28 +4,10 @@
 //! operation processing at each replica, ensuring linearizability
 //! guarantees are preserved.
 
-use kvs_zoo::before_storage::PaxosDispatcher;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::server::KVSServer;
 use kvs_zoo::values::LwwWrapper;
 
-/// Test that linearizable KVS processes operations in Paxos-determined order
-#[test]
-fn test_linearizable_kvs_sequential_processing() {
-    // This test verifies that the linearizable KVS processes operations
-    // in the exact order determined by Paxos consensus
-
-    // Create a linearizable KVS server type
-    type _LinearizableKVS = KVSServer<
-        LwwWrapper<String>,
-        PaxosDispatcher<LwwWrapper<String>>,
-        kvs_zoo::after_storage::NoReplication,
-    >;
-
-    // Verify that the type compiles and can be instantiated
-    // The actual sequential processing is tested in the deployment tests
-    println!("LinearizableKVS type verified");
-}
+// Note: Legacy server-based type test removed; linearizability is validated via deployment tests.
 
 /// Test linearizable KVS with operations that must maintain strict order
 #[test]
@@ -58,6 +40,10 @@ fn test_linearizable_kvs_strict_ordering() {
                 Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
                 None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
             },
+            KVSOperation::Delete(key) => {
+                replica_state.remove(&key);
+                format!("DELETE {} = OK [LINEARIZABLE]", key)
+            }
         };
         replica_responses.push(response);
     }
@@ -102,6 +88,10 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                correct_state.remove(key);
+                format!("DELETE {} = OK", key)
+            }
         };
         correct_responses.push(response);
     }
@@ -196,6 +186,10 @@ fn test_linearizable_kvs_concurrent_clients() {
                 Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
                 None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK [LINEARIZABLE]", key)
+            }
         };
         responses.push(response);
     }
@@ -244,6 +238,10 @@ fn test_linearizable_kvs_replica_consistency() {
                 Some(value) => format!("GET {} = {:?} [REPLICA1]", key, value),
                 None => format!("GET {} = NOT FOUND [REPLICA1]", key),
             },
+            KVSOperation::Delete(key) => {
+                replica1_state.remove(key);
+                format!("DELETE {} = OK [REPLICA1]", key)
+            }
         };
         replica1_responses.push(response);
     }
@@ -262,6 +260,10 @@ fn test_linearizable_kvs_replica_consistency() {
                 Some(value) => format!("GET {} = {:?} [REPLICA2]", key, value),
                 None => format!("GET {} = NOT FOUND [REPLICA2]", key),
             },
+            KVSOperation::Delete(key) => {
+                replica2_state.remove(key);
+                format!("DELETE {} = OK [REPLICA2]", key)
+            }
         };
         replica2_responses.push(response);
     }
@@ -314,6 +316,10 @@ fn test_linearizability_bug_regression() {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
+            KVSOperation::Delete(key) => {
+                state.remove(&key);
+                format!("DELETE {} = OK", key)
+            }
         };
         responses.push(response);
     }

@@ -102,6 +102,9 @@ where
                     return false;
                 }
             }
+            KVSOperation::Delete(k) => {
+                state.remove(k);
+            }
         }
     }
 

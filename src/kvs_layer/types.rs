@@ -3,43 +3,88 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-/// A layer in the KVS architecture, pairing before_storage and after_storage strategies.
+/// A layer in the KVS architecture, pairing generic Before and After strategies.
 ///
 /// - `Name`: marker type naming this layer (shared with Hydro location types)
-/// - `D`: before_storage strategy (routing/ordering) at this level
-/// - `M`: after_storage strategy (replication/responders) at this level
+/// - `B`: before_storage strategy (routing/ordering) at this level
+/// - `A`: after_storage strategy (replication/responders) at this level
 /// - `Child`: either another `KVSCluster` or `()` for terminal
 #[derive(Clone)]
-pub struct KVSCluster<Name, D, M, Child> {
+pub struct KVSCluster<Name, B, A, Child, Bg = ()> {
     _name: PhantomData<Name>,
-    // Field names retain historical naming; dispatch = before_storage, maintenance = after_storage.
-    pub dispatch: D,
-    pub maintenance: M,
+    // Generic names: before = before_storage stage (e.g., routing/ordering); after = after_storage (e.g., replication/responders)
+    pub before: B,
+    pub after: A,
     pub child: Child,
+    /// Optional background maintenance pipeline (tomb indexing, anti-entropy, etc.)
+    pub background: Bg,
 }
 
-impl<Name, D, M, Child> KVSCluster<Name, D, M, Child> {
-    pub fn new(dispatch: D, maintenance: M, child: Child) -> Self {
+impl<Name, B, A, Child> KVSCluster<Name, B, A, Child> {
+    /// Construct a cluster without a background pipeline (defaults to `()`).
+    pub fn new(before: B, after: A, child: Child) -> Self {
         Self {
             _name: PhantomData,
-            dispatch,
-            maintenance,
+            before,
+            after,
             child,
+            background: (),
+        }
+    }
+
+    /// Construct a cluster while explicitly providing a background pipeline.
+    pub fn with_background<Bg>(
+        before: B,
+        after: A,
+        child: Child,
+        background: Bg,
+    ) -> KVSCluster<Name, B, A, Child, Bg> {
+        KVSCluster {
+            _name: PhantomData,
+            before,
+            after,
+            child,
+            background,
         }
     }
 }
 
-impl<Name, D: Default, M: Default, Child: Default> Default for KVSCluster<Name, D, M, Child> {
+impl<Name, B, A, Child, Bg> KVSCluster<Name, B, A, Child, Bg> {
+    pub fn new_with_background(before: B, after: A, child: Child, background: Bg) -> Self {
+        Self {
+            _name: PhantomData,
+            before,
+            after,
+            child,
+            background,
+        }
+    }
+}
+
+impl<Name, B: Default, A: Default, Child: Default, Bg: Default> Default
+    for KVSCluster<Name, B, A, Child, Bg>
+{
     fn default() -> Self {
-        Self::new(D::default(), M::default(), Child::default())
+        Self {
+            _name: PhantomData,
+            before: B::default(),
+            after: A::default(),
+            child: Child::default(),
+            background: Bg::default(),
+        }
     }
 }
 
 /// Collection of named cluster handles created during KVS wiring.
 ///
-/// Allows type-safe lookup of cluster handles by layer name.
+/// Supports optional role-specialized clusters per layer. Roles are identified by
+/// Rust types so that layers like Paxos can register multiple internal clusters
+/// (e.g., Proposer, Acceptor) under a single layer `Name` without the wiring
+/// infrastructure knowing anything about Paxos.
 pub struct KVSClusters<'a> {
-    clusters: HashMap<TypeId, Cluster<'a, crate::kvs_core::KVSNode>>,
+    /// Mapping from (LayerName, Role) to Cluster handle.
+    /// The default/no-role entries use `Role = ()`.
+    clusters: HashMap<(TypeId, TypeId), Cluster<'a, crate::kvs_core::KVSNode>>,
 }
 
 impl<'a> KVSClusters<'a> {
@@ -49,26 +94,52 @@ impl<'a> KVSClusters<'a> {
         }
     }
 
-    /// Insert a cluster handle for a named layer.
+    /// Insert a cluster handle for a named layer (no role).
     pub fn insert<Name: 'static>(&mut self, cluster: Cluster<'a, crate::kvs_core::KVSNode>) {
-        self.clusters.insert(TypeId::of::<Name>(), cluster);
+        self.insert_role::<Name, ()>(cluster);
     }
 
-    /// Get the cluster handle for a named layer.
+    /// Insert a cluster handle for a named layer and role.
+    pub fn insert_role<Name: 'static, Role: 'static>(
+        &mut self,
+        cluster: Cluster<'a, crate::kvs_core::KVSNode>,
+    ) {
+        let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
+        self.clusters.insert(key, cluster);
+    }
+
+    /// Get the cluster handle for a named layer (no role).
     ///
     /// Panics if the layer name was not registered during wiring.
     pub fn get<Name: 'static>(&self) -> &Cluster<'a, crate::kvs_core::KVSNode> {
-        self.clusters.get(&TypeId::of::<Name>()).unwrap_or_else(|| {
+        self.get_role::<Name, ()>()
+    }
+
+    /// Get the cluster handle for a named layer and role.
+    ///
+    /// Panics if the (name, role) pair was not registered during wiring.
+    pub fn get_role<Name: 'static, Role: 'static>(&self) -> &Cluster<'a, crate::kvs_core::KVSNode> {
+        let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
+        self.clusters.get(&key).unwrap_or_else(|| {
             panic!(
-                "No cluster found for layer type {}",
-                std::any::type_name::<Name>()
+                "No cluster found for layer type {} and role {}",
+                std::any::type_name::<Name>(),
+                std::any::type_name::<Role>()
             )
         })
     }
 
-    /// Try to get the cluster handle for a named layer.
+    /// Try to get the cluster handle for a named layer (no role).
     pub fn try_get<Name: 'static>(&self) -> Option<&Cluster<'a, crate::kvs_core::KVSNode>> {
-        self.clusters.get(&TypeId::of::<Name>())
+        self.try_get_role::<Name, ()>()
+    }
+
+    /// Try to get the cluster handle for a named layer and role.
+    pub fn try_get_role<Name: 'static, Role: 'static>(
+        &self,
+    ) -> Option<&Cluster<'a, crate::kvs_core::KVSNode>> {
+        let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
+        self.clusters.get(&key)
     }
 }
 
@@ -80,24 +151,24 @@ impl<'a> Default for KVSClusters<'a> {
 
 /// Leaf-level (per-member) layer placeholder.
 #[derive(Clone)]
-pub struct KVSNode<Name, D, M> {
+pub struct KVSNode<Name, B, A> {
     _name: PhantomData<Name>,
-    pub dispatch: D,
-    pub maintenance: M,
+    pub before: B,
+    pub after: A,
 }
 
-impl<Name, D, M> KVSNode<Name, D, M> {
-    pub fn new(dispatch: D, maintenance: M) -> Self {
+impl<Name, B, A> KVSNode<Name, B, A> {
+    pub fn new(before: B, after: A) -> Self {
         Self {
             _name: PhantomData,
-            dispatch,
-            maintenance,
+            before,
+            after,
         }
     }
 }
 
-impl<Name, D: Default, M: Default> Default for KVSNode<Name, D, M> {
+impl<Name, B: Default, A: Default> Default for KVSNode<Name, B, A> {
     fn default() -> Self {
-        Self::new(D::default(), M::default())
+        Self::new(B::default(), A::default())
     }
 }

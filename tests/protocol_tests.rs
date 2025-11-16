@@ -23,13 +23,19 @@ fn test_operation_pattern_matching() {
             assert_eq!(key, "key1");
             assert_eq!(value, "value1");
         }
-        KVSOperation::Get(_) => panic!("Expected PUT operation"),
+        KVSOperation::Get(_) | KVSOperation::Delete(_) => panic!("Expected PUT operation"),
     }
 
     let get_op: KVSOperation<String> = KVSOperation::Get("key1".to_string());
     match get_op {
         KVSOperation::Get(key) => assert_eq!(key, "key1"),
-        KVSOperation::Put(_, _) => panic!("Expected GET operation"),
+        KVSOperation::Put(_, _) | KVSOperation::Delete(_) => panic!("Expected GET operation"),
+    }
+
+    let del_op: KVSOperation<String> = KVSOperation::Delete("key1".to_string());
+    match del_op {
+        KVSOperation::Delete(key) => assert_eq!(key, "key1"),
+        KVSOperation::Put(_, _) | KVSOperation::Get(_) => panic!("Expected DELETE operation"),
     }
 }
 
@@ -53,13 +59,13 @@ fn test_response_pattern_matching() {
     match get_response {
         KVSResponse::GetResult(Some(value)) => assert_eq!(value, "value"),
         KVSResponse::GetResult(None) => panic!("Expected found value"),
-        KVSResponse::PutOk => panic!("Expected GET response"),
+        KVSResponse::PutOk | KVSResponse::DeleteOk => panic!("Expected GET response"),
     }
 
     let not_found_response: KVSResponse<String> = KVSResponse::GetResult(None);
     match not_found_response {
         KVSResponse::GetResult(None) => {} // Expected
         KVSResponse::GetResult(Some(_)) => panic!("Expected not found"),
-        KVSResponse::PutOk => panic!("Expected GET response"),
+        KVSResponse::PutOk | KVSResponse::DeleteOk => panic!("Expected GET response"),
     }
 }

@@ -8,23 +8,32 @@ edition = "2024"
 name = "kvs_zoo"
 
 [dependencies]
-hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = ["deploy"] }
-hydro_std = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-lattices = { version = "0.6.1", features = ["serde"] }
+hydro_lang = { git = "https://github.com/hydro-project/hydro.git", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d", features = ["deploy"] }
+hydro_std = { git = "https://github.com/hydro-project/hydro.git", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d" }
+hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d" }
+lattices = { git = "https://github.com/hydro-project/hydro.git", package = "lattices", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d", features = ["serde"] }
 stageleft = "0.10.0"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 rand = "0.8.0"
 futures = "0.3.0"
 tokio = { version = "1.29.0", features = ["full"] }
+
+[features]
+# Default: simple HashSet tombstones (no extra dependencies)
+default = ["tombstone_hashset"]
+# Use a HashSet<String> as the tombstone set
+tombstone_hashset = []
+# Placeholder for future FST-based tombstones (String keys); currently maps to HashSet in code.
+tombstone_fst = []
 
 [build-dependencies]
 stageleft_tool = "0.10.0"
 
 [dev-dependencies]
 ctor = "0.2"
-hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = [
+hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d" }
+hydro_lang = { git = "https://github.com/hydro-project/hydro.git", rev = "0c6666bfdcda799f8c835bb7198f7d24e1c1c41d", features = [
     "deploy",
     "viz",
     "sim",
@@ -33,6 +42,10 @@ tokio = { version = "1.29.0", features = ["full"] }
 tokio-stream = { version = "0.1.3", default-features = false }
 futures = "0.3.0"
 insta = { version = "1", features = ["json"] }
+proptest = "1.4"
+serial_test = "2.0"
+clap = { version = "4.5", features = ["derive"] }
+trybuild = "1.0"
 
 [lints.clippy]
 uninlined_format_args = "allow"
