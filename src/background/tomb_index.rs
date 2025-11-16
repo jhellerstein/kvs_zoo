@@ -2,7 +2,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::background::MetaBackground;
-use crate::events::{DataEvent, MetaEvent};
+use crate::events::{DataEvent, MetaDigestFormat, MetaEvent};
 
 /// Snapshot of tomb metadata accumulated by the background indexer.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,18 +70,33 @@ impl TombIndexBackground {
                 }));
         }
 
+        let mut meta_stream = meta;
+
         if self.emit_summaries {
             let summaries =
-                stats_stream.map(q!(|snapshot: TombIndexStats| MetaEvent::TombSummary {
-                    total_tombs: snapshot.total_tombs,
-                    last_tomb_key: snapshot.last_tomb_key.clone(),
-                }));
+                stats_stream
+                    .clone()
+                    .map(q!(|snapshot: TombIndexStats| MetaEvent::TombSummary {
+                        total_tombs: snapshot.total_tombs,
+                        last_tomb_key: snapshot.last_tomb_key.clone(),
+                    }));
 
-            meta.interleave(summaries)
-                .assume_ordering(nondet!(/** tomb meta with summaries */))
-        } else {
-            meta
+            meta_stream = meta_stream
+                .interleave(summaries)
+                .assume_ordering(nondet!(/** tomb meta with summaries */));
         }
+
+        let digests = stats_stream.map(q!(|snapshot: TombIndexStats| {
+            let payload = serde_json::to_vec(&snapshot).expect("serialize digest");
+            MetaEvent::CompactionDigest {
+                format: MetaDigestFormat::TombIndexJsonV1,
+                bytes: payload,
+            }
+        }));
+
+        meta_stream
+            .interleave(digests)
+            .assume_ordering(nondet!(/** tomb meta with summaries + digests */))
     }
 }
 

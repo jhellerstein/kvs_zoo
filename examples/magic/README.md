@@ -17,3 +17,5 @@ Learn more wiring details in the paired Detail examples:
 
 - replicated_detail.rs — explicit Hydro wiring for the replicated topology
 - sharded_detail.rs — explicit Hydro wiring and shard-by-hash prints
+
+Need a refresher on the new data/meta/background split before diving in? The quick primer lives at `../../docs/metadata_background_quickstart.md`.

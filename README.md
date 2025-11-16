@@ -33,7 +33,7 @@ Pipelines:
 
 Early phases keep dispatch simple: borrowed references passed synchronously; cloning deferred until a stage explicitly needs ownership.
 
-See `docs/background_pipeline_plan.md` for the phased migration plan.
+See `docs/background_pipeline_plan.md` for the phased migration plan and `docs/metadata_background_quickstart.md` for hands-on wiring guidance (data vs meta streams, background stage attachment).
 
 ### Core Abstractions
 

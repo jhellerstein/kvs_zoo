@@ -16,6 +16,8 @@ Start here depending on your goal:
 
 See also: `examples/magic/README.md` and `examples/detail/README.md` for curated lists.
 
+Want to understand where the metadata/background wiring hooks in? Skim `../docs/metadata_background_quickstart.md` for the primer on `DataEvent` vs `MetaEvent` streams and how background stages attach to running demos.
+
 ## The layering API (kvs_layer)
 
 Two building blocks you can nest to any depth:

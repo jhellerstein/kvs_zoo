@@ -80,8 +80,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data,
         meta,
     } = KVSCore::process(all_tagged);
-    data.for_each(q!(|_data| ())); // Demo drops maintenance data events for now
-    meta.for_each(q!(|_meta| ())); // Demo drops maintenance metadata for now
+    data.for_each(q!(|event| println!("[after] data {:?}", event)));
+    meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
 
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses

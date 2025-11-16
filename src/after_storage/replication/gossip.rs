@@ -225,43 +225,6 @@ impl<V> AfterResponses for SimpleGossip<V> {
     }
 }
 
-/// Gossip replication for metadata maintenance messages
-///
-/// Implements MaintenanceReplicator to gossip maintenance messages to random peers in the cluster
-/// using a separate network channel from data replication.
-impl crate::after_storage::pipeline::MaintenanceReplicator
-    for SimpleGossip<crate::after_storage::meta::MaintenanceMsg>
-{
-    fn replicate_meta<'a>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        meta_in: Stream<
-            crate::after_storage::meta::MaintenanceMsg,
-            Cluster<'a, KVSNode>,
-            Unbounded,
-        >,
-    ) -> Stream<crate::after_storage::meta::MaintenanceMsg, Cluster<'a, KVSNode>, Unbounded> {
-        let cluster_members = Self::get_cluster_members(cluster);
-
-        // Gossip maintenance messages to random peers
-        let gossip_sent = meta_in
-            .clone()
-            .cross_product(
-                cluster_members
-                    .clone()
-                    .assume_retries(nondet!(/** member list OK */)),
-            )
-            .map(q!(|(msg, member_id)| (member_id, msg)))
-            .into_keyed()
-            .demux_bincode(cluster);
-
-        gossip_sent
-            .values()
-            .assume_ordering(nondet!(/** gossip messages unordered */))
-            .assume_retries(nondet!(/** gossip retries OK */))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

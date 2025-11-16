@@ -126,11 +126,9 @@ impl KVSCore {
 
         let responses = combined
             .clone()
-            .filter_map(q!(|emission: CoreEmission<V>| emission.response));
-        let data = combined
-            .clone()
-            .filter_map(q!(|emission: CoreEmission<V>| emission.data));
-        let meta = combined.filter_map(q!(|emission: CoreEmission<V>| emission.meta));
+            .filter_map(q!(|emission| emission.response));
+        let data = combined.clone().filter_map(q!(|emission| emission.data));
+        let meta = combined.filter_map(q!(|emission| emission.meta));
 
         CoreOutput {
             responses,

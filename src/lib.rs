@@ -25,6 +25,7 @@ pub mod kvs_layer {
 }
 
 pub mod cross_layer_flow;
+pub use cross_layer_flow::CrossLayerFlowResult;
 pub mod plumbing;
 pub mod protocol;
 pub mod store_state;
@@ -33,7 +34,9 @@ pub mod values;
 // New Phase 0 events & consumer traits.
 pub mod events;
 pub use background::{BackgroundPlumb, MetaBackground};
-pub use events::{DataConsumer, DataEvent, DataMetaConsumer, MetaConsumer, MetaEvent, TeeAfter};
+pub use events::{
+    DataConsumer, DataEvent, DataMetaConsumer, MetaConsumer, MetaEvent, MetaTeeAfter, TeeAfter,
+};
 
 #[cfg(test)]
 mod test_init {

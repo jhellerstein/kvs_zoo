@@ -1,3 +1,58 @@
+# Background Pipeline Status & Follow-Ups (November 2025)
+
+This document replaces the sprawling restart plan with a concise snapshot that can ride in the PR description. For wiring details and examples, see [`docs/metadata_background_quickstart.md`](metadata_background_quickstart.md).
+
+---
+
+## Executive Summary
+
+- `KVSCore::process` now emits distinct `DataEvent<V>` and `MetaEvent` streams and every helper (`plumb_kvs_dataflow`, detail examples) forwards both.
+- `MetaEvent` covers `Tomb`, `TombSummary`, `ReclaimFrontier`, and JSON digests via `CompactionDigest`/`MetaDigestFormat::TombIndexJsonV1`.
+- `TombIndexBackground` attaches through `MetaBackground`, logs stats optionally, emits summaries, and produces the digest payload for downstream maintenance.
+- Integration coverage: `meta_stream_tests` exercise tomb emission, background plumb wiring, and digest surfacing; `cargo nextest run` passes (104 tests, 8 skipped).
+- User-facing docs refreshed (README, example READMEs, quickstart) to point at the metadata/background story.
+
+---
+
+## Delivered Components
+
+| Area | Highlights | Notes |
+|------|------------|-------|
+| Core events | `events.rs` defines `DataEvent`, `MetaEvent`, and `MetaDigestFormat` | designed for additive growth (scans, richer digests) |
+| Background plumbing | `MetaBackground` + `BackgroundPlumb` traits walk the layer tree | background stages receive borrowed refs; no allocations when unused |
+| Tomb index stage | `TombIndexBackground` tracks tomb counts, optional logging, emits summaries + JSON digest | digest encoded once via `serde_json::to_vec` |
+| Examples/tests | All demos use new plumbing; `meta_stream_tests` assert tomb, summary, digest emission | serialised with `serial_test` to dodge Hydro trybuild races |
+| Documentation | README + quickstart link to metadata/background primer | redundant plan trimmed to this note |
+
+---
+
+## Outstanding Follow-Ups
+
+1. **Reclaim frontier consumer** – implement a background stage (or storage hook) that reacts to `MetaEvent::ReclaimFrontier` and tunes tomb retention.
+2. **Digest consumers** – provide a reference reader (CLI/tooling) that decodes `MetaDigestFormat::TombIndexJsonV1` and surfaces metrics.
+3. **After-stage opt-in** – audit after-storage strategies for optional metadata handling (e.g., replication strategies emitting tomb awareness).
+4. **Property tests** – rebuild the old control-channel property coverage around the new metadata stream semantics once reclaim/digest consumers land.
+
+These items stay on the backlog but are not required for the current PR.
+
+---
+
+## PR Checklist Snapshot
+
+- [x] `cargo fmt`
+- [x] `cargo nextest run`
+- [x] Docs updated (`README`, examples, quickstart, this note)
+- [x] No legacy control-channel references remain
+- [x] Tests cover background plumbing (tombs, summaries, digests)
+
+Keep this list in sync with the PR body when opening/refreshing the review.
+
+---
+
+## Historical Context
+
+The previous 300-line plan (restored via Git history if needed) documented the branch restart from the legacy control channel. With the refactor now concrete, this lean summary should suffice; consult commit history for deep archeology.
+
 # Background Pipeline & Stream Refactor Plan
 
 This document captures the restart plan from `after-control-pipeline` toward a cleaner architecture with **Data** and **Metadata** streams plus an optional **Background** pipeline. It is intentionally self‑contained so we can delete legacy control-channel code without needing git archaeology.
@@ -167,9 +222,9 @@ When adding `KVSOperation::Scan`:
 | ✅ | Cargo workspace builds (`cargo check`) | Verified after module move. |
 | ✅ | Relocate tomb background stages from `after_storage/cleanup` into `background/` | `TombIndexBackground` now lives under `src/background/`. |
 | ✅ | Rename `after_storage::control` API surface to metadata-centric naming | Migrated to `after_storage::meta` with Maintenance* terminology. |
-| ☐ | Update docs/tests to drop "control channel" phrasing | Follow-up: refresh docs, rebuild property tests with metadata naming. |
-| ☐ | Point meta stream plumbing away from After-specific control helpers | Pending once background stages own metadata feed. |
-| ☐ | Expand integration tests for metadata consumers | Pending follow-up after refactor. |
+| ✅ | Update docs/tests to drop "control channel" phrasing | Added `docs/metadata_background_quickstart.md`; naming aligned with Metadata/background terminology. |
+| ✅ | Point meta stream plumbing away from After-specific control helpers | Removed legacy MaintenanceReplicator trait + impls; cross_layer_flow now surfaces data/meta for the background tee wiring. |
+| ✅ | Expand integration tests for metadata consumers | Added `background_plumb_routes_meta_events` to ensure stages observe tomb meta via BackgroundPlumb. |
 
 _Update this table as each step is completed to keep the branch audit-ready._
 

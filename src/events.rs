@@ -12,6 +12,13 @@ pub enum DataEvent<V> {
     Get { key: String, value: Option<V> },
 }
 
+/// Wire format for background digests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MetaDigestFormat {
+    /// JSON serialization of `TombIndexStats`; stable, human-readable.
+    TombIndexJsonV1,
+}
+
 /// MetaEvent carries maintenance/system metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetaEvent {
@@ -22,8 +29,14 @@ pub enum MetaEvent {
         total_tombs: usize,
         last_tomb_key: Option<String>,
     },
-    // Future: Reclaim { key: String },
-    // Future: TombDigest { format_id: u16, bytes: Vec<u8> },
+    ReclaimFrontier {
+        frontier_seq: Option<u64>,
+        epoch: u64,
+    },
+    CompactionDigest {
+        format: MetaDigestFormat,
+        bytes: Vec<u8>,
+    },
 }
 
 /// A consumer of DataEvents (After or Background pipeline stage).
@@ -65,6 +78,26 @@ where
         self.next.on_data(ev);
         if let Some(bg) = &mut self.bg_data {
             bg.on_data(ev);
+        }
+    }
+}
+
+/// Phase 0 Tee for MetaEvent stream so background stages can observe metadata too.
+pub struct MetaTeeAfter<M, Next, BgMeta> {
+    pub next: Next,
+    pub bg_meta: Option<BgMeta>,
+    _pm: std::marker::PhantomData<M>,
+}
+
+impl<M, Next, BgMeta> MetaTeeAfter<M, Next, BgMeta>
+where
+    Next: MetaConsumer<M>,
+    BgMeta: MetaConsumer<M>,
+{
+    pub fn on_meta(&mut self, meta: &M) {
+        self.next.on_meta(meta);
+        if let Some(bg) = &mut self.bg_meta {
+            bg.on_meta(meta);
         }
     }
 }

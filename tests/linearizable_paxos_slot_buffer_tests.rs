@@ -23,6 +23,7 @@ type LinearizableKVS = KVSCluster<
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
+#[serial_test::serial]
 #[test]
 fn get_waits_for_prior_put_slot() {
     let flow = hydro_lang::compile::builder::FlowBuilder::new();

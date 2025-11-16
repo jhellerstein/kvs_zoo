@@ -3,6 +3,7 @@
 //! These are used by examples and tests to plumb before/after layers to the core
 //! and connect external I/O, without relying on test-only server conveniences.
 
+use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -96,9 +97,14 @@ where
     let tagged_routed = routed_ops.map(q!(|op| crate::protocol::Envelope::new(true, op)));
     let crate::kvs_core::CoreOutput {
         responses: core_responses,
-        data: data_events,
-        meta: meta_stream,
+        data: local_data_events,
+        meta: local_meta_stream,
     } = crate::kvs_core::KVSCore::process(tagged_routed);
+
+    let data_events = local_data_events
+        .assume_ordering::<TotalOrder>(nondet!(/** core data events in op order */));
+    let meta_stream = local_meta_stream
+        .assume_ordering::<TotalOrder>(nondet!(/** core meta events in op order */));
 
     // Upward after_storage pass: traverse replication/responders chain from leaf to root.
     let final_responses = kvs.after_responses(&layers, core_responses);

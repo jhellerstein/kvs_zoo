@@ -16,13 +16,12 @@
 //!    ↙      ↘
 //! Data      Metadata (MaintenanceMsg)
 //!  ↓         ↓
-//!  ↓      MaintenanceReplicator (optional)
 //!  ↓         ↓
 //!  ↓      MaintenanceLocalHandler (optional)
 //!  ↓         ↓
 //!  └────┬────┘
 //!       ↓
-//!  Replication
+//!  Background / Replication Consumers
 //! ```
 //!
 //! # Message Types
@@ -146,48 +145,6 @@ impl MaintenanceMsg {
     pub fn reclaim_with_frontier(frontier_seq: u64, epoch: u64) -> Self {
         MaintenanceMsg::Reclaim(ReclaimFrontier::with_frontier(frontier_seq, epoch))
     }
-}
-
-/// Trait for maintenance message replication strategies.
-///
-/// Implementers define how maintenance messages are replicated across the cluster.
-/// Metadata replication operates independently from data replication, using a
-/// separate network channel to avoid interference with data consistency.
-///
-/// # Metadata Replication Flow
-///
-/// ```text
-/// Local Metadata Messages
-///        ↓
-///   [MaintenanceReplicator]
-///        ↓
-///   Network Channel (separate from data)
-///        ↓
-///   All Nodes Receive
-/// ```
-///
-/// # Implementations
-///
-/// - **BroadcastReplication**: Sends each message to all nodes immediately
-/// - **GossipReplication**: Gradually propagates messages through gossip protocol
-pub trait MaintenanceReplicator {
-    /// Replicate maintenance messages to all nodes in the cluster.
-    ///
-    /// Takes a stream of maintenance messages and returns a stream of replicated
-    /// messages received from other nodes. The strategy determines how messages
-    /// are synchronized (broadcast, gossip, etc.).
-    ///
-    /// # Arguments
-    /// - `cluster`: The cluster context for network operations
-    /// - `meta_in`: Stream of maintenance messages to replicate
-    ///
-    /// # Returns
-    /// Stream of maintenance messages received from replication
-    fn replicate_meta<'a>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        meta_in: Stream<MaintenanceMsg, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<MaintenanceMsg, Cluster<'a, KVSNode>, Unbounded>;
 }
 
 /// Trait for maintenance message local handlers.
