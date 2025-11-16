@@ -29,18 +29,14 @@ jobs:
           tool: cargo-nextest
 
       - name: Build (kvs_zoo)
-        working-directory: kvs_zoo
         run: cargo build --locked --examples --tests
 
       - name: Clippy (kvs_zoo)
-        working-directory: kvs_zoo
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Run unit tests (kvs_zoo)
-        working-directory: kvs_zoo
         run: cargo nextest run --locked --nocapture
 
       - name: Run smoke tests (ignored)
-        working-directory: kvs_zoo
         run: cargo nextest run --locked --test examples_smoke --run-ignored ignored-only --nocapture
 
