@@ -2,6 +2,11 @@ use hydro_lang::prelude::*;
 
 use crate::events::{DataEvent, MetaEvent};
 
+pub type BackgroundDataStream<'a, V> =
+    Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+pub type BackgroundMetaStream<'a> =
+    Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+
 pub mod tomb_index;
 pub use tomb_index::{TombIndexBackground, TombIndexStats};
 
@@ -10,24 +15,18 @@ pub trait MetaBackground<V> {
     fn attach<'a>(
         &mut self,
         cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    );
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>);
 }
 
 impl<V> MetaBackground<V> for () {
     fn attach<'a>(
         &mut self,
         _cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) {
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>) {
         (data, meta)
     }
 }
@@ -37,12 +36,9 @@ pub trait BackgroundPlumb<V> {
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    )
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
     where
         V: Clone
             + serde::Serialize
@@ -62,12 +58,9 @@ impl<V> BackgroundPlumb<V> for () {
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    )
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
     where
         V: Clone
             + serde::Serialize
@@ -96,12 +89,9 @@ where
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    )
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
     where
         V: Clone
             + serde::Serialize
@@ -126,12 +116,9 @@ impl<V, Name, B, A> BackgroundPlumb<V> for crate::kvs_layer::KVSNode<Name, B, A>
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        meta: Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> (
-        Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-        Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    )
+        data: BackgroundDataStream<'a, V>,
+        meta: BackgroundMetaStream<'a>,
+    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
     where
         V: Clone
             + serde::Serialize

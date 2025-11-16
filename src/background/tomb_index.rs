@@ -12,19 +12,10 @@ pub struct TombIndexStats {
 }
 
 /// Simple background stage that indexes tomb metadata and optionally emits summaries.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TombIndexBackground {
     log_snapshots: bool,
     emit_summaries: bool,
-}
-
-impl Default for TombIndexBackground {
-    fn default() -> Self {
-        Self {
-            log_snapshots: false,
-            emit_summaries: false,
-        }
-    }
 }
 
 impl TombIndexBackground {

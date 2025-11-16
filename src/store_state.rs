@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use lattices::map_union_with_tombstones::MapUnionWithTombstones;
 
 // Select tombstone set implementation by feature flag.
-// Temporarily use HashSet for both variants until Hydro exposes FST tombstones.
+// Temporarily use HashSet for all variants until Hydro exposes FST tombstones.
 #[cfg(feature = "tombstone_fst")]
 type TombSet = std::collections::HashSet<String>;
 
-#[cfg(feature = "tombstone_hashset")]
+#[cfg(all(not(feature = "tombstone_fst"), feature = "tombstone_hashset"))]
 type TombSet = std::collections::HashSet<String>;
 
 #[cfg(not(any(feature = "tombstone_fst", feature = "tombstone_hashset")))]

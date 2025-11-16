@@ -7,17 +7,17 @@ use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
+type OperationStream<V, L> = Stream<crate::protocol::KVSOperation<V>, L, Unbounded>;
+type PutDeltaStream<V, L> = Stream<(String, V), L, Unbounded>;
+
 // Traits are required in bounds; no direct uses here.
 
 /// Extract (key, value) deltas for each applied PUT while also returning
 /// the original operation sequence unchanged. Lightweight replacement for
 /// the former KVSCore::process_with_deltas helper.
 pub fn extract_put_deltas<'a, V, L>(
-    operations: Stream<crate::protocol::KVSOperation<V>, L, Unbounded>,
-) -> (
-    Stream<crate::protocol::KVSOperation<V>, L, Unbounded>,
-    Stream<(String, V), L, Unbounded>,
-)
+    operations: OperationStream<V, L>,
+) -> (OperationStream<V, L>, PutDeltaStream<V, L>)
 where
     V: Clone
         + Serialize
