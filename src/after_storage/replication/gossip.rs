@@ -3,7 +3,9 @@
 //! Implements the unified `replicate_updates` API, splitting unslotted and slotted
 //! updates internally to avoid code duplication.
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy, ReplicationUpdate};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
+};
 use crate::kvs_core::KVSNode;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::location::MemberId;
@@ -169,6 +171,12 @@ where
             .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
                 nondet!(/** consumers expect exactly-once semantics */),
             )
+    }
+}
+
+impl<V> ClusterCommunication for SimpleGossip<V> {
+    fn requires_cluster_scope() -> bool {
+        true
     }
 }
 

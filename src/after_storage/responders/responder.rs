@@ -2,7 +2,9 @@
 
 use hydro_lang::prelude::*;
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, LeafCompatible, ReplicationStrategy,
+};
 use crate::kvs_core::KVSNode;
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +62,10 @@ impl<V> ReplicationStrategy<V> for Responder
 where
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
+    fn is_active() -> bool {
+        false
+    }
+
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
@@ -78,3 +84,11 @@ where
         local_slotted_data
     }
 }
+
+impl ClusterCommunication for Responder {
+    fn requires_cluster_scope() -> bool {
+        false
+    }
+}
+
+impl LeafCompatible for Responder {}

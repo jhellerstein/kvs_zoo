@@ -3,7 +3,9 @@
 //! Implements the unified `replicate_updates` API, splitting unslotted and
 //! slotted updates internally to avoid code duplication.
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy, ReplicationUpdate};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
+};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -87,6 +89,12 @@ impl<V> BroadcastReplication<V> {
             config,
             _phantom: std::marker::PhantomData,
         }
+    }
+}
+
+impl<V> ClusterCommunication for BroadcastReplication<V> {
+    fn requires_cluster_scope() -> bool {
+        true
     }
 }
 

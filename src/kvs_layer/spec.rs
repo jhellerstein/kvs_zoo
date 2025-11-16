@@ -1,7 +1,6 @@
-use hydro_lang::prelude::*;
-
-use crate::after_storage::ReplicationStrategy;
+use crate::after_storage::{LeafCompatible, ReplicationStrategy};
 use crate::before_storage::Before;
+use hydro_lang::prelude::*;
 
 /// Trait for KVS specifications that can create and register clusters.
 pub trait KVSSpec<V> {
@@ -62,7 +61,7 @@ where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     B: Before<V> + Clone,
-    A: ReplicationStrategy<V> + Clone,
+    A: ReplicationStrategy<V> + Clone + LeafCompatible,
 {
     fn create_clusters<'a>(
         &self,

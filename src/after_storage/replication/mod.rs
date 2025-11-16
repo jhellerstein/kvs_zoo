@@ -5,7 +5,9 @@ pub mod gossip;
 pub use broadcast::*;
 pub use gossip::*;
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, LeafCompatible, ReplicationStrategy,
+};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -37,6 +39,10 @@ where
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     R: ReplicationStrategy<V> + Clone,
 {
+    fn is_active() -> bool {
+        R::is_active()
+    }
+
     /// Unordered replication delegates to inner strategy
     fn replicate_data<'a>(
         &self,
@@ -61,6 +67,17 @@ where
         sequence_slotted_operations(cluster, replicated_slotted)
     }
 }
+
+impl<R> ClusterCommunication for SequencedReplication<R>
+where
+    R: ClusterCommunication,
+{
+    fn requires_cluster_scope() -> bool {
+        R::requires_cluster_scope()
+    }
+}
+
+impl<R> LeafCompatible for SequencedReplication<R> where R: LeafCompatible {}
 
 // Upward pass hook: by default, this wrapper doesn't alter responses
 impl<R> AfterResponses for SequencedReplication<R> {

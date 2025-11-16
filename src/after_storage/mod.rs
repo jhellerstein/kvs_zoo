@@ -13,6 +13,25 @@ pub mod responders;
 /* Core after-storage traits and helpers (migrated from legacy `maintenance`) */
 /* ------------------------------------------------------------------------- */
 
+/// Marker for after-storage hooks that require intra-cluster communication.
+///
+/// Hooks that return `true` from [`ClusterCommunication::requires_cluster_scope`] cannot run on
+/// leaf layers (`KVSNode`) because they depend on communicating with peer members in the cluster.
+/// Leaf-only hooks should override the default and return `false` so the plumbing can validate
+/// placement statically.
+pub trait ClusterCommunication {
+    /// Whether this hook needs to execute on a multi-member cluster.
+    fn requires_cluster_scope() -> bool {
+        true
+    }
+}
+
+/// Marker for after-storage hooks that may attach directly to a leaf `KVSNode`.
+///
+/// Implement this trait for strategies that do not require peer communication so the type checker
+/// rejects accidental use of cluster-scoped hooks on leaf layers.
+pub trait LeafCompatible: ClusterCommunication {}
+
 /// Compose two maintenance strategies so they can run concurrently.
 ///
 /// This allows, for example, running a replication strategy (with its own
@@ -40,6 +59,23 @@ pub trait AfterComposeExt: Sized {
 
 impl<T> AfterComposeExt for T {}
 
+impl<A, B> ClusterCommunication for CombinedAfter<A, B>
+where
+    A: ClusterCommunication,
+    B: ClusterCommunication,
+{
+    fn requires_cluster_scope() -> bool {
+        A::requires_cluster_scope() || B::requires_cluster_scope()
+    }
+}
+
+impl<A, B> LeafCompatible for CombinedAfter<A, B>
+where
+    A: LeafCompatible,
+    B: LeafCompatible,
+{
+}
+
 /// Readability alias for "no after-stage/replication".
 ///
 /// This is equivalent to the unit type `()` which already implements
@@ -63,7 +99,13 @@ pub enum ReplicationUpdate<V> {
 /// Replication strategies handle background data synchronization between nodes,
 /// operating independently of operation processing. They ensure data consistency
 /// and availability across the distributed system.
-pub trait ReplicationStrategy<V> {
+pub trait ReplicationStrategy<V>: ClusterCommunication {
+    /// Whether this strategy is active. Strategies like `NoReplication` or unit `()` override this
+    /// to short-circuit the replication pipeline without relying on type-id checks.
+    fn is_active() -> bool {
+        true
+    }
+
     /// Unified replication entry: replicate updates (slotted or unslotted)
     ///
     /// Implementers may override this to handle both update kinds in one place.
@@ -183,7 +225,19 @@ impl NoReplication {
     }
 }
 
+impl ClusterCommunication for NoReplication {
+    fn requires_cluster_scope() -> bool {
+        false
+    }
+}
+
+impl LeafCompatible for NoReplication {}
+
 impl<V> ReplicationStrategy<V> for NoReplication {
+    fn is_active() -> bool {
+        false
+    }
+
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
@@ -213,6 +267,10 @@ impl AfterResponses for NoReplication {
 /// The unit type `()` can be used as a convenient no-op replication strategy,
 /// providing the same behavior as NoReplication with even less overhead.
 impl<V> ReplicationStrategy<V> for () {
+    fn is_active() -> bool {
+        false
+    }
+
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
@@ -226,6 +284,14 @@ impl<V> ReplicationStrategy<V> for () {
     }
 }
 
+impl ClusterCommunication for () {
+    fn requires_cluster_scope() -> bool {
+        false
+    }
+}
+
+impl LeafCompatible for () {}
+
 // Blanket impls for combining two maintenance strategies
 impl<V, A, B> ReplicationStrategy<V> for CombinedAfter<A, B>
 where
@@ -233,6 +299,10 @@ where
     A: ReplicationStrategy<V>,
     B: ReplicationStrategy<V>,
 {
+    fn is_active() -> bool {
+        A::is_active() || B::is_active()
+    }
+
     fn replicate_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,

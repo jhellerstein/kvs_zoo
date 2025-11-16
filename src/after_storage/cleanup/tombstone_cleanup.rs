@@ -2,7 +2,9 @@
 //!
 //! Provides background garbage collection for tombstoned (deleted) entries.
 
-use crate::after_storage::{AfterResponses, ReplicationStrategy};
+use crate::after_storage::{
+    AfterResponses, ClusterCommunication, LeafCompatible, ReplicationStrategy,
+};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -53,6 +55,14 @@ impl TombstoneCleanup {
         }
     }
 }
+
+impl ClusterCommunication for TombstoneCleanup {
+    fn requires_cluster_scope() -> bool {
+        false
+    }
+}
+
+impl LeafCompatible for TombstoneCleanup {}
 
 impl<V> ReplicationStrategy<V> for TombstoneCleanup {
     fn replicate_data<'a>(

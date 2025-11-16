@@ -1,12 +1,35 @@
-use std::any::TypeId;
-
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 
-use crate::after_storage::{AfterResponses, NoReplication, ReplicationStrategy};
+use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::protocol::KVSOperation;
 
 type ClusterStream<'a, T> = Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+
+/// Forward a delta stream to the parent cluster so cluster-scoped hooks can observe peer traffic.
+fn forward_to_cluster<'a, V>(
+    stream: ClusterStream<'a, (String, V)>,
+    target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+) -> ClusterStream<'a, (String, V)>
+where
+    V: Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + 'static,
+{
+    stream
+        .broadcast_bincode(target_cluster, nondet!(/** forward puts to parent layer */))
+        .values()
+        .assume_ordering::<TotalOrder>(nondet!(/** forwarded upstream */))
+}
 
 /// After-stage plumbing: traverse replication/responders chain from leaf upward.
 pub trait AfterPlumb<V> {
@@ -152,7 +175,7 @@ where
         + Sync
         + 'static,
 {
-    TypeId::of::<A>() == TypeId::of::<()>() || TypeId::of::<A>() == TypeId::of::<NoReplication>()
+    !A::is_active()
 }
 
 impl<V, Name, B, A, Child, Bg> ReplicationPlumb<V>
@@ -203,8 +226,20 @@ where
         let (pass_up_from_child, child_ops) = self.child.replicate_puts(layers, deltas);
         let mut combined_ops = child_ops;
 
+        let needs_cluster_scope = A::requires_cluster_scope();
+        let pass_up_for_parent = if needs_cluster_scope {
+            forward_to_cluster(pass_up_from_child.clone(), my_cluster)
+        } else {
+            pass_up_from_child.clone()
+        };
+
         if !should_skip_replication::<A, V>() {
-            let replication_input = pass_up_from_child.clone();
+            let replication_input = if needs_cluster_scope {
+                pass_up_for_parent.clone()
+            } else {
+                pass_up_from_child
+            };
+
             let replicated = self
                 .after
                 .replicate_data(my_cluster, replication_input)
@@ -221,7 +256,7 @@ where
                 .assume_ordering::<TotalOrder>(nondet!(/** combined replication ops */));
         }
 
-        (pass_up_from_child, combined_ops)
+        (pass_up_for_parent, combined_ops)
     }
 }
 
