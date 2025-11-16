@@ -1,6 +1,6 @@
 use hydro_lang::prelude::*;
 
-use crate::events::{DataEvent, MetaEvent};
+use crate::kvs_core::events::{DataEvent, MetaEvent};
 
 pub type BackgroundDataStream<'a, V> =
     Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;

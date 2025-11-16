@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::after_storage::ReplicationStrategy;
 use crate::before_storage::Before;
-use crate::events::{DataEvent, MetaEvent};
 use crate::kvs_core::KVSNode;
+use crate::kvs_core::events::{DataEvent, MetaEvent};
 use crate::protocol::KVSOperation;
 
 /// Composite output from the cross-layer helper so background stages can

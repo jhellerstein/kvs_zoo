@@ -5,11 +5,13 @@
 //! for participating in linearizability guarantees. It also defines the KVSNode marker
 //! type used for Hydro clusters.
 
+pub mod events;
+
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::events::{DataEvent, MetaEvent};
+use self::events::{DataEvent, MetaEvent};
 use crate::protocol::{Envelope, KVSOperation};
 
 #[derive(Clone)]
