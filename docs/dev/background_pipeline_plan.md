@@ -221,7 +221,7 @@ When adding `KVSOperation::Scan`:
 | ✅ | Background plumbing trait (`MetaBackground`) established in `src/background/mod.rs` | Cluster exposes `plumb_background`; `TombIndexBackground` compiling. |
 | ✅ | Cargo workspace builds (`cargo check`) | Verified after module move. |
 | ✅ | Relocate tomb background stages from `after_storage/cleanup` into `background/` | `TombIndexBackground` now lives under `src/background/`. |
-| ✅ | Rename `after_storage::control` API surface to metadata-centric naming | Migrated to `after_storage::meta` with Maintenance* terminology. |
+| ✅ | Rename `after_storage::control` API surface to metadata-centric naming | Simplified to `events::MetaEvent`; legacy `after_storage::meta` shim removed. |
 | ✅ | Update docs/tests to drop "control channel" phrasing | Added `docs/metadata_background_quickstart.md`; naming aligned with Metadata/background terminology. |
 | ✅ | Point meta stream plumbing away from After-specific control helpers | Removed legacy MaintenanceReplicator trait + impls; cross_layer_flow now surfaces data/meta for the background tee wiring. |
 | ✅ | Expand integration tests for metadata consumers | Added `background_plumb_routes_meta_events` to ensure stages observe tomb meta via BackgroundPlumb. |

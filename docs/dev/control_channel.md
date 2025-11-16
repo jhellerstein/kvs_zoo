@@ -1,3 +1,5 @@
+> **Historical note**: The API described below referenced the now-removed `after_storage::control` / `after_storage::pipeline` modules. `events::MetaEvent` and the background pipeline supersede this design; keep this document for archaeology only.
+
 Love it. Here’s a tight, two-channel API that keeps Data exactly as-is, makes Control purely opt‑in, supports multiple control handlers (replication and local maintenance), and never routes Control through the KVSOperation stream.
 
 ## Core types (short names)
