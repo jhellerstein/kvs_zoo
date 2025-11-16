@@ -2,7 +2,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::background::MetaBackground;
-use crate::events::{DataEvent, MetaDigestFormat, MetaEvent};
+use crate::kvs_core::events::{DataEvent, MetaDigestFormat, MetaEvent};
 
 /// Snapshot of tomb metadata accumulated by the background indexer.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

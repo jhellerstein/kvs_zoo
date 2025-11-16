@@ -31,10 +31,8 @@ pub mod protocol;
 pub mod store_state;
 pub mod values;
 
-// New Phase 0 events & consumer traits.
-pub mod events;
 pub use background::{BackgroundPlumb, MetaBackground};
-pub use events::{
+pub use kvs_core::events::{
     DataConsumer, DataEvent, DataMetaConsumer, MetaConsumer, MetaEvent, MetaTeeAfter, TeeAfter,
 };
 
