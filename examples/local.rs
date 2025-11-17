@@ -1,83 +1,62 @@
-//! Local KVS (single node)
+mod demo;
 
 use clap::Parser;
-use hydro_lang::viz::config::GraphConfig;
+use demo::{DemoArgs, run_demo};
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::LwwWrapper;
+use std::time::Duration;
 
-// Marker type for Hydro location type / KVS layer type
+// Marker type naming this example layer.
 #[derive(Clone)]
 struct LocalStorage;
 
-// Architecture: single layer, single node
-type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>; // KVSCluster<Marker type, Before, After, Nested layer>
+// Single-node architecture: SingleNodeRouter Before storage, no After storage, no Child layers.
+type LocalKVS = KVSCluster<LocalStorage, SingleNodeRouter, (), ()>;
 
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
-}
+const START_BANNER: &str = "🚀 Local KVS Demo (single node)";
+const FINISH_BANNER: &str = "✅ Local demo complete";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-    println!("🚀 Local KVS Demo (single node)");
+    let args = DemoArgs::parse();
 
-    // Standard Hydro deployment
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
+    run_example(&args, operations()).await
+}
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process::<()>();
-    let client_external = flow.external::<()>();
-
-    // Build a Hydro graph for the LocalKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<LwwWrapper<String>, _>(
-        &proxy,
-        &client_external,
-        &flow,
+async fn run_example(
+    args: &DemoArgs,
+    operations: Vec<KVSOperation<LwwWrapper<String>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    run_demo(
+        START_BANNER,
+        FINISH_BANNER,
         LocalKVS::default(),
-    );
+        |_| {},
+        |host| vec![host.clone()],
+        |layers| layers.get::<LocalStorage>(),
+        |_, _| Vec::new(),
+        operations,
+        |_| Vec::new(),
+        Duration::from_millis(500),
+        |_, _| None,
+        &args.graph,
+    )
+    .await
+}
 
-    let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
-
-    // Deploy: cluster of 1 node for local storage
-    let nodes = built
-        .with_default_optimize()
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(layers.get::<LocalStorage>(), vec![localhost.clone()])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (mut out, mut input) = nodes.connect_bincode(port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-
-    // Run demo operations
-    use futures::{SinkExt, StreamExt};
+fn operations() -> Vec<KVSOperation<LwwWrapper<String>>> {
     use kvs_zoo::protocol::KVSOperation as Op;
-    let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
-        Op::Get("alpha".into()),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into())),
-        Op::Get("alpha".into()),
-    ];
-    for op in ops {
-        input.send(op).await?;
-        if let Some(resp) = out.next().await {
-            println!("→ {}", resp);
-        }
+
+    fn wrap(_node: &str, value: &str) -> LwwWrapper<String> {
+        LwwWrapper::new(value.to_string())
     }
 
-    println!("✅ Local demo complete");
-    deployment.stop().await?;
-    Ok(())
+    vec![
+        Op::Put("user:1".into(), wrap("client", "alice")),
+        Op::Put("user:2".into(), wrap("client", "bob")),
+        Op::Get("user:1".into()),
+        Op::Get("user:2".into()),
+    ]
 }

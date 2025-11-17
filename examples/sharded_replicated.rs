@@ -1,126 +1,105 @@
-//! Sharded + Replicated KVS (shards × replicas)
+mod demo;
 
 use clap::Parser;
-use futures::{SinkExt, StreamExt};
-use hydro_lang::viz::config::GraphConfig;
+use demo::{DemoArgs, run_demo};
 use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::CausalString;
+use kvs_zoo::values::{CausalString, VCWrapper};
+use std::time::Duration;
 
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
-}
-
-// Hydro location types = KVS layer types (no duplication!)
 #[derive(Clone)]
 struct Shard;
 
 #[derive(Clone)]
 struct Replica;
 
-// Architecture: nested layers - sharding at top, replication within each shard
-type ShardedReplicatedKVS = KVSCluster<
+type ShardedReplicatedKVS<V> = KVSCluster<
     Shard,
     ShardedRouter,
     (),
-    KVSCluster<Replica, RoundRobinRouter, BroadcastReplication<CausalString>, ()>,
+    KVSCluster<Replica, RoundRobinRouter, BroadcastReplication<V>, ()>,
 >;
+
+const START_BANNER: &str = "🚀 Sharded + Replicated KVS Demo";
+const FINISH_BANNER: &str = "✅ Sharded+Replicated demo complete";
+const SHARDS: usize = 3;
+const REPLICAS: usize = 3;
+const INITIAL_DELAY_MS: u64 = 600;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-    println!("🚀 Sharded + Replicated KVS Demo");
+    let args = DemoArgs::parse();
 
-    // Standard Hydro deployment
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
-
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
-    let proxy = flow.process::<()>();
-    let client_external = flow.external::<()>();
-
-    // Define KVS architecture via defaults (Sharded → RR → Broadcast)
-    let mut kvs_spec: ShardedReplicatedKVS = Default::default();
-    // An example of overriding defaults down the layers
-    kvs_spec.child.after =
-        BroadcastReplication::with_config(BroadcastReplicationConfig::low_latency());
-
-    // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
-    let (layers, port) =
-        plumb_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
-
-    let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
-
-    // Deploy: one cluster per layer
-    // - Shard cluster: 3 members (default)
-    // - Replica cluster: 3 members (default)
-    let nodes = built
-        .with_default_optimize()
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(
-            layers.get::<Shard>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<Replica>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (mut out, mut input) = nodes.connect_bincode(port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-
-    // Run operations
-    fn causal(node: &str, v: &str) -> CausalString {
-        let mut vc = kvs_zoo::values::VCWrapper::new();
-        vc.bump(node.to_string());
-        CausalString::new(vc, v.to_string())
-    }
-    let ops = vec![
-        KVSOperation::Put("user:alice".into(), causal("a", "x")),
-        KVSOperation::Put("user:bob".into(), causal("b", "y")),
-        KVSOperation::Get("user:alice".into()),
-        KVSOperation::Get("user:bob".into()),
-    ];
-
-    for op in &ops {
-        if let Some(info) = shard_info(op, 3) {
-            println!("   {}", info);
-        }
-    }
-    for op in ops {
-        input.send(op).await?;
-        if let Some(resp) = out.next().await {
-            println!("→ {}", resp);
-        }
-    }
-
-    deployment.stop().await?;
-    println!("✅ Sharded+Replicated demo complete");
-    Ok(())
+    run_example::<CausalString, _, _>(&args, operations(), annotate_shard, |_, _| None).await
 }
 
-fn shard_info(op: &KVSOperation<CausalString>, shard_count: usize) -> Option<String> {
+async fn run_example<V, Annotate, PostStep>(
+    args: &DemoArgs,
+    operations: Vec<KVSOperation<V>>,
+    annotate: Annotate,
+    post_step: PostStep,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    V: Clone
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + Send
+        + Sync
+        + std::hash::Hash
+        + 'static,
+    Annotate: Fn(&KVSOperation<V>) -> Vec<String>,
+    PostStep: Fn(usize, &KVSOperation<V>) -> Option<Duration>,
+{
+    run_demo(
+        START_BANNER,
+        FINISH_BANNER,
+        ShardedReplicatedKVS::<V>::default(),
+        |spec| {
+            spec.child.after =
+                BroadcastReplication::with_config(BroadcastReplicationConfig::low_latency());
+        },
+        |host| vec![host.clone(); SHARDS],
+        |layers| layers.get::<Shard>(),
+        |layers, host| vec![(layers.get::<Replica>(), vec![host.clone(); REPLICAS])],
+        operations,
+        annotate,
+        Duration::from_millis(INITIAL_DELAY_MS),
+        post_step,
+        &args.graph,
+    )
+    .await
+}
+
+fn operations() -> Vec<KVSOperation<CausalString>> {
+    use kvs_zoo::protocol::KVSOperation as Op;
+
+    fn wrap(node: &str, value: &str) -> CausalString {
+        let mut clock = VCWrapper::new();
+        clock.bump(node.to_string());
+        CausalString::new(clock, value.to_string())
+    }
+
+    vec![
+        Op::Put("user:1".into(), wrap("client", "alice")),
+        Op::Put("user:2".into(), wrap("client", "bob")),
+        Op::Get("user:1".into()),
+        Op::Get("user:2".into()),
+    ]
+}
+
+fn annotate_shard(op: &KVSOperation<CausalString>) -> Vec<String> {
     match op {
         KVSOperation::Put(key, _) | KVSOperation::Get(key) | KVSOperation::Delete(key) => {
-            let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
-                key,
-                shard_count,
-            );
-            Some(format!("→ shard {} for '{}'", shard_id, key))
+            let shard_id = ShardedRouter::calculate_shard_id(key, SHARDS);
+            vec![format!("→ shard {} for '{}'", shard_id, key)]
         }
     }
 }

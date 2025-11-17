@@ -15,9 +15,12 @@ use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::values::LwwWrapper;
 use tokio::time::Duration;
 
+// Marker type naming this example layer.
 #[derive(Clone)]
 struct Replica;
 
+// Replicated architecture: RoundRobinRouter Before to any replica, SimpleGossip After to replicate, no Child layers.
+// Additional Background layer for tombstone indexing/emission.
 type ReplicatedKVS = KVSCluster<
     Replica,
     RoundRobinRouter,

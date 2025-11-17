@@ -2,9 +2,9 @@
 source: tests/examples_snapshots.rs
 expression: sanitize(&stdout)
 ---
-🚀 Replicated KVS Demo (gossip)
-→ PUT alpha = OK
-→ GET alpha = one
-→ PUT beta = OK
-→ GET beta = two
+🚀 Replicated KVS Demo (gossip, LWW)
+→ PUT user:1 = OK
+→ PUT user:2 = OK
+→ GET user:1 = alice
+→ GET user:2 = bob
 ✅ Replicated (gossip) demo complete

@@ -3,8 +3,8 @@ source: tests/examples_snapshots.rs
 expression: sanitize(&stdout)
 ---
 🚀 Local KVS Demo (single node)
-→ PUT alpha = OK
-→ GET alpha = one
-→ PUT alpha = OK
-→ GET alpha = two
+→ PUT user:1 = OK
+→ PUT user:2 = OK
+→ GET user:1 = alice
+→ GET user:2 = bob
 ✅ Local demo complete

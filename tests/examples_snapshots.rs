@@ -59,7 +59,7 @@ fn snapshot_sharded() {
 
 #[test]
 fn snapshot_replicated_causal() {
-    let (stdout, _stderr) = run_example("replicated", &["--", "--lattice", "causal"]);
+    let (stdout, _stderr) = run_example("replicated_causal", &[]);
     insta::assert_snapshot!("example_replicated_causal_stdout", sanitize(&stdout));
 }
 

@@ -6,7 +6,7 @@ use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
+use kvs_zoo::values::{CausalString, VCWrapper};
 use std::time::Duration;
 
 // Marker type naming this example layer.
@@ -16,14 +16,14 @@ struct Replica;
 // Replicated architecture: RoundRobinRouter Before to any replica, SimpleGossip After to replicate, no Child layers.
 type ReplicatedKVS<V> = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<V>, ()>;
 
-const START_BANNER: &str = "🚀 Replicated KVS Demo (gossip, LWW)";
+const START_BANNER: &str = "🚀 Replicated KVS Demo (gossip, causal)";
 const FINISH_BANNER: &str = "✅ Replicated (gossip) demo complete";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = DemoArgs::parse();
 
-    run_example::<LwwWrapper<String>, _, _>(&args, operations(), |_| Vec::new(), gossip_pause).await
+    run_example::<CausalString, _, _>(&args, operations(), |_| Vec::new(), gossip_pause).await
 }
 
 async fn run_example<V, Annotate, PostStep>(
@@ -66,11 +66,13 @@ where
     .await
 }
 
-fn operations() -> Vec<KVSOperation<LwwWrapper<String>>> {
+fn operations() -> Vec<KVSOperation<CausalString>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
-    fn wrap(_node: &str, value: &str) -> LwwWrapper<String> {
-        LwwWrapper::new(value.to_string())
+    fn wrap(node: &str, value: &str) -> CausalString {
+        let mut clock = VCWrapper::new();
+        clock.bump(node.to_string());
+        CausalString::new(clock, value.to_string())
     }
 
     vec![

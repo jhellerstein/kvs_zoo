@@ -3,12 +3,12 @@ source: tests/examples_snapshots.rs
 expression: sanitize(&stdout)
 ---
 🚀 Sharded Local KVS Demo
-   → shard 1 for 'user:1'
-   → shard 1 for 'user:2'
-   → shard 1 for 'user:1'
-   → shard 1 for 'user:2'
+→ shard 1 for 'user:1'
 → PUT user:1 = OK
+→ shard 1 for 'user:2'
 → PUT user:2 = OK
+→ shard 1 for 'user:1'
 → GET user:1 = alice
+→ shard 1 for 'user:2'
 → GET user:2 = bob
 ✅ Sharded local demo complete
