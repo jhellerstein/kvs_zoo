@@ -13,7 +13,9 @@ pub struct ClockState {
     pub inner: ::std::collections::BTreeMap<String, VCWrapper>,
 }
 
-pub fn new_clock_state() -> ClockState { ClockState::default() }
+pub fn new_clock_state() -> ClockState {
+    ClockState::default()
+}
 use crate::background::{BackgroundDataStream, BackgroundMetaStream, MetaBackground};
 use crate::kvs_core::events::{DataEvent, MetaEvent};
 use crate::values::VCWrapper;
@@ -54,7 +56,9 @@ pub struct VectorClockBackground {
 }
 
 impl VectorClockBackground {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Enable stdout logging whenever a local vector clock update is produced.
     pub fn with_logging(mut self, enabled: bool) -> Self {
@@ -92,17 +96,19 @@ where
     ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>) {
         let vector_clock_updates = data.clone().scan(
             q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
-            q!(move |state: &mut kvs_zoo::background::vector_clock::ClockState, event| {
-                match event {
-                    DataEvent::Put { key, .. } | DataEvent::Delete { key } => {
-                        let member_raw = CLUSTER_SELF_ID.raw_id;
-                        let entry = state.inner.entry(key.clone()).or_default();
-                        entry.bump(member_raw.to_string());
-                        Some((key, member_raw, entry.clone()))
+            q!(
+                move |state: &mut kvs_zoo::background::vector_clock::ClockState, event| {
+                    match event {
+                        DataEvent::Put { key, .. } | DataEvent::Delete { key } => {
+                            let member_raw = CLUSTER_SELF_ID.raw_id;
+                            let entry = state.inner.entry(key.clone()).or_default();
+                            entry.bump(member_raw.to_string());
+                            Some((key, member_raw, entry.clone()))
+                        }
+                        DataEvent::Get { .. } => None,
                     }
-                    DataEvent::Get { .. } => None,
                 }
-            }),
+            ),
         );
 
         let vector_meta =
@@ -125,7 +131,8 @@ where
                 }));
         }
 
-        let mut combined_meta = meta.clone()
+        let mut combined_meta = meta
+            .clone()
             .interleave(vector_meta.clone())
             .assume_ordering(nondet!(/** meta with vector clocks */));
 
@@ -134,15 +141,23 @@ where
             let aggregated = combined_meta
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClock { key, member: _, clock } => Some((key, clock)),
+                    MetaEvent::VectorClock {
+                        key,
+                        member: _,
+                        clock,
+                    } => Some((key, clock)),
                     _ => None,
                 }))
                 .scan(
                     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
-                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState, (key, clock)| {
+                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,
+                        (key, clock)| {
                         let entry = state.inner.entry(key.clone()).or_default();
                         entry.merge(clock);
-                        Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot { key, clock: entry.clone() })
+                        Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot {
+                            key,
+                            clock: entry.clone(),
+                        })
                     }),
                 );
 
@@ -154,31 +169,39 @@ where
             let events = aggregated
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClockSnapshot { key, clock } => Some(kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock)),
+                    MetaEvent::VectorClockSnapshot { key, clock } => Some(
+                        kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock)
+                    ),
                     _ => None,
                 }))
-                .interleave(
-                    combined_meta
-                        .clone()
-                        .filter_map(q!(|event| match event { MetaEvent::Tomb { key } => Some(kvs_zoo::background::vector_clock::PruneEvent::Tomb(key)), _ => None }))
-                )
-                .interleave(
-                    aggregated
-                        .clone()
-                        .filter_map(q!(|event| match event { MetaEvent::VectorClockSnapshot { key, clock } => Some(kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock)), _ => None }))
-                )
+                .interleave(combined_meta.clone().filter_map(q!(|event| match event {
+                    MetaEvent::Tomb { key } =>
+                        Some(kvs_zoo::background::vector_clock::PruneEvent::Tomb(key)),
+                    _ => None,
+                })))
+                .interleave(aggregated.clone().filter_map(q!(|event| match event {
+                    MetaEvent::VectorClockSnapshot { key, clock } => Some(
+                        kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock)
+                    ),
+                    _ => None,
+                })))
                 .assume_ordering(nondet!(/** prune events interleaved */));
 
             let pruned_meta = events.scan(
                 q!(|| kvs_zoo::background::vector_clock::new_prune_state()),
-                q!(|state: &mut kvs_zoo::background::vector_clock::PruneState, event: kvs_zoo::background::vector_clock::PruneEvent| {
+                q!(|state: &mut kvs_zoo::background::vector_clock::PruneState,
+                    event: kvs_zoo::background::vector_clock::PruneEvent| {
                     match event {
-                        kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock) => { state.latest.insert(key, clock); None }
+                        kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock) => {
+                            state.latest.insert(key, clock);
+                            None
+                        }
                         kvs_zoo::background::vector_clock::PruneEvent::Tomb(key) => {
                             let tomb_vc = state.latest.get(&key).cloned().unwrap_or_default();
                             state.pending.insert(key.clone(), tomb_vc.clone());
                             if let Some(frontier_vc) = state.frontier.get(&key).cloned()
-                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
+                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc)
+                            {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
                             }
@@ -186,8 +209,12 @@ where
                         }
                         kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock) => {
                             state.frontier.insert(key.clone(), clock.clone());
-                            if let (Some(tomb_vc), Some(frontier_vc)) = (state.pending.get(&key).cloned(), state.frontier.get(&key).cloned())
-                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
+                            if let (Some(tomb_vc), Some(frontier_vc)) = (
+                                state.pending.get(&key).cloned(),
+                                state.frontier.get(&key).cloned(),
+                            ) && (tomb_vc.happened_before(&frontier_vc)
+                                || tomb_vc == frontier_vc)
+                            {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
                             }
@@ -204,7 +231,8 @@ where
         }
 
         // Build local frontier (merged per-key clocks) from snapshot events.
-        let (combined_meta, _frontier_snaps) = kvs_zoo::after_storage::meta::build_frontier(combined_meta);
+        let (combined_meta, _frontier_snaps) =
+            kvs_zoo::after_storage::meta::build_frontier(combined_meta);
 
         (data, combined_meta)
     }

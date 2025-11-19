@@ -40,7 +40,9 @@ pub enum MetaEvent {
         bytes: Vec<u8>,
     },
     /// Typed tomb prune notification: key tombstone proven reclaimable.
-    TombPruned { key: String },
+    TombPruned {
+        key: String,
+    },
     VectorClock {
         key: String,
         member: u32,

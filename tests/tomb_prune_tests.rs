@@ -17,40 +17,29 @@ async fn tomb_prune_local_single_node() {
             #[derive(Clone)]
             struct RootLayer;
 
-            let mut spec = KVSCluster::<
-                RootLayer,
-                (),
-                (),
-                (),
-                VectorClockBackground,
-            >::new_with_background(
-                (),
-                (),
-                (),
-                VectorClockBackground::new()
-                    .with_logging(false)
-                    .with_digests(true),
-            );
+            let mut spec =
+                KVSCluster::<RootLayer, (), (), (), VectorClockBackground>::new_with_background(
+                    (),
+                    (),
+                    (),
+                    VectorClockBackground::new()
+                        .with_logging(false)
+                        .with_digests(true),
+                );
 
             let mut layers = KVSClusters::new();
-            let _entry_cluster = <KVSCluster<
-                RootLayer,
-                (),
-                (),
-                (),
-                VectorClockBackground,
-            > as KVSSpec<CausalString>>::create_clusters(&spec, flow, &mut layers);
+            let _entry_cluster =
+                <KVSCluster<RootLayer, (), (), (), VectorClockBackground> as KVSSpec<
+                    CausalString,
+                >>::create_clusters(&spec, flow, &mut layers);
 
             let operations = process
                 .source_iter(q!(vec![
-                    kvs_zoo::protocol::KVSOperation::Put(
-                        "alpha".to_string(),
-                        {
-                            let mut vc = kvs_zoo::values::VCWrapper::new();
-                            vc.bump("client".to_string());
-                            kvs_zoo::values::CausalString::new(vc, "payload".to_string())
-                        },
-                    ),
+                    kvs_zoo::protocol::KVSOperation::Put("alpha".to_string(), {
+                        let mut vc = kvs_zoo::values::VCWrapper::new();
+                        vc.bump("client".to_string());
+                        kvs_zoo::values::CausalString::new(vc, "payload".to_string())
+                    },),
                     kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string()),
                 ]))
                 .assume_ordering(nondet!(/** ops */));
@@ -74,7 +63,10 @@ async fn tomb_prune_local_single_node() {
             let mut saw_vc = false;
             for _ in 0..12 {
                 match timeout(Duration::from_millis(500), stream.next()).await {
-                    Ok(Some(key)) if key == "alpha" => { saw_vc = true; break; }
+                    Ok(Some(key)) if key == "alpha" => {
+                        saw_vc = true;
+                        break;
+                    }
                     Ok(Some(_)) => continue,
                     _ => break,
                 }
@@ -115,19 +107,18 @@ async fn tomb_prune_replication_two_nodes() {
                 BroadcastReplication<CausalString>,
                 (),
                 VectorClockBackground,
-            > as KVSSpec<CausalString>>::create_clusters(&spec, flow, &mut layers);
+            > as KVSSpec<CausalString>>::create_clusters(
+                &spec, flow, &mut layers
+            );
 
             // Issue a Put then a Delete; Put will replicate and provide remote VC activity.
             let operations = process
                 .source_iter(q!(vec![
-                    kvs_zoo::protocol::KVSOperation::Put(
-                        "beta".to_string(),
-                        {
-                            let mut vc = kvs_zoo::values::VCWrapper::new();
-                            vc.bump("client".to_string());
-                            kvs_zoo::values::CausalString::new(vc, "payload".to_string())
-                        },
-                    ),
+                    kvs_zoo::protocol::KVSOperation::Put("beta".to_string(), {
+                        let mut vc = kvs_zoo::values::VCWrapper::new();
+                        vc.bump("client".to_string());
+                        kvs_zoo::values::CausalString::new(vc, "payload".to_string())
+                    },),
                     kvs_zoo::protocol::KVSOperation::Delete("beta".to_string()),
                 ]))
                 .assume_ordering(nondet!(/** client ops */));
@@ -148,15 +139,15 @@ async fn tomb_prune_replication_two_nodes() {
                 .data
                 .interleave(replica_core.data)
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                    nondet!(/** combined data events */),
-                );
+                nondet!(/** combined data events */),
+            );
 
             let combined_meta = client_core
                 .meta
                 .interleave(replica_core.meta)
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                    nondet!(/** combined meta events */),
-                );
+                nondet!(/** combined meta events */),
+            );
 
             let (bg_data, bg_meta) = spec.plumb_background(&layers, combined_data, combined_meta);
             bg_data.for_each(q!(|_d| ()));
@@ -174,7 +165,10 @@ async fn tomb_prune_replication_two_nodes() {
             let mut saw_vc = false;
             for _ in 0..16 {
                 match timeout(Duration::from_millis(700), stream.next()).await {
-                    Ok(Some(key)) if key == "beta" => { saw_vc = true; break; }
+                    Ok(Some(key)) if key == "beta" => {
+                        saw_vc = true;
+                        break;
+                    }
                     Ok(Some(_)) => continue,
                     _ => break,
                 }
@@ -226,19 +220,18 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                 BroadcastReplication<CausalString>,
                 (),
                 VectorClockBackground,
-            > as KVSSpec<CausalString>>::create_clusters(&spec, flow, &mut layers);
+            > as KVSSpec<CausalString>>::create_clusters(
+                &spec, flow, &mut layers
+            );
 
             // Put then Delete on key "gamma"; replication introduces a concurrent remote bump.
             let operations = process
                 .source_iter(q!(vec![
-                    kvs_zoo::protocol::KVSOperation::Put(
-                        "gamma".to_string(),
-                        {
-                            let mut vc = kvs_zoo::values::VCWrapper::new();
-                            vc.bump("client".to_string());
-                            kvs_zoo::values::CausalString::new(vc, "payload".to_string())
-                        },
-                    ),
+                    kvs_zoo::protocol::KVSOperation::Put("gamma".to_string(), {
+                        let mut vc = kvs_zoo::values::VCWrapper::new();
+                        vc.bump("client".to_string());
+                        kvs_zoo::values::CausalString::new(vc, "payload".to_string())
+                    },),
                     kvs_zoo::protocol::KVSOperation::Delete("gamma".to_string()),
                 ]))
                 .assume_ordering(nondet!(/** client ops */));
@@ -259,19 +252,18 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                 .data
                 .interleave(replica_core.data)
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                    nondet!(/** combined data events */),
-                );
+                nondet!(/** combined data events */),
+            );
 
             let combined_meta = client_core
                 .meta
                 .interleave(replica_core.meta)
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                    nondet!(/** combined meta events */),
-                );
+                nondet!(/** combined meta events */),
+            );
 
             let (bg_data, bg_meta) = spec.plumb_background(&layers, combined_data, combined_meta);
             bg_data.for_each(q!(|_d| ()));
-
 
             bg_meta
                 .clone()
@@ -279,12 +271,23 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                     MetaEvent::VectorClockSnapshot { key, clock } if key == "gamma" => {
                         let mut any_ge_2 = false;
                         for (_, cnt) in clock.as_inner().as_reveal_ref().iter() {
-                            if cnt.into_reveal() >= 2 { any_ge_2 = true; break; }
+                            if cnt.into_reveal() >= 2 {
+                                any_ge_2 = true;
+                                break;
+                            }
                         }
-                        Some(if any_ge_2 { "VC2:gamma".to_string() } else { "VC1:gamma".to_string() })
+                        Some(if any_ge_2 {
+                            "VC2:gamma".to_string()
+                        } else {
+                            "VC1:gamma".to_string()
+                        })
                     }
                     MetaEvent::TombPruned { key } => {
-                        if key == "gamma" { Some("PRUNE:gamma".to_string()) } else { None }
+                        if key == "gamma" {
+                            Some("PRUNE:gamma".to_string())
+                        } else {
+                            None
+                        }
                     }
                     _ => None,
                 }))
@@ -297,27 +300,44 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
             let mut seen_tomb_frontier = false; // snapshot frontier condition
             let mut saw_prune_before_frontier = false;
 
-            let mut first_member: Option<hydro_lang::location::member_id::MemberId<kvs_zoo::kvs_core::KVSNode>> = None;
+            let mut first_member: Option<
+                hydro_lang::location::member_id::MemberId<kvs_zoo::kvs_core::KVSNode>,
+            > = None;
             for _ in 0..48 {
                 match timeout(Duration::from_millis(1000), stream.next()).await {
                     Ok(Some((member, meta))) => {
                         match first_member {
                             None => first_member = Some(member),
-                            Some(m0) => if member != m0 { seen_remote = true; }
+                            Some(m0) => {
+                                if member != m0 {
+                                    seen_remote = true;
+                                }
+                            }
                         }
                         if meta.starts_with("VC") {
-                            if meta == "VC2:gamma" { seen_tomb_frontier = true; }
+                            if meta == "VC2:gamma" {
+                                seen_tomb_frontier = true;
+                            }
                         } else if meta == "PRUNE:gamma" {
-                            if !seen_tomb_frontier { saw_prune_before_frontier = true; }
-                            else { break; }
+                            if !seen_tomb_frontier {
+                                saw_prune_before_frontier = true;
+                            } else {
+                                break;
+                            }
                         }
                     }
                     _ => continue,
                 }
             }
 
-            assert!(seen_remote, "expected remote concurrent update via snapshot");
-            assert!(!saw_prune_before_frontier, "should not prune before tomb frontier snapshot observed");
+            assert!(
+                seen_remote,
+                "expected remote concurrent update via snapshot"
+            );
+            assert!(
+                !saw_prune_before_frontier,
+                "should not prune before tomb frontier snapshot observed"
+            );
         },
     )
     .await;

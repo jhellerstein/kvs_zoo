@@ -140,7 +140,10 @@ impl KVSCore {
                         } else {
                             None
                         };
-                        let data = Some(DataEvent::Put { key: key.clone(), value: value_for_event });
+                        let data = Some(DataEvent::Put {
+                            key: key.clone(),
+                            value: value_for_event,
+                        });
                         (response, data, None)
                     }
                     KVSOperation::Get(key) => {
@@ -149,7 +152,10 @@ impl KVSCore {
                             Some(v) => format!("GET {} = {}", key, v),
                             None => format!("GET {} = NOT FOUND", key),
                         };
-                        let data = Some(DataEvent::Get { key: key.clone(), value });
+                        let data = Some(DataEvent::Get {
+                            key: key.clone(),
+                            value,
+                        });
                         (Some(msg), data, None)
                     }
                     KVSOperation::Delete(key) => {

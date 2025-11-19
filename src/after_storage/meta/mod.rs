@@ -85,7 +85,7 @@ pub enum MetaMessage {
 
 // Vector frontier (merged per-key VCs) built from background VC digests
 pub mod vector_frontier;
-pub use vector_frontier::{build_frontier, new_frontier_state, FrontierState};
+pub use vector_frontier::{FrontierState, build_frontier, new_frontier_state};
 
 impl MetaMessage {
     /// Create a new tomb metadata message.
