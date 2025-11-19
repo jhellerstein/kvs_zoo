@@ -6,21 +6,14 @@ use serde::{Deserialize, Serialize};
 use crate as kvs_zoo;
 
 /// Wrapper around the vector-clock state map used inside `q!` closures.
-///
-/// Rationale: the Hydro code generator in test/trybuild contexts sometimes
-/// expands type paths like `std::collections::BTreeMap` into invalid
-/// `std::collections::btree::map::BTreeMap`. By using a named, public wrapper
-/// type here and referencing it explicitly in `q!` closures, we avoid those
-/// brittle expansions and keep generated code compiling.
+/// Provides a monomorphic symbol so codegen preserves the type without
+/// dropping generic arguments (seen when using raw BTreeMap directly).
 #[derive(Clone, Debug, Default)]
 pub struct ClockState {
     pub inner: ::std::collections::BTreeMap<String, VCWrapper>,
 }
 
-/// Construct a fresh `ClockState` for scans/aggregations.
-pub fn new_clock_state() -> ClockState {
-    ClockState::default()
-}
+pub fn new_clock_state() -> ClockState { ClockState::default() }
 use crate::background::{BackgroundDataStream, BackgroundMetaStream, MetaBackground};
 use crate::kvs_core::events::{DataEvent, MetaDigestFormat, MetaEvent};
 use crate::values::VCWrapper;
@@ -104,21 +97,9 @@ where
             q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
             q!(move |state: &mut kvs_zoo::background::vector_clock::ClockState, event| {
                 match event {
-                    DataEvent::Put { key, .. } => {
+                    DataEvent::Put { key, .. } | DataEvent::Delete { key } => {
                         let member_raw = CLUSTER_SELF_ID.raw_id;
-                        let entry = state
-                            .inner
-                            .entry(key.clone())
-                            .or_default();
-                        entry.bump(member_raw.to_string());
-                        Some((key, member_raw, entry.clone()))
-                    }
-                    DataEvent::Delete { key } => {
-                        let member_raw = CLUSTER_SELF_ID.raw_id;
-                        let entry = state
-                            .inner
-                            .entry(key.clone())
-                            .or_default();
+                        let entry = state.inner.entry(key.clone()).or_default();
                         entry.bump(member_raw.to_string());
                         Some((key, member_raw, entry.clone()))
                     }

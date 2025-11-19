@@ -9,32 +9,37 @@ This note captures patterns that keep Hydro's generated code compiling cleanly i
 
 These surfaced when `q!` closures directly used std collection types and/or captured generics implicitly.
 
-## Recommended pattern
-- Use a public wrapper type for scan state instead of raw collections.
-  - Define a small struct (e.g., `ClockState`) that owns the map.
-  - Expose a public zero-arg constructor (e.g., `new_clock_state()`), and use it in the `scan` initializer.
-- Type the closure state parameter explicitly using the wrapper type.
-- Avoid explicit generic event types in the closure parameter list when possible; let the pipeline type drive it.
-- Prefer small, public helper functions called from within `q!` blocks (constructors, small transforms).
+## Recommended pattern (Hybrid)
+Use a combination of ctor path rewrites and monomorphic wrapper structs:
 
-Rationale: the wrapper type and helpers give the code generator stable, named symbols to reference, avoiding fragile expansions of std paths and easing type inference around `state_ref_unchecked`.
+1. Path normalization via ctor:
+   In `lib.rs`, install a rewrite so deep internal paths do not leak:
+   ```rust
+   #[ctor::ctor]
+   fn init_rewrites() {
+       stageleft::add_private_reexport(
+           vec!["std","collections","btree","map","BTreeMap"],
+           vec!["std","collections","BTreeMap"],
+       );
+   }
+   ```
+   This cures E0433 deep-path expansion issues.
 
-## Example (VectorClockBackground)
+2. Wrapper for generic scan state:
+   When a `scan` state is a generic collection (e.g. `BTreeMap<K,V>`), Stageleft codegen may drop `<K,V>` and re-emit only the head, triggering E0107 and E0282. Provide a monomorphic wrapper struct (e.g. `ClockState`) so the generator references a concrete symbol and preserves type inference.
+
+3. Direct collection only when safe:
+   Use raw `BTreeMap` inside `q!` closures only if the generated code will not re-materialize the type (e.g. simple maps not captured as persistent scan state). If failures appear, revert to a wrapper.
+
+Rationale: ctor-installed rewrites fix path stability; wrappers fix generic token loss. Together they minimize boilerplate while keeping codegen robust.
+
+## Example (VectorClockBackground hybrid)
 File: `kvs_zoo/src/background/vector_clock.rs`
 
 ```rust
-/// Wrapper around the vector-clock state map used inside `q!` closures.
 #[derive(Clone, Debug, Default)]
-pub struct ClockState {
-    pub inner: ::std::collections::BTreeMap<String, VCWrapper>,
-}
-
-/// Construct a fresh `ClockState` for scans/aggregations.
-pub fn new_clock_state() -> ClockState {
-    ClockState::default()
-}
-
-// ...
+pub struct ClockState { pub inner: ::std::collections::BTreeMap<String, VCWrapper> }
+pub fn new_clock_state() -> ClockState { ClockState::default() }
 
 let vector_clock_updates = data.clone().scan(
     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
@@ -42,10 +47,7 @@ let vector_clock_updates = data.clone().scan(
         match event {
             DataEvent::Put { key, .. } | DataEvent::Delete { key } => {
                 let member_raw = CLUSTER_SELF_ID.raw_id;
-                let entry = state
-                    .inner
-                    .entry(key.clone())
-                    .or_insert_with(kvs_zoo::values::VCWrapper::new);
+                let entry = state.inner.entry(key.clone()).or_default();
                 entry.bump(member_raw.to_string());
                 Some((key, member_raw, entry.clone()))
             }
@@ -62,20 +64,19 @@ let aggregated = combined_meta
     .scan(
         q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
         q!(|state: &mut kvs_zoo::background::vector_clock::ClockState, (key, clock)| {
-            let entry = state
-                .inner
-                .entry(key.clone())
-                .or_insert_with(kvs_zoo::values::VCWrapper::new);
+            let entry = state.inner.entry(key.clone()).or_default();
             entry.merge(clock);
-            Some(kvs_zoo::background::vector_clock::VectorClockSnapshot { key, clock: entry.clone() })
+            Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot { key, clock: entry.clone() })
         }),
     );
 ```
 
 ## Additional tips
-- Keep helper functions and wrapper types `pub` so the generated trybuild crate can reference them.
-- When you must use std types directly, prefer the re-exported paths (e.g., `std::collections::BTreeMap`) over deep module paths.
-- Use `cargo nextest run <test>` to run a specific test quickly; it avoids slow filtering through unrelated tests.
+- Centralize path rewrites (single ctor function) for all affected std types.
+- Use wrapper structs when: (a) state spans multiple closures (`scan`), or (b) generated examples must hold the state and generics would be dropped.
+- Prefer direct collections only for ephemeral closures or maps not persisted across `scan`.
+- If you observe E0107/E0282 after removing a wrapper, restore a monomorphic wrapper.
+- Use `cargo nextest run <test>` for targeted feedback.
 
 ## When to apply this
 - Background stages that use `scan` or stateful operators inside `q!` closures.
