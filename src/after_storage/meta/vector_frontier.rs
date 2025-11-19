@@ -19,10 +19,12 @@ pub fn new_frontier_state() -> FrontierState {
     FrontierState::default()
 }
 
-/// Consume VC digests from background meta, merge into a local frontier per key,
-/// and return the original meta stream along with a stream of merged snapshots
-/// (one per update). The caller can ignore the snapshots and instead read the
-/// frontier via other means if desired.
+/// Consume VectorClockSnapshot events from `meta`, merge a local frontier per key,
+/// and return:
+/// - The original `meta` stream (passthrough, no additional interleaving)
+/// - A stream of merged frontier snapshots (one per update)
+///
+/// Callers that need frontier updates should subscribe to the second stream.
 pub fn build_frontier<'a>(
     meta: BackgroundMetaStream<'a>,
 ) -> (BackgroundMetaStream<'a>, BackgroundMetaStream<'a>) {
@@ -48,9 +50,5 @@ pub fn build_frontier<'a>(
             ),
         );
 
-    let meta_with_frontier = meta
-        .interleave(frontier_snapshots.clone())
-        .assume_ordering(nondet!(/** meta + frontier snapshots */));
-
-    (meta_with_frontier, frontier_snapshots)
+    (meta, frontier_snapshots)
 }

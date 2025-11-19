@@ -40,6 +40,11 @@ pub fn new_prune_state() -> PruneState {
     PruneState::default()
 }
 
+#[inline]
+pub fn can_prune(tomb_vc: &VCWrapper, frontier_vc: &VCWrapper) -> bool {
+    tomb_vc.happened_before(frontier_vc) || tomb_vc == frontier_vc
+}
+
 /// Snapshot of the merged vector clock state for a particular key.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VectorClockSnapshot {
@@ -200,7 +205,7 @@ where
                             let tomb_vc = state.latest.get(&key).cloned().unwrap_or_default();
                             state.pending.insert(key.clone(), tomb_vc.clone());
                             if let Some(frontier_vc) = state.frontier.get(&key).cloned()
-                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc)
+                                && kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc)
                             {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
@@ -212,8 +217,7 @@ where
                             if let (Some(tomb_vc), Some(frontier_vc)) = (
                                 state.pending.get(&key).cloned(),
                                 state.frontier.get(&key).cloned(),
-                            ) && (tomb_vc.happened_before(&frontier_vc)
-                                || tomb_vc == frontier_vc)
+                            ) && kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc)
                             {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
