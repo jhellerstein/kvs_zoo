@@ -72,7 +72,7 @@ impl VectorClockBackground {
         self
     }
 
-    /// Emit `MetaEvent::CompactionDigest` snapshots with merged vector clocks.
+    /// Emit merged vector clock snapshots (now as direct MetaEvent::VectorClockSnapshot).
     pub fn with_digests(mut self, enabled: bool) -> Self {
         self.emit_digests = enabled;
         self
@@ -109,7 +109,7 @@ where
                         let entry = state
                             .inner
                             .entry(key.clone())
-                            .or_insert_with(kvs_zoo::values::VCWrapper::new);
+                            .or_default();
                         entry.bump(member_raw.to_string());
                         Some((key, member_raw, entry.clone()))
                     }
@@ -118,7 +118,7 @@ where
                         let entry = state
                             .inner
                             .entry(key.clone())
-                            .or_insert_with(kvs_zoo::values::VCWrapper::new);
+                            .or_default();
                         entry.bump(member_raw.to_string());
                         Some((key, member_raw, entry.clone()))
                     }
@@ -152,99 +152,68 @@ where
             .assume_ordering(nondet!(/** meta with vector clocks */));
 
         if self.emit_digests {
+            // Aggregate merged per-key clocks and emit direct snapshot events.
             let aggregated = combined_meta
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClock {
-                        key,
-                        member: _,
-                        clock,
-                    } => Some((key, clock)),
+                    MetaEvent::VectorClock { key, member: _, clock } => Some((key, clock)),
                     _ => None,
                 }))
                 .scan(
                     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
                     q!(|state: &mut kvs_zoo::background::vector_clock::ClockState, (key, clock)| {
-                        let entry = state
-                            .inner
-                            .entry(key.clone())
-                            .or_insert_with(kvs_zoo::values::VCWrapper::new);
+                        let entry = state.inner.entry(key.clone()).or_default();
                         entry.merge(clock);
-                        Some(kvs_zoo::background::vector_clock::VectorClockSnapshot {
-                            key,
-                            clock: entry.clone(),
-                        })
+                        Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot { key, clock: entry.clone() })
                     }),
                 );
 
-            let digest_meta = aggregated.clone().map(q!(
-                |snapshot: kvs_zoo::background::vector_clock::VectorClockSnapshot| {
-                    let payload = serde_json::to_vec(&snapshot)
-                        .expect("serialize vector clock snapshot");
-                    MetaEvent::CompactionDigest {
-                        format: MetaDigestFormat::VectorClockJsonV1,
-                        bytes: payload,
-                    }
-                }
-            ));
-
-            if self.log_updates {
-                aggregated.clone().for_each(q!(
-                    |_snapshot: kvs_zoo::background::vector_clock::VectorClockSnapshot| { () }
-                ));
-            }
-
             combined_meta = combined_meta
-                .interleave(digest_meta.clone())
-                .assume_ordering(nondet!(/** meta with vector clock digests */));
+                .interleave(aggregated.clone())
+                .assume_ordering(nondet!(/** meta + vc snapshots */));
 
-            // (no-op)
-
-            // VC-based tomb prune: capture tomb VC at deletion, compare with frontier, emit pruned digest
-            // Use the aggregated snapshots directly as the (local) frontier stream.
-            let frontier_snaps = aggregated.clone();
-
+            // VC-based strict tomb prune using aggregated snapshots as frontier.
             let events = aggregated
                 .clone()
-                .map(q!(|snap: kvs_zoo::background::vector_clock::VectorClockSnapshot| kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(snap.key, snap.clock)))
+                .filter_map(q!(|event| match event {
+                    MetaEvent::VectorClockSnapshot { key, clock } => Some(kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock)),
+                    _ => None,
+                }))
                 .interleave(
                     combined_meta
                         .clone()
-                        .filter_map(q!(|event| match event { kvs_zoo::kvs_core::events::MetaEvent::Tomb { key } => Some(kvs_zoo::background::vector_clock::PruneEvent::Tomb(key)), _ => None }))
+                        .filter_map(q!(|event| match event { MetaEvent::Tomb { key } => Some(kvs_zoo::background::vector_clock::PruneEvent::Tomb(key)), _ => None }))
                 )
                 .interleave(
-                    frontier_snaps
+                    aggregated
                         .clone()
-                        .map(q!(|snap: kvs_zoo::background::vector_clock::VectorClockSnapshot| kvs_zoo::background::vector_clock::PruneEvent::Frontier(snap.key, snap.clock)))
+                        .filter_map(q!(|event| match event { MetaEvent::VectorClockSnapshot { key, clock } => Some(kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock)), _ => None }))
                 )
                 .assume_ordering(nondet!(/** prune events interleaved */));
 
-            // Strict: only emit when tomb VC <= frontier VC
             let pruned_meta = events.scan(
                 q!(|| kvs_zoo::background::vector_clock::new_prune_state()),
                 q!(|state: &mut kvs_zoo::background::vector_clock::PruneState, event: kvs_zoo::background::vector_clock::PruneEvent| {
                     match event {
                         kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock) => { state.latest.insert(key, clock); None }
                         kvs_zoo::background::vector_clock::PruneEvent::Tomb(key) => {
-                            let tomb_vc = state.latest.get(&key).cloned().unwrap_or_else(kvs_zoo::values::VCWrapper::new);
+                            let tomb_vc = state.latest.get(&key).cloned().unwrap_or_default();
                             state.pending.insert(key.clone(), tomb_vc.clone());
-                            if let Some(frontier_vc) = state.frontier.get(&key).cloned() {
-                                if tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc {
-                                    state.pending.remove(&key);
-                                    let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
-                                    return Some(kvs_zoo::kvs_core::events::MetaEvent::CompactionDigest { format: kvs_zoo::kvs_core::events::MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
-                                }
+                            if let Some(frontier_vc) = state.frontier.get(&key).cloned()
+                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
+                                state.pending.remove(&key);
+                                let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
+                                return Some(MetaEvent::CompactionDigest { format: MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
                             }
                             None
                         }
                         kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock) => {
                             state.frontier.insert(key.clone(), clock.clone());
-                            if let (Some(tomb_vc), Some(frontier_vc)) = (state.pending.get(&key).cloned(), state.frontier.get(&key).cloned()) {
-                                if tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc {
-                                    state.pending.remove(&key);
-                                    let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
-                                    return Some(kvs_zoo::kvs_core::events::MetaEvent::CompactionDigest { format: kvs_zoo::kvs_core::events::MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
-                                }
+                            if let (Some(tomb_vc), Some(frontier_vc)) = (state.pending.get(&key).cloned(), state.frontier.get(&key).cloned())
+                                && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
+                                state.pending.remove(&key);
+                                let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
+                                return Some(MetaEvent::CompactionDigest { format: MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
                             }
                             None
                         }
@@ -256,16 +225,11 @@ where
                 .clone()
                 .interleave(combined_meta)
                 .assume_ordering(nondet!(/** pruned digests prioritized + meta */));
-
-            // Also emit a direct prune digest upon tomb if not strict (for visibility/tests).
-            // No direct prune emission in strict mode.
         }
 
-            // Build/maintain a local frontier of merged per-key clocks from digests.
-            // This wires in the stateful frontier collector; snapshots are currently unused here
-            // but the accumulated state is available for local maintenance (e.g., tombstone cleanup).
-            let (combined_meta, _frontier_snaps) = kvs_zoo::after_storage::meta::build_frontier(combined_meta);
+        // Build local frontier (merged per-key clocks) from snapshot events.
+        let (combined_meta, _frontier_snaps) = kvs_zoo::after_storage::meta::build_frontier(combined_meta);
 
-            (data, combined_meta)
+        (data, combined_meta)
     }
 }

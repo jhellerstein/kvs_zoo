@@ -62,32 +62,24 @@ async fn tomb_prune_local_single_node() {
 
             bg_meta
                 .filter_map(q!(|event| match event {
-                    MetaEvent::CompactionDigest { format, bytes } => match format {
-                        kvs_zoo::kvs_core::events::MetaDigestFormat::VectorClockJsonV1 => Some(bytes),
-                        _ => None,
-                    },
+                    MetaEvent::VectorClockSnapshot { key, clock: _ } => Some(key),
                     _ => None,
                 }))
                 .send_bincode(process)
                 .entries()
-                .map(q!(|(_member, bytes)| bytes))
+                .map(q!(|(_member, key)| key))
         },
         |mut stream| async move {
-            // Expect at least one vector-clock frontier snapshot for the key
+            // Expect at least one snapshot event for key "alpha"
             let mut saw_vc = false;
             for _ in 0..12 {
                 match timeout(Duration::from_millis(500), stream.next()).await {
-                    Ok(Some(bytes)) => {
-                        #[derive(serde::Deserialize)]
-                        struct VectorClockKeyOnly { key: String }
-                        if let Ok(snap) = serde_json::from_slice::<VectorClockKeyOnly>(&bytes) {
-                            if snap.key == "alpha" { saw_vc = true; break; }
-                        }
-                    }
+                    Ok(Some(key)) if key == "alpha" => { saw_vc = true; break; }
+                    Ok(Some(_)) => continue,
                     _ => break,
                 }
             }
-            assert!(saw_vc, "expected VectorClockJsonV1 digest for key alpha");
+            assert!(saw_vc, "expected VectorClockSnapshot for key alpha");
         },
     )
     .await;
@@ -171,31 +163,23 @@ async fn tomb_prune_replication_two_nodes() {
 
             bg_meta
                 .filter_map(q!(|event| match event {
-                    MetaEvent::CompactionDigest { format, bytes } => match format {
-                        kvs_zoo::kvs_core::events::MetaDigestFormat::VectorClockJsonV1 => Some(bytes),
-                        _ => None,
-                    },
+                    MetaEvent::VectorClockSnapshot { key, clock: _ } => Some(key),
                     _ => None,
                 }))
                 .send_bincode(process)
                 .entries()
-                .map(q!(|(_member, bytes)| bytes))
+                .map(q!(|(_member, key)| key))
         },
         |mut stream| async move {
             let mut saw_vc = false;
             for _ in 0..16 {
                 match timeout(Duration::from_millis(700), stream.next()).await {
-                    Ok(Some(bytes)) => {
-                        #[derive(serde::Deserialize)]
-                        struct VectorClockKeyOnly { key: String }
-                        if let Ok(snap) = serde_json::from_slice::<VectorClockKeyOnly>(&bytes) {
-                            if snap.key == "beta" { saw_vc = true; break; }
-                        }
-                    }
+                    Ok(Some(key)) if key == "beta" => { saw_vc = true; break; }
+                    Ok(Some(_)) => continue,
                     _ => break,
                 }
             }
-            assert!(saw_vc, "expected VectorClockJsonV1 digest for key beta");
+            assert!(saw_vc, "expected VectorClockSnapshot for key beta");
         },
     )
     .await;
@@ -288,80 +272,54 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
             let (bg_data, bg_meta) = spec.plumb_background(&layers, combined_data, combined_meta);
             bg_data.for_each(q!(|_d| ()));
 
-            // Multiplex VC digests and TombPruned digests into one stream with a tag.
-            let vc_tagged = bg_meta
+
+            bg_meta
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::CompactionDigest { format, bytes } => match format {
-                        kvs_zoo::kvs_core::events::MetaDigestFormat::VectorClockJsonV1 => Some(("vc".to_string(), bytes)),
-                        _ => None,
-                    },
+                    MetaEvent::VectorClockSnapshot { key, clock } if key == "gamma" => {
+                        let mut any_ge_2 = false;
+                        for (_, cnt) in clock.as_inner().as_reveal_ref().iter() {
+                            if cnt.into_reveal() >= 2 { any_ge_2 = true; break; }
+                        }
+                        Some(if any_ge_2 { "VC2:gamma".to_string() } else { "VC1:gamma".to_string() })
+                    }
+                    MetaEvent::CompactionDigest { format: kvs_zoo::kvs_core::events::MetaDigestFormat::TombPrunedJsonV1, bytes } => {
+                        if let Ok(tp) = serde_json::from_slice::<kvs_zoo::background::vector_clock::TombPruned>(&bytes) {
+                            if tp.key == "gamma" { Some("PRUNE:gamma".to_string()) } else { None }
+                        } else { None }
+                    }
                     _ => None,
-                }));
-
-            let prune_tagged = bg_meta
-                .clone()
-                .filter_map(q!(|event| match event {
-                    MetaEvent::CompactionDigest { format, bytes } => match format {
-                        kvs_zoo::kvs_core::events::MetaDigestFormat::TombPrunedJsonV1 => Some(("prune".to_string(), bytes)),
-                        _ => None,
-                    },
-                    _ => None,
-                }));
-
-            vc_tagged
-                .interleave(prune_tagged)
-                .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** tagged vc/prune */))
+                }))
                 .send_bincode(process)
                 .entries()
-                .map(q!(|(member, tuple)| (member, tuple)))
+                .map(q!(|(member, meta)| (member, meta)))
         },
         |mut stream| async move {
-            #[derive(serde::Deserialize)]
-            struct VectorClockSnapshot { key: String, clock: kvs_zoo::values::VCWrapper }
-            #[derive(serde::Deserialize)]
-            struct TombPruned { key: String }
-
             let mut seen_remote = false;
-            let mut seen_tomb_frontier = false; // observed a snapshot where some member count reached 2
+            let mut seen_tomb_frontier = false; // snapshot frontier condition
             let mut saw_prune_before_frontier = false;
 
             let mut first_member: Option<hydro_lang::location::member_id::MemberId<kvs_zoo::kvs_core::KVSNode>> = None;
             for _ in 0..48 {
                 match timeout(Duration::from_millis(1000), stream.next()).await {
-                    Ok(Some((member, (kind, bytes)))) => {
-                        match first_member.clone() {
+                    Ok(Some((member, meta))) => {
+                        match first_member {
                             None => first_member = Some(member),
                             Some(m0) => if member != m0 { seen_remote = true; }
                         }
-                        if kind == "vc" {
-                            if let Ok(snap) = serde_json::from_slice::<VectorClockSnapshot>(&bytes) {
-                                if snap.key == "gamma" {
-                                    // tomb frontier seen when any member counter reaches >= 2
-                                    let mut any_ge_2 = false;
-                                    for (_, cnt) in snap.clock.as_inner().as_reveal_ref().iter() {
-                                        if cnt.into_reveal() >= 2 { any_ge_2 = true; break; }
-                                    }
-                                    if any_ge_2 { seen_tomb_frontier = true; }
-                                }
-                            }
-                        } else if kind == "prune" {
-                            if let Ok(tp) = serde_json::from_slice::<TombPruned>(&bytes) {
-                                if tp.key == "gamma" {
-                                    if !seen_tomb_frontier { saw_prune_before_frontier = true; }
-                                    else { break; }
-                                }
-                            }
+                        if meta.starts_with("VC") {
+                            if meta == "VC2:gamma" { seen_tomb_frontier = true; }
+                        } else if meta == "PRUNE:gamma" {
+                            if !seen_tomb_frontier { saw_prune_before_frontier = true; }
+                            else { break; }
                         }
                     }
                     _ => continue,
                 }
             }
 
-            assert!(seen_remote, "expected to observe remote concurrent update via VC digest");
-            assert!(!saw_prune_before_frontier, "should not prune before tomb frontier is observed");
-            // Note: prune emission after frontier is eventually consistent and may be delayed
-            // by scheduling; we only assert the safety property (no early prune).
+            assert!(seen_remote, "expected remote concurrent update via snapshot");
+            assert!(!saw_prune_before_frontier, "should not prune before tomb frontier snapshot observed");
         },
     )
     .await;

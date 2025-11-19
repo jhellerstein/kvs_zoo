@@ -19,8 +19,6 @@ pub enum DataEvent<V> {
 pub enum MetaDigestFormat {
     /// JSON serialization of `TombIndexStats`; stable, human-readable.
     TombIndexJsonV1,
-    /// JSON serialization of cluster vector clock snapshots.
-    VectorClockJsonV1,
     /// JSON serialization of a pruned tombstone notification { key }.
     TombPrunedJsonV1,
 }
@@ -46,6 +44,11 @@ pub enum MetaEvent {
     VectorClock {
         key: String,
         member: u32,
+        clock: VCWrapper,
+    },
+    /// Direct per-key merged vector clock snapshot (no manual JSON serialization).
+    VectorClockSnapshot {
+        key: String,
         clock: VCWrapper,
     },
 }
