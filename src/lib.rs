@@ -9,6 +9,15 @@ fn init_rewrites() {
         vec!["std", "collections", "btree", "map", "BTreeMap"],
         vec!["std", "collections", "BTreeMap"],
     );
+    // Uniform rewrites for hash collections used inside `q!` closures.
+    stageleft::add_private_reexport(
+        vec!["std", "collections", "hash", "map", "HashMap"],
+        vec!["std", "collections", "HashMap"],
+    );
+    stageleft::add_private_reexport(
+        vec!["std", "collections", "hash", "set", "HashSet"],
+        vec!["std", "collections", "HashSet"],
+    );
 }
 
 // Terminology: legacy "dispatch" → `before_storage`; legacy "maintenance" → `after_storage`.

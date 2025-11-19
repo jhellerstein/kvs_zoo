@@ -72,12 +72,21 @@ let aggregated = combined_meta
 ```
 
 ## Additional tips
-- Centralize path rewrites (single ctor function) for all affected std types.
+- Centralize path rewrites (single ctor function) for all affected std types (`BTreeMap`, `HashMap`, `HashSet`).
 - Use wrapper structs when: (a) state spans multiple closures (`scan`), or (b) generated examples must hold the state and generics would be dropped.
 - Prefer direct collections only for ephemeral closures or maps not persisted across `scan`.
 - If you observe E0107/E0282 after removing a wrapper, restore a monomorphic wrapper.
 - Use `cargo nextest run <test>` for targeted feedback.
+- Provide a `new_<name>_state()` helper (e.g. `new_clock_state()`, `new_store_state()`, `new_prune_state()`, `new_frontier_state()`) for uniform scan initialization.
 
 ## When to apply this
 - Background stages that use `scan` or stateful operators inside `q!` closures.
-- Any time you see generated code errors about `std::collections::btree::map::BTreeMap` or `state_ref_unchecked` inference issues.
+- Any time you see generated code errors about deep std collection paths or `state_ref_unchecked` inference issues.
+
+## Wrapper Inventory
+- `ClockState`: Vector clock map per key (BTreeMap<String, VCWrapper>) used in background updates and aggregation.
+- `PruneState`: Tracks latest, pending tomb VCs, and frontier VCs for strict prune decisions.
+- `FrontierState`: Maintains merged per-key frontier clocks for downstream reclamation logic.
+- `StoreState<V>`: Lattice-based key/value map plus tombstone set via `MapUnionWithTombstones`; generic over value lattice `V`.
+
+All wrappers follow the pattern: lightweight struct + `new_<name>_state()` + public `inner` (or structured fields) with std collections rewritten via ctor. If removal of any wrapper yields codegen generic loss or path errors, revert immediately.

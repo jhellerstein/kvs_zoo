@@ -27,6 +27,11 @@ pub struct StoreState<V> {
     inner: MapUnionWithTombstones<HashMap<String, V>, TombSet>,
 }
 
+/// Convenience constructor used in `q!` scans to standardize wrapper creation.
+pub fn new_store_state<V: Default>() -> StoreState<V> {
+    StoreState::default()
+}
+
 impl<V> StoreState<V> {
     /// Construct a new store state from explicit map/tombstone collections.
     pub fn new_from(map: impl Into<HashMap<String, V>>, tombstones: impl Into<TombSet>) -> Self {
