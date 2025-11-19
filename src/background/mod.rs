@@ -8,7 +8,9 @@ pub type BackgroundMetaStream<'a> =
     Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
 
 pub mod tomb_index;
+pub mod vector_clock;
 pub use tomb_index::{TombIndexBackground, TombIndexStats};
+pub use vector_clock::{VectorClockBackground, VectorClockSnapshot};
 
 /// Trait implemented by background stages that wish to consume data/meta events.
 pub trait MetaBackground<V> {
