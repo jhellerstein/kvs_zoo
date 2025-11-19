@@ -18,10 +18,7 @@ use crate::background::{BackgroundDataStream, BackgroundMetaStream, MetaBackgrou
 use crate::kvs_core::events::{DataEvent, MetaEvent};
 use crate::values::VCWrapper;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TombPruned {
-    pub key: String,
-}
+// (Formerly `TombPruned` JSON struct removed; now using typed `MetaEvent::TombPruned`.)
 
 #[derive(Clone, Debug)]
 pub enum PruneEvent {
