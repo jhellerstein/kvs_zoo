@@ -15,7 +15,7 @@ pub struct ClockState {
 
 pub fn new_clock_state() -> ClockState { ClockState::default() }
 use crate::background::{BackgroundDataStream, BackgroundMetaStream, MetaBackground};
-use crate::kvs_core::events::{DataEvent, MetaDigestFormat, MetaEvent};
+use crate::kvs_core::events::{DataEvent, MetaEvent};
 use crate::values::VCWrapper;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -183,8 +183,7 @@ where
                             if let Some(frontier_vc) = state.frontier.get(&key).cloned()
                                 && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
                                 state.pending.remove(&key);
-                                let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
-                                return Some(MetaEvent::CompactionDigest { format: MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
+                                return Some(MetaEvent::TombPruned { key: key.clone() });
                             }
                             None
                         }
@@ -193,8 +192,7 @@ where
                             if let (Some(tomb_vc), Some(frontier_vc)) = (state.pending.get(&key).cloned(), state.frontier.get(&key).cloned())
                                 && (tomb_vc.happened_before(&frontier_vc) || tomb_vc == frontier_vc) {
                                 state.pending.remove(&key);
-                                let payload = serde_json::to_vec(&kvs_zoo::background::vector_clock::TombPruned { key: key.clone() }).expect("serialize tomb pruned");
-                                return Some(MetaEvent::CompactionDigest { format: MetaDigestFormat::TombPrunedJsonV1, bytes: payload });
+                                return Some(MetaEvent::TombPruned { key: key.clone() });
                             }
                             None
                         }

@@ -283,10 +283,8 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                         }
                         Some(if any_ge_2 { "VC2:gamma".to_string() } else { "VC1:gamma".to_string() })
                     }
-                    MetaEvent::CompactionDigest { format: kvs_zoo::kvs_core::events::MetaDigestFormat::TombPrunedJsonV1, bytes } => {
-                        if let Ok(tp) = serde_json::from_slice::<kvs_zoo::background::vector_clock::TombPruned>(&bytes) {
-                            if tp.key == "gamma" { Some("PRUNE:gamma".to_string()) } else { None }
-                        } else { None }
+                    MetaEvent::TombPruned { key } => {
+                        if key == "gamma" { Some("PRUNE:gamma".to_string()) } else { None }
                     }
                     _ => None,
                 }))

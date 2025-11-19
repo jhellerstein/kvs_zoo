@@ -19,8 +19,6 @@ pub enum DataEvent<V> {
 pub enum MetaDigestFormat {
     /// JSON serialization of `TombIndexStats`; stable, human-readable.
     TombIndexJsonV1,
-    /// JSON serialization of a pruned tombstone notification { key }.
-    TombPrunedJsonV1,
 }
 
 /// MetaEvent carries maintenance/system metadata.
@@ -41,6 +39,8 @@ pub enum MetaEvent {
         format: MetaDigestFormat,
         bytes: Vec<u8>,
     },
+    /// Typed tomb prune notification: key tombstone proven reclaimable.
+    TombPruned { key: String },
     VectorClock {
         key: String,
         member: u32,
