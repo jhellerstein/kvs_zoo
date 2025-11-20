@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::values::VCWrapper;
 
 /// DataEvent captures the observable outcome of an operation.
 /// (Future: add Scan variants.)
@@ -31,28 +30,11 @@ pub enum MetaEvent {
         total_tombs: usize,
         last_tomb_key: Option<String>,
     },
-    ReclaimFrontier {
-        frontier_seq: Option<u64>,
-        epoch: u64,
-    },
     CompactionDigest {
         format: MetaDigestFormat,
         bytes: Vec<u8>,
     },
-    /// Typed tomb prune notification: key tombstone proven reclaimable.
-    TombPruned {
-        key: String,
-    },
-    VectorClock {
-        key: String,
-        member: u32,
-        clock: VCWrapper,
-    },
-    /// Direct per-key merged vector clock snapshot (no manual JSON serialization).
-    VectorClockSnapshot {
-        key: String,
-        clock: VCWrapper,
-    },
+    // Note: All tombstone GC and vector-clock metadata removed for simplicity.
 }
 
 /// A consumer of DataEvents (After or Background pipeline stage).
