@@ -4,7 +4,7 @@ use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::{
-    BroadcastReplication, SequencedReplication as Sequenced,
+    BroadcastReplication, BroadcastReplicationConfig, SequencedReplication as Sequenced,
 };
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::Pipeline;
@@ -58,8 +58,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define the nested KVS architecture via defaults (Paxos → RR → Sequenced<Broadcast> → Slot/Responder)
-    let kvs_spec: LinearizableReplicatedKVS = Default::default();
+    // Define the nested KVS architecture with synchronous broadcast for snappy local demos
+    // (Paxos → RR → Sequenced<Broadcast(synchronous)> → Slot/Responder)
+    let inner_after = Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::with_config(
+        BroadcastReplicationConfig::synchronous(),
+    ));
+    let inner_leaf = kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
+        SlotOrderEnforcer::new(),
+        Responder::new(),
+    );
+    let inner = kvs_zoo::kvs_layer::KVSCluster::<
+        SequenceReplicated,
+        RoundRobinRouter,
+        Sequenced<BroadcastReplication<LwwWrapper<String>>>,
+        kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
+    >::new(RoundRobinRouter::new(), inner_after, inner_leaf);
+
+    let kvs_spec: LinearizableReplicatedKVS = kvs_zoo::kvs_layer::KVSCluster::new(
+        Pipeline::new(
+            PaxosDispatcher::<LwwWrapper<String>>::new(),
+            RoundRobinRouter::new(),
+        ),
+        (),
+        inner,
+    );
 
     // Plumb full dataflow with external I/O using the standard helper (down/up only)
     let (layers, bidi_port) =

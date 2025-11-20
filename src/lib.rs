@@ -1,5 +1,25 @@
 stageleft::stageleft_no_entry_crate!();
 
+// Rewrite fragile deep std paths (e.g. btree::map::BTreeMap) at codegen time.
+// This allows direct usage of `std::collections::BTreeMap` in `q!` closures
+// without introducing wrapper structs solely to stabilize generated paths.
+#[ctor::ctor]
+fn init_rewrites() {
+    stageleft::add_private_reexport(
+        vec!["std", "collections", "btree", "map", "BTreeMap"],
+        vec!["std", "collections", "BTreeMap"],
+    );
+    // Uniform rewrites for hash collections used inside `q!` closures.
+    stageleft::add_private_reexport(
+        vec!["std", "collections", "hash", "map", "HashMap"],
+        vec!["std", "collections", "HashMap"],
+    );
+    stageleft::add_private_reexport(
+        vec!["std", "collections", "hash", "set", "HashSet"],
+        vec!["std", "collections", "HashSet"],
+    );
+}
+
 // Terminology: legacy "dispatch" → `before_storage`; legacy "maintenance" → `after_storage`.
 pub mod after_storage;
 pub mod background;
