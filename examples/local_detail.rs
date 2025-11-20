@@ -39,26 +39,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let initial_ops = operations_stream
         .entries()
         .map(q!(|(_client_id, op)| op))
+        // TODO: IS THE NEXT LINE NEEDED?
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-        nondet!(/** client op stream */),
-    );
+            nondet!(/** client op stream */),
+        );
 
     // Route all ops to the single member (id 0)
     let routed_ops = initial_ops
+        // TODO: MOVE THIS UP TO PREVIOUS MAP FOR SIMPLICITY!
         .map(q!(|op| (
             hydro_lang::location::MemberId::from_raw(0u32),
             op
         )))
         .into_keyed()
-        .demux_bincode(&local)
-        .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-            nondet!(/** routed to single member */),
-        );
+        .demux_bincode(&local);
 
     // Per-node total ordering for correctness
     let ordered_ops = routed_ops
         .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-            nondet!(/** sequential processing per node */),
+            nondet!(/** sequential processing via a single node */),
         );
 
     // No replication: just process operations and emit responses
@@ -74,6 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
+        // BUG! This member_id 0 is not right... we need to send back to the original External client!
+        // Should carry the client id through the dataflow so we can use it here.
         .map(q!(|(_member_id, response)| (0u64, response)))
         .into_keyed();
     complete_sink.complete(to_complete);

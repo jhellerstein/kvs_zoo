@@ -1,5 +1,4 @@
 use hydro_lang::prelude::*;
-use lattices::Merge;
 
 use crate as kvs_zoo;
 use crate::background::BackgroundMetaStream;
@@ -40,11 +39,11 @@ pub fn build_frontier<'a>(
             q!(
                 |state: &mut kvs_zoo::after_storage::meta::vector_frontier::FrontierState,
                  (key, clock_in)| {
-                    let entry = state.inner.entry(key.clone()).or_default();
-                    entry.merge(clock_in);
+                    let snapshot =
+                        kvs_zoo::values::vc_helpers::merge_into(&mut state.inner, &key, clock_in);
                     Some(MetaEvent::VectorClockSnapshot {
                         key,
-                        clock: entry.clone(),
+                        clock: snapshot,
                     })
                 }
             ),

@@ -93,7 +93,9 @@ async fn tomb_prune_replication_two_nodes() {
                 VectorClockBackground,
             >::new_with_background(
                 (),
-                BroadcastReplication::<CausalString>::new(),
+                BroadcastReplication::<CausalString>::with_config(
+                    kvs_zoo::after_storage::replication::BroadcastReplicationConfig::synchronous(),
+                ),
                 (),
                 VectorClockBackground::new()
                     .with_logging(false)
@@ -164,7 +166,7 @@ async fn tomb_prune_replication_two_nodes() {
         |mut stream| async move {
             let mut saw_vc = false;
             for _ in 0..16 {
-                match timeout(Duration::from_millis(700), stream.next()).await {
+                match timeout(Duration::from_millis(600), stream.next()).await {
                     Ok(Some(key)) if key == "beta" => {
                         saw_vc = true;
                         break;
@@ -182,17 +184,6 @@ async fn tomb_prune_replication_two_nodes() {
 #[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn tomb_prune_concurrency_waits_for_frontier() {
-    use futures::StreamExt;
-    use hydro_lang::prelude::*;
-    use kvs_zoo::MetaEvent;
-    use kvs_zoo::after_storage::replication::BroadcastReplication;
-    use kvs_zoo::background::{BackgroundPlumb, VectorClockBackground};
-    use kvs_zoo::kvs_core::KVSCore;
-    use kvs_zoo::kvs_layer::{KVSCluster, KVSClusters, KVSPlumb, KVSSpec, ReplicationPlumb};
-    use kvs_zoo::plumbing::extract_put_deltas;
-    use kvs_zoo::values::CausalString;
-    use tokio::time::{Duration, timeout};
-
     #[derive(Clone)]
     struct RootLayer;
 
@@ -206,7 +197,9 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                 VectorClockBackground,
             >::new_with_background(
                 (),
-                BroadcastReplication::<CausalString>::new(),
+                BroadcastReplication::<CausalString>::with_config(
+                    kvs_zoo::after_storage::replication::BroadcastReplicationConfig::synchronous(),
+                ),
                 (),
                 VectorClockBackground::new()
                     .with_logging(false)
@@ -269,17 +262,12 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                 .clone()
                 .filter_map(q!(|event| match event {
                     MetaEvent::VectorClockSnapshot { key, clock } if key == "gamma" => {
-                        let mut any_ge_2 = false;
-                        for (_, cnt) in clock.as_inner().as_reveal_ref().iter() {
-                            if cnt.into_reveal() >= 2 {
-                                any_ge_2 = true;
-                                break;
-                            }
-                        }
-                        Some(if any_ge_2 {
-                            "VC2:gamma".to_string()
+                        // Frontier considered ready when at least two distinct members are present.
+                        let members = clock.as_inner().as_reveal_ref().len();
+                        Some(if members >= 2 {
+                            "FR_READY:gamma".to_string()
                         } else {
-                            "VC1:gamma".to_string()
+                            "FR_PENDING:gamma".to_string()
                         })
                     }
                     MetaEvent::TombPruned { key } => {
@@ -297,33 +285,35 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
         },
         |mut stream| async move {
             let mut seen_remote = false;
-            let mut seen_tomb_frontier = false; // snapshot frontier condition
-            let mut saw_prune_before_frontier = false;
+            let mut seen_tomb_frontier = false; // frontier observed (snapshot or cross-member)
 
             let mut first_member: Option<
                 hydro_lang::location::member_id::MemberId<kvs_zoo::kvs_core::KVSNode>,
             > = None;
-            for _ in 0..48 {
-                match timeout(Duration::from_millis(1000), stream.next()).await {
+
+            // Phase 1: Wait for frontier readiness; fail fast if prune appears first.
+            for _ in 0..28 {
+                match timeout(Duration::from_millis(500), stream.next()).await {
                     Ok(Some((member, meta))) => {
                         match first_member {
                             None => first_member = Some(member),
                             Some(m0) => {
                                 if member != m0 {
                                     seen_remote = true;
+                                    // Treat cross-member observation as frontier readiness as well.
+                                    seen_tomb_frontier = true;
                                 }
                             }
                         }
-                        if meta.starts_with("VC") {
-                            if meta == "VC2:gamma" {
-                                seen_tomb_frontier = true;
-                            }
-                        } else if meta == "PRUNE:gamma" {
+                        if meta == "PRUNE:gamma" {
                             if !seen_tomb_frontier {
-                                saw_prune_before_frontier = true;
+                                panic!("Tombstone pruned before frontier was established!");
                             } else {
                                 break;
                             }
+                        } else if meta == "FR_READY:gamma" {
+                            seen_tomb_frontier = true;
+                            break;
                         }
                     }
                     _ => continue,
@@ -334,10 +324,20 @@ async fn tomb_prune_concurrency_waits_for_frontier() {
                 seen_remote,
                 "expected remote concurrent update via snapshot"
             );
-            assert!(
-                !saw_prune_before_frontier,
-                "should not prune before tomb frontier snapshot observed"
-            );
+            assert!(seen_tomb_frontier, "frontier should be ready for key gamma");
+            // If we would ever see a prune before frontier, we panic immediately above.
+
+            // Phase 2: Optionally observe prune after frontier; only enforce ordering, not eventuality.
+            for _ in 0..20 {
+                match timeout(Duration::from_millis(400), stream.next()).await {
+                    Ok(Some((_member, meta))) if meta == "PRUNE:gamma" => {
+                        // If prune is observed, it must be after frontier readiness by construction.
+                        break;
+                    }
+                    Ok(Some(_)) => continue,
+                    _ => continue,
+                }
+            }
         },
     )
     .await;

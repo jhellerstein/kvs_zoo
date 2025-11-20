@@ -1,6 +1,5 @@
 use hydro_lang::location::cluster::CLUSTER_SELF_ID;
 use hydro_lang::prelude::*;
-use lattices::Merge;
 use serde::{Deserialize, Serialize};
 
 use crate as kvs_zoo;
@@ -106,9 +105,12 @@ where
                     match event {
                         DataEvent::Put { key, .. } | DataEvent::Delete { key } => {
                             let member_raw = CLUSTER_SELF_ID.raw_id;
-                            let entry = state.inner.entry(key.clone()).or_default();
-                            entry.bump(member_raw.to_string());
-                            Some((key, member_raw, entry.clone()))
+                            let clock = kvs_zoo::values::vc_helpers::bump_local(
+                                &mut state.inner,
+                                &key,
+                                member_raw,
+                            );
+                            Some((key, member_raw, clock))
                         }
                         DataEvent::Get { .. } => None,
                     }
@@ -157,11 +159,11 @@ where
                     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
                     q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,
                         (key, clock)| {
-                        let entry = state.inner.entry(key.clone()).or_default();
-                        entry.merge(clock);
+                        let snapshot =
+                            kvs_zoo::values::vc_helpers::merge_into(&mut state.inner, &key, clock);
                         Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot {
                             key,
-                            clock: entry.clone(),
+                            clock: snapshot,
                         })
                     }),
                 );
@@ -205,7 +207,10 @@ where
                             let tomb_vc = state.latest.get(&key).cloned().unwrap_or_default();
                             state.pending.insert(key.clone(), tomb_vc.clone());
                             if let Some(frontier_vc) = state.frontier.get(&key).cloned()
-                                && kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc)
+                                && kvs_zoo::background::vector_clock::can_prune(
+                                    &tomb_vc,
+                                    &frontier_vc,
+                                )
                             {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
@@ -217,8 +222,10 @@ where
                             if let (Some(tomb_vc), Some(frontier_vc)) = (
                                 state.pending.get(&key).cloned(),
                                 state.frontier.get(&key).cloned(),
-                            ) && kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc)
-                            {
+                            ) && kvs_zoo::background::vector_clock::can_prune(
+                                &tomb_vc,
+                                &frontier_vc,
+                            ) {
                                 state.pending.remove(&key);
                                 return Some(MetaEvent::TombPruned { key: key.clone() });
                             }
