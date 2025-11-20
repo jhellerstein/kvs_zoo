@@ -36,23 +36,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &client_external,
         );
 
-    let initial_ops = operations_stream
-        .entries()
-        .map(q!(|(_client_id, op)| op))
-        // TODO: IS THE NEXT LINE NEEDED?
-        .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-            nondet!(/** client op stream */),
-        );
-
     // Route all ops to the single member (id 0)
-    let routed_ops = initial_ops
-        // TODO: MOVE THIS UP TO PREVIOUS MAP FOR SIMPLICITY!
-        .map(q!(|op| (
+    let routed_ops = operations_stream
+        .entries()
+        .map(q!(|(_client_id, op)| (
             hydro_lang::location::MemberId::from_raw(0u32),
             op
         )))
         .into_keyed()
-        .demux_bincode(&local);
+        .demux_bincode(&local);    
 
     // Per-node total ordering for correctness
     let ordered_ops = routed_ops
