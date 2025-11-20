@@ -21,17 +21,11 @@ use crate::values::VCWrapper;
 
 // (Formerly `TombPruned` JSON struct removed; now using typed `MetaEvent::TombPruned`.)
 
-#[derive(Clone, Debug)]
-pub enum PruneEvent {
-    ClockSnap(String, VCWrapper),
-    Tomb(String),
-    Frontier(String, VCWrapper),
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct PruneState {
-    pub latest: ::std::collections::BTreeMap<String, VCWrapper>,
+    // Tombs awaiting a frontier snapshot sufficiently advanced to prune.
     pub pending: ::std::collections::BTreeMap<String, VCWrapper>,
+    // Current merged frontier (vector clock snapshot per key).
     pub frontier: ::std::collections::BTreeMap<String, VCWrapper>,
 }
 
@@ -145,100 +139,72 @@ where
 
         if self.emit_digests {
             // Aggregate merged per-key clocks and emit direct snapshot events.
-            let aggregated = combined_meta
+            // Aggregate merged per-key clocks into snapshot events.
+            let snapshots = combined_meta
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClock {
-                        key,
-                        member: _,
-                        clock,
-                    } => Some((key, clock)),
+                    MetaEvent::VectorClock { key, member: _, clock } => Some((key, clock)),
                     _ => None,
                 }))
                 .scan(
                     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
-                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,
-                        (key, clock)| {
-                        let snapshot =
-                            kvs_zoo::values::vc_helpers::merge_into(&mut state.inner, &key, clock);
-                        Some(kvs_zoo::kvs_core::events::MetaEvent::VectorClockSnapshot {
-                            key,
-                            clock: snapshot,
-                        })
+                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,(key, clock)| {
+                        let snapshot = kvs_zoo::values::vc_helpers::merge_into(&mut state.inner,&key,clock);
+                        Some(MetaEvent::VectorClockSnapshot { key, clock: snapshot })
                     }),
                 );
 
-            combined_meta = combined_meta
-                .interleave(aggregated.clone())
-                .assume_ordering(nondet!(/** meta + vc snapshots */));
+            // Tomb events (original meta stream).
+            let tombs = combined_meta.clone().filter_map(q!(|event| match event {
+                MetaEvent::Tomb { key } => Some(key),
+                _ => None,
+            }));
 
-            // VC-based strict tomb prune using aggregated snapshots as frontier.
-            let events = aggregated
+            // Interleave snapshots and tombs, performing pruning inline.
+            let pruned_meta = snapshots
                 .clone()
-                .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClockSnapshot { key, clock } => Some(
-                        kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock)
-                    ),
-                    _ => None,
-                }))
-                .interleave(combined_meta.clone().filter_map(q!(|event| match event {
-                    MetaEvent::Tomb { key } =>
-                        Some(kvs_zoo::background::vector_clock::PruneEvent::Tomb(key)),
-                    _ => None,
-                })))
-                .interleave(aggregated.clone().filter_map(q!(|event| match event {
-                    MetaEvent::VectorClockSnapshot { key, clock } => Some(
-                        kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock)
-                    ),
-                    _ => None,
-                })))
-                .assume_ordering(nondet!(/** prune events interleaved */));
-
-            let pruned_meta = events.scan(
-                q!(|| kvs_zoo::background::vector_clock::new_prune_state()),
-                q!(|state: &mut kvs_zoo::background::vector_clock::PruneState,
-                    event: kvs_zoo::background::vector_clock::PruneEvent| {
-                    match event {
-                        kvs_zoo::background::vector_clock::PruneEvent::ClockSnap(key, clock) => {
-                            state.latest.insert(key, clock);
-                            None
-                        }
-                        kvs_zoo::background::vector_clock::PruneEvent::Tomb(key) => {
-                            let tomb_vc = state.latest.get(&key).cloned().unwrap_or_default();
-                            state.pending.insert(key.clone(), tomb_vc.clone());
-                            if let Some(frontier_vc) = state.frontier.get(&key).cloned()
-                                && kvs_zoo::background::vector_clock::can_prune(
-                                    &tomb_vc,
-                                    &frontier_vc,
-                                )
-                            {
-                                state.pending.remove(&key);
-                                return Some(MetaEvent::TombPruned { key: key.clone() });
+                .map(q!(|snap| (Some(snap), None::<String>)))
+                .interleave(tombs.map(q!(|key| (None, Some(key)))))
+                .assume_ordering(nondet!(/** snapshots + tombs interleaved */))
+                .scan(
+                    q!(|| kvs_zoo::background::vector_clock::new_prune_state()),
+                    q!(|state: &mut kvs_zoo::background::vector_clock::PruneState,(maybe_snap, maybe_tomb)| {
+                        let mut emit: Option<MetaEvent> = None;
+                        if let Some(snap) = maybe_snap {
+                            if let MetaEvent::VectorClockSnapshot { key, clock } = snap {
+                                state.frontier.insert(key.clone(), clock.clone());
+                                if let Some(tomb_vc) = state.pending.get(&key).cloned() {
+                                    let frontier_vc = state.frontier.get(&key).unwrap();
+                                    if kvs_zoo::background::vector_clock::can_prune(&tomb_vc, frontier_vc) {
+                                        state.pending.remove(&key);
+                                        emit = Some(MetaEvent::TombPruned { key });
+                                    }
+                                }
                             }
-                            None
                         }
-                        kvs_zoo::background::vector_clock::PruneEvent::Frontier(key, clock) => {
-                            state.frontier.insert(key.clone(), clock.clone());
-                            if let (Some(tomb_vc), Some(frontier_vc)) = (
-                                state.pending.get(&key).cloned(),
-                                state.frontier.get(&key).cloned(),
-                            ) && kvs_zoo::background::vector_clock::can_prune(
-                                &tomb_vc,
-                                &frontier_vc,
-                            ) {
-                                state.pending.remove(&key);
-                                return Some(MetaEvent::TombPruned { key: key.clone() });
+                        if let Some(tomb_key) = maybe_tomb {
+                            let tomb_vc = state.frontier.get(&tomb_key).cloned().unwrap_or_default();
+                            // If frontier already advanced, prune immediately; else store.
+                            if let Some(frontier_vc) = state.frontier.get(&tomb_key).cloned() {
+                                if kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc) {
+                                    emit = Some(MetaEvent::TombPruned { key: tomb_key });
+                                } else {
+                                    state.pending.insert(tomb_key, tomb_vc);
+                                }
+                            } else {
+                                state.pending.insert(tomb_key, tomb_vc);
                             }
-                            None
                         }
-                    }
-                }),
-            );
+                        emit
+                    }),
+                );
 
+            // Prioritize emitted TombPruned / snapshots before original meta.
             combined_meta = pruned_meta
                 .clone()
+                .interleave(snapshots.clone())
                 .interleave(combined_meta)
-                .assume_ordering(nondet!(/** pruned digests prioritized + meta */));
+                .assume_ordering(nondet!(/** pruned + snapshots + meta */));
         }
 
         // Build local frontier (merged per-key clocks) from snapshot events.
