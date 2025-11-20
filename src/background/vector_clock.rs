@@ -143,14 +143,23 @@ where
             let snapshots = combined_meta
                 .clone()
                 .filter_map(q!(|event| match event {
-                    MetaEvent::VectorClock { key, member: _, clock } => Some((key, clock)),
+                    MetaEvent::VectorClock {
+                        key,
+                        member: _,
+                        clock,
+                    } => Some((key, clock)),
                     _ => None,
                 }))
                 .scan(
                     q!(|| kvs_zoo::background::vector_clock::new_clock_state()),
-                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,(key, clock)| {
-                        let snapshot = kvs_zoo::values::vc_helpers::merge_into(&mut state.inner,&key,clock);
-                        Some(MetaEvent::VectorClockSnapshot { key, clock: snapshot })
+                    q!(|state: &mut kvs_zoo::background::vector_clock::ClockState,
+                        (key, clock)| {
+                        let snapshot =
+                            kvs_zoo::values::vc_helpers::merge_into(&mut state.inner, &key, clock);
+                        Some(MetaEvent::VectorClockSnapshot {
+                            key,
+                            clock: snapshot,
+                        })
                     }),
                 );
 
@@ -168,14 +177,18 @@ where
                 .assume_ordering(nondet!(/** snapshots + tombs interleaved */))
                 .scan(
                     q!(|| kvs_zoo::background::vector_clock::new_prune_state()),
-                    q!(|state: &mut kvs_zoo::background::vector_clock::PruneState,(maybe_snap, maybe_tomb)| {
+                    q!(|state: &mut kvs_zoo::background::vector_clock::PruneState,
+                        (maybe_snap, maybe_tomb)| {
                         let mut emit: Option<MetaEvent> = None;
                         if let Some(snap) = maybe_snap {
                             if let MetaEvent::VectorClockSnapshot { key, clock } = snap {
                                 state.frontier.insert(key.clone(), clock.clone());
                                 if let Some(tomb_vc) = state.pending.get(&key).cloned() {
                                     let frontier_vc = state.frontier.get(&key).unwrap();
-                                    if kvs_zoo::background::vector_clock::can_prune(&tomb_vc, frontier_vc) {
+                                    if kvs_zoo::background::vector_clock::can_prune(
+                                        &tomb_vc,
+                                        frontier_vc,
+                                    ) {
                                         state.pending.remove(&key);
                                         emit = Some(MetaEvent::TombPruned { key });
                                     }
@@ -183,10 +196,14 @@ where
                             }
                         }
                         if let Some(tomb_key) = maybe_tomb {
-                            let tomb_vc = state.frontier.get(&tomb_key).cloned().unwrap_or_default();
+                            let tomb_vc =
+                                state.frontier.get(&tomb_key).cloned().unwrap_or_default();
                             // If frontier already advanced, prune immediately; else store.
                             if let Some(frontier_vc) = state.frontier.get(&tomb_key).cloned() {
-                                if kvs_zoo::background::vector_clock::can_prune(&tomb_vc, &frontier_vc) {
+                                if kvs_zoo::background::vector_clock::can_prune(
+                                    &tomb_vc,
+                                    &frontier_vc,
+                                ) {
                                     emit = Some(MetaEvent::TombPruned { key: tomb_key });
                                 } else {
                                     state.pending.insert(tomb_key, tomb_vc);
