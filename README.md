@@ -3,7 +3,7 @@
 A collection of progressively more sophisticated Key-Value Store implementations built with [Hydro](https://github.com/hydro-project/hydro), designed as educational examples for an upcoming book about distributed programming.
 
 The **KVS Zoo** demonstrates how to build distributed systems using Hydro's global dataflow programming model and a composable server architecture that allows mixing and matching
-request-routing layers, replication/cleanup layers, and value semantics to create sophisticated distributed key-value stores from reusable components.
+request-routing layers, replication layers, and value semantics to create sophisticated distributed key-value stores from reusable components.
 
 ## 📚 Background
 
@@ -16,7 +16,7 @@ The implementations showcase Hydro's approach to building distributed systems: e
 
 ## 🏗️ Architecture
 
-The zoo showcases a composable architecture where routing layers, replication/cleanup layers, and value semantics can be mixed and matched.
+The zoo showcases a composable architecture where routing layers, replication layers, and value semantics can be mixed and matched.
 
 ### Data and Metadata Streams
 
@@ -28,8 +28,8 @@ The core emits two orthogonal event streams:
 Pipeline stages subscribe to the streams they care about:
 
 - **Before** stages run sequentially just before storage, routing and ordering `KVSOperation<V>` requests.
-- **After** stages run sequentially just after storage, consuming `DataEvent<V>` and optionally `MetaEvent` when replication or cleanup needs the extra context.
-- **Background** stages (opt-in) attach to either `DataEvent<V>` or `MetaEvent` streams for longer-lived background work, as demonstrated by the tombstone indexer in `examples/replicated_with_tombstone.rs`.
+- **After** stages run sequentially just after storage, consuming `DataEvent<V>` and optionally `MetaEvent` when replication needs the extra context.
+- **Background** stages (opt-in) attach to either `DataEvent<V>` or `MetaEvent` streams for longer-lived background work.
 
 Stages branch by cloning Hydro streams, which could potentially be optimized in future.
 
@@ -107,21 +107,6 @@ Imposes a total order with Paxos while keeping background replication pluggable.
   - Paxos imposes a global slot order on operations
   - Replication preserves slots and enforces in-order application per replica
   - Strong consistency guarantees
-
-### 6. **Replicated Tombstone KVS** (`examples/replicated_with_tombstone.rs`)
-
-Highlights Delete + Tomb semantics backed by a metadata-aware background stage.
-
-- **Routing**: `RoundRobinRouter`
-- **Replication**: `SimpleGossip`
-- **Background**: `TombIndexBackground` (logs tomb statistics and emits summaries via `MetaEvent`)
-- **Concepts**: Metadata stream consumption, background processing, tombstone indexing
-
-Run:
-```bash
-cargo run --example replicated_with_tombstone
-```
-Expect a DELETE followed by a GET showing `NOT FOUND`, plus tomb logs like `[bg] tomb_index total=1 last=Some("alpha")` and `MetaEvent::TombSummary` entries that downstream consumers can observe.
 
 ## 🧪 Core Components
 

@@ -40,7 +40,7 @@ See the types and traits in:
 If you don’t want to plumb Hydro by hand, use the unified flow:
 
 - `src/cross_layer_flow.rs`
-    - `cross_layer_flow` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts either bare operations or envelopes via `Into<KVSOperation<_>>`.
+    - `cross_layer_flow` — unified: parent before_storage → optional leaf before_storage (use `NoLeaf` for no-op) → processing → after_storage. Accepts KVS operations directly.
 
 The examples below use both the simple server helpers and the explicit “detail” variants to show the minimal vs explicit Hydro wiring.
 

@@ -14,18 +14,12 @@ async fn delete_emits_tomb_meta_event() {
         |process| {
             let ops = process
                 .source_iter(q!(vec![
-                    kvs_zoo::protocol::Envelope::new(
-                        true,
-                        kvs_zoo::protocol::KVSOperation::Put(
-                            "alpha".to_string(),
-                            kvs_zoo::values::LwwWrapper::new("one".to_string()),
-                            Some(1),
-                        ),
+                    kvs_zoo::protocol::KVSOperation::Put(
+                        "alpha".to_string(),
+                        kvs_zoo::values::LwwWrapper::new("one".to_string()),
+                        Some(1),
                     ),
-                    kvs_zoo::protocol::Envelope::new(
-                        true,
-                        kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string(), Some(1)),
-                    ),
+                    kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string(), Some(1)),
                 ]))
                 .assume_ordering(nondet!(/** deterministic demo ops */));
 
@@ -139,13 +133,11 @@ async fn tomb_index_background_emits_summary() {
         |flow, process| {
             let cluster = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
             let ops = cluster
-                .source_iter(q!(vec![kvs_zoo::protocol::Envelope::new(
-                    true,
-                    kvs_zoo::protocol::KVSOperation::<kvs_zoo::values::LwwWrapper<String>>::Delete(
-                        "alpha".to_string(),
-                        Some(1),
-                    ),
-                )]))
+                .source_iter(q!(vec![kvs_zoo::protocol::KVSOperation::<
+                    kvs_zoo::values::LwwWrapper<String>,
+                >::Delete(
+                    "alpha".to_string(), Some(1),
+                ),]))
                 .assume_ordering(nondet!(/** single delete */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } = KVSCore::process(ops);

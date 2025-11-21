@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_client_ops(ordered_ops);
+    } = KVSCore::process(ordered_ops);
     data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
     meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
 

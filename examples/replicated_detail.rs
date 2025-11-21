@@ -70,16 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gossip = SimpleGossip::<LwwWrapper<String>>::default();
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
-    // Merge local ops (respond) with replicated PUTs (no respond) into one ordered stream
-    let local_tagged = ordered_ops
+    // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, None)));
+    let all_ops = ordered_ops
         .clone()
-        .map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
-    let replicated_tagged = replicated_puts.map(q!(|(k, v)| kvs_zoo::protocol::Envelope::new(
-        false,
-        KVSOperation::Put(k, v, None)
-    )));
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
+        .interleave(replicated_ops)
         .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
         nondet!(/** per-node sequential processing */),
     );
@@ -88,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process(all_tagged);
+    } = KVSCore::process(all_ops);
     data.for_each(q!(|event| println!("[after] data {:?}", event)));
     meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
 

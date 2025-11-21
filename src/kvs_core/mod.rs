@@ -12,7 +12,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use self::events::{DataEvent, MetaEvent};
-use crate::protocol::{Envelope, KVSOperation, KVSResponse};
+use crate::protocol::{KVSOperation, KVSResponse};
 
 #[derive(Clone)]
 struct CoreEmission<V> {
@@ -41,58 +41,6 @@ pub struct KVSNode {}
 pub struct KVSCore;
 
 impl KVSCore {
-    /// Convenience wrapper for processing client-originated operations.
-    ///
-    /// Client requests expect responses, so metadata is auto-tagged `true` before
-    /// delegating to the main envelope-based processor.
-    pub fn process_client_ops<'a, V, L>(
-        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<V, L>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let enveloped = operations.map(q!(|op| Envelope::new(true, op)));
-        Self::process(enveloped)
-    }
-
-    /// Convenience wrapper for processing replicated operations.
-    ///
-    /// Replicated updates should not emit client responses, so metadata is
-    /// auto-tagged `false` before delegating to the main processor.
-    pub fn process_replicated_ops<'a, V, L>(
-        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<V, L>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let enveloped = operations.map(q!(|op| Envelope::new(false, op)));
-        Self::process(enveloped)
-    }
-
     /// This function takes a stream of operations and processes them one by one
     /// in order, ensuring that each read sees the exact state at its position
     /// in the sequence. Uses lattice merge semantics for combining values.
@@ -104,7 +52,7 @@ impl KVSCore {
     /// Structured response containing both the response stream (for clients)
     /// and a metadata stream suitable for background maintenance wiring.
     pub fn process<'a, V, L>(
-        operations: Stream<Envelope<bool, KVSOperation<V>>, L, Unbounded, TotalOrder>,
+        operations: Stream<KVSOperation<V>, L, Unbounded, TotalOrder>,
     ) -> CoreOutput<V, L>
     where
         V: Clone
@@ -123,14 +71,13 @@ impl KVSCore {
     {
         let combined = operations.scan(
             q!(|| std::collections::HashMap::new()),
-            q!(|state, envelope| {
-                let should_respond = envelope.metadata; // bool flag
-                let client_id = envelope.operation.client_id();
+            q!(|state, operation| {
+                let client_id = operation.client_id();
 
-                // Only generate response if should_respond AND client_id is Some
-                let should_emit_response = should_respond && client_id.is_some();
+                // Only generate response if client_id is Some
+                let should_emit_response = client_id.is_some();
 
-                let (response, data, meta) = match envelope.operation {
+                let (response, data, meta) = match operation {
                     KVSOperation::Put(key, value, _) => {
                         let value_for_event = value.clone();
                         state

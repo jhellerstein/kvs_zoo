@@ -108,14 +108,15 @@ where
         responses: client_responses,
         data: client_data_events,
         meta: client_meta_stream,
-    } = crate::kvs_core::KVSCore::process_client_ops(client_ops);
+    } = crate::kvs_core::KVSCore::process(client_ops);
 
-    // Replicated operations flow through the same core path but skip response emission.
+    // Replicated operations flow through the same core path.
+    // Replicated ops have client_id=None, so they won't generate responses.
     let crate::kvs_core::CoreOutput {
         responses: replica_responses,
         data: replica_data_events,
         meta: replica_meta_stream,
-    } = crate::kvs_core::KVSCore::process_replicated_ops(
+    } = crate::kvs_core::KVSCore::process(
         replication_ops.assume_ordering::<TotalOrder>(nondet!(/** replicated op order */)),
     );
 
