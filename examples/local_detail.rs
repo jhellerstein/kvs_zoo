@@ -36,15 +36,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &client_external,
         );
 
-    // Route all ops to the single member (id 0)
+    // Route all ops to the single member (id 0), attaching client_id to operations
     let routed_ops = operations_stream
         .entries()
-        .map(q!(|(_client_id, op)| (
+        .map(q!(|(client_id, op)| (
             hydro_lang::location::MemberId::from_raw(0u32),
-            op
+            op.with_client_id(Some(client_id))
         )))
         .into_keyed()
-        .demux_bincode(&local);    
+        .demux_bincode(&local);
 
     // Per-node total ordering for correctness
     let ordered_ops = routed_ops
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_client_ops(ordered_ops);
+    } = KVSCore::process(ordered_ops);
     data.for_each(q!(|_data| ())); // Local demo currently ignores data events
     meta.for_each(q!(|_meta| ())); // Local demo currently ignores metadata
 
@@ -65,9 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
-        // BUG! This member_id 0 is not right... we need to send back to the original External client!
-        // Should carry the client id through the dataflow so we can use it here.
-        .map(q!(|(_member_id, response)| (0u64, response)))
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
         .into_keyed();
     complete_sink.complete(to_complete);
 
@@ -94,10 +94,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
-        Op::Get("alpha".into()),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into())),
-        Op::Get("alpha".into()),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
+        Op::Get("alpha".into(), None),
+        Op::Put("alpha".into(), LwwWrapper::new("two".into()), None),
+        Op::Get("alpha".into(), None),
     ];
     for op in ops {
         input.send(op).await?;

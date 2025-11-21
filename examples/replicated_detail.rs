@@ -41,10 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let initial_ops = operations_stream
         .entries()
-        .map(q!(|(_client_id, op)| op))
+        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-        nondet!(/** client op stream */),
-    );
+            nondet!(/** client op stream */),
+        );
 
     let routed_ops = initial_ops
         .map(q!(|op| (
@@ -70,16 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gossip = SimpleGossip::<LwwWrapper<String>>::default();
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
-    // Merge local ops (respond) with replicated PUTs (no respond) into one ordered stream
-    let local_tagged = ordered_ops
+    // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, None)));
+    let all_ops = ordered_ops
         .clone()
-        .map(q!(|op| kvs_zoo::protocol::Envelope::new(true, op)));
-    let replicated_tagged = replicated_puts.map(q!(|(k, v)| kvs_zoo::protocol::Envelope::new(
-        false,
-        KVSOperation::Put(k, v)
-    )));
-    let all_tagged = local_tagged
-        .interleave(replicated_tagged)
+        .interleave(replicated_ops)
         .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
         nondet!(/** per-node sequential processing */),
     );
@@ -88,14 +83,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process(all_tagged);
+    } = KVSCore::process(all_ops);
     data.for_each(q!(|event| println!("[after] data {:?}", event)));
     meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
 
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
-        .map(q!(|(_member_id, response)| (0u64, response)))
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
         .into_keyed();
     complete_sink.complete(to_complete);
 
@@ -125,10 +122,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
-        Op::Get("alpha".into()),
-        Op::Put("beta".into(), LwwWrapper::new("two".into())),
-        Op::Get("beta".into()),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
+        Op::Get("alpha".into(), None),
+        Op::Put("beta".into(), LwwWrapper::new("two".into()), None),
+        Op::Get("beta".into(), None),
     ];
 
     for (i, op) in ops.into_iter().enumerate() {

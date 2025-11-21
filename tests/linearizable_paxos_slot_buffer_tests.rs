@@ -76,19 +76,20 @@ fn get_waits_for_prior_put_slot() {
             .send(kvs_zoo::protocol::KVSOperation::Put(
                 "x".into(),
                 LwwWrapper::new("1".into()),
+                Some(1),
             ))
             .await
             .unwrap();
         input
-            .send(kvs_zoo::protocol::KVSOperation::Get("x".into()))
+            .send(kvs_zoo::protocol::KVSOperation::Get("x".into(), Some(1)))
             .await
             .unwrap();
         let r1 = out.next().await.unwrap();
         let r2 = out.next().await.unwrap();
-        assert!(r1.contains("PUT x = OK"));
+        assert!(r1.contains("PUT OK"), "unexpected PUT response: {r1}");
         // Accept either display form (direct value or debug) to avoid brittle formatting assumptions.
         assert!(
-            r2.contains("GET x = 1") || r2.contains("GET x = LwwWrapper"),
+            r2.contains("GET = 1") || r2.contains("GET = LwwWrapper"),
             "unexpected GET response: {r2}"
         );
 

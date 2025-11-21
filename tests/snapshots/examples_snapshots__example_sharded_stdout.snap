@@ -7,8 +7,8 @@ expression: sanitize(&stdout)
    → shard 1 for 'user:2'
    → shard 1 for 'user:1'
    → shard 1 for 'user:2'
-→ PUT user:1 = OK
-→ PUT user:2 = OK
-→ GET user:1 = alice
-→ GET user:2 = bob
+→ PUT OK
+→ PUT OK
+→ GET = alice
+→ GET = bob
 ✅ Sharded local demo complete

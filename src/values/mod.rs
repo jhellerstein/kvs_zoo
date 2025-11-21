@@ -51,7 +51,6 @@
 
 pub mod causal;
 pub mod lww;
-pub mod vc_helpers;
 pub mod vector_clock;
 
 // Re-export main types for convenience

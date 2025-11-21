@@ -123,10 +123,10 @@ fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<LwwWrapper<String>>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
-        Op::Get("alpha".into()),
-        Op::Put("beta".into(), LwwWrapper::new("two".into())),
-        Op::Get("beta".into()),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
+        Op::Get("alpha".into(), None),
+        Op::Put("beta".into(), LwwWrapper::new("two".into()), None),
+        Op::Get("beta".into(), None),
     ]
 }
 
@@ -140,9 +140,9 @@ fn causal_ops() -> Vec<kvs_zoo::protocol::KVSOperation<CausalString>> {
     }
 
     vec![
-        Op::Put("alpha".into(), causal("client", "one")),
-        Op::Get("alpha".into()),
-        Op::Put("beta".into(), causal("client", "two")),
-        Op::Get("beta".into()),
+        Op::Put("alpha".into(), causal("client", "one"), None),
+        Op::Get("alpha".into(), None),
+        Op::Put("beta".into(), causal("client", "two"), None),
+        Op::Get("beta".into(), None),
     ]
 }

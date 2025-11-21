@@ -62,22 +62,27 @@ async fn test_local_kvs_service() {
 
     // Test operations
     let operations = vec![
-        KVSOperation::Put("key1".to_string(), LwwWrapper::new("value1".to_string())),
-        KVSOperation::Get("key1".to_string()),
+        KVSOperation::Put(
+            "key1".to_string(),
+            LwwWrapper::new("value1".to_string()),
+            None,
+        ),
+        KVSOperation::Get("key1".to_string(), None),
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("updated_value1".to_string()),
+            None,
         ),
-        KVSOperation::Get("key1".to_string()),
-        KVSOperation::Get("nonexistent".to_string()),
+        KVSOperation::Get("key1".to_string(), None),
+        KVSOperation::Get("nonexistent".to_string(), None),
     ];
 
     let expected_responses = [
-        Some("PUT key1 = OK".to_string()),
-        Some("GET key1 = value1".to_string()),
-        Some("PUT key1 = OK".to_string()),
-        Some("GET key1 = updated_value1".to_string()),
-        Some("GET nonexistent = NOT FOUND".to_string()),
+        Some("PUT OK".to_string()),
+        Some("GET = value1".to_string()),
+        Some("PUT OK".to_string()),
+        Some("GET = updated_value1".to_string()),
+        Some("GET = NOT FOUND".to_string()),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -137,10 +142,10 @@ async fn test_replicated_kvs_service() {
     let val2 = create_causal_string("node2", "value2");
 
     let operations = vec![
-        KVSOperation::Put("alpha".to_string(), val1),
-        KVSOperation::Put("alpha".to_string(), val2), // Concurrent write - should merge
-        KVSOperation::Get("alpha".to_string()),
-        KVSOperation::Get("nonexistent".to_string()),
+        KVSOperation::Put("alpha".to_string(), val1, None),
+        KVSOperation::Put("alpha".to_string(), val2, None), // Concurrent write - should merge
+        KVSOperation::Get("alpha".to_string(), None),
+        KVSOperation::Get("nonexistent".to_string(), None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -168,7 +173,11 @@ async fn test_replicated_kvs_service() {
                 );
                 println!("✅ Operation {}: Causal merge - {}", i, response);
             } else {
-                assert_eq!(response, "GET nonexistent = NOT FOUND");
+                assert!(
+                    response.contains("NOT FOUND"),
+                    "Expected NOT FOUND, got: {}",
+                    response
+                );
                 println!("✅ Operation {}: {}", i, response);
             }
         } else {
@@ -234,14 +243,16 @@ async fn test_sharded_kvs_service() {
         KVSOperation::Put(
             "shard_key_0".to_string(),
             LwwWrapper::new("value_0".to_string()),
+            None,
         ),
         KVSOperation::Put(
             "shard_key_1".to_string(),
             LwwWrapper::new("value_1".to_string()),
+            None,
         ),
-        KVSOperation::Get("shard_key_0".to_string()),
-        KVSOperation::Get("shard_key_1".to_string()),
-        KVSOperation::Get("nonexistent".to_string()),
+        KVSOperation::Get("shard_key_0".to_string(), None),
+        KVSOperation::Get("shard_key_1".to_string(), None),
+        KVSOperation::Get("nonexistent".to_string(), None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -259,28 +270,28 @@ async fn test_sharded_kvs_service() {
                         // Validate expected responses
                         match i {
                             0 => assert!(
-                                response.contains("PUT") && response.contains("shard_key_0"),
-                                "Expected PUT response for shard_key_0, got: {}",
+                                response.contains("PUT OK"),
+                                "Expected PUT OK response, got: {}",
                                 response
                             ),
                             1 => assert!(
-                                response.contains("PUT") && response.contains("shard_key_1"),
-                                "Expected PUT response for shard_key_1, got: {}",
+                                response.contains("PUT OK"),
+                                "Expected PUT OK response, got: {}",
                                 response
                             ),
                             2 => assert!(
-                                response.contains("shard_key_0") && response.contains("value_0"),
-                                "Expected shard_key_0 with value_0, got: {}",
+                                response.contains("value_0"),
+                                "Expected value_0, got: {}",
                                 response
                             ),
                             3 => assert!(
-                                response.contains("shard_key_1") && response.contains("value_1"),
-                                "Expected shard_key_1 with value_1, got: {}",
+                                response.contains("value_1"),
+                                "Expected value_1, got: {}",
                                 response
                             ),
                             4 => assert!(
-                                response.contains("GET nonexistent = NOT FOUND"),
-                                "Expected nonexistent key not found, got: {}",
+                                response.contains("NOT FOUND"),
+                                "Expected NOT FOUND, got: {}",
                                 response
                             ),
                             _ => {}
@@ -360,10 +371,10 @@ async fn test_sharded_replicated_kvs_service() {
     let val2 = create_causal_string("node2", "value_1");
 
     let operations = vec![
-        KVSOperation::Put("shard_key_0".to_string(), val1),
-        KVSOperation::Put("shard_key_1".to_string(), val2),
-        KVSOperation::Get("shard_key_0".to_string()),
-        KVSOperation::Get("shard_key_1".to_string()),
+        KVSOperation::Put("shard_key_0".to_string(), val1, None),
+        KVSOperation::Put("shard_key_1".to_string(), val2, None),
+        KVSOperation::Get("shard_key_0".to_string(), None),
+        KVSOperation::Get("shard_key_1".to_string(), None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {

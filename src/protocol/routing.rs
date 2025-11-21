@@ -22,12 +22,12 @@ pub trait HasSequence {
 // Impl for core KVS message types
 // -----------------------------------------------------------------------------
 
-use crate::protocol::{Envelope, KVSOperation};
+use crate::protocol::KVSOperation;
 
 impl<V> RoutingKey for KVSOperation<V> {
     fn routing_key(&self) -> &[u8] {
         match self {
-            KVSOperation::Put(k, _) | KVSOperation::Get(k) | KVSOperation::Delete(k) => {
+            KVSOperation::Put(k, _, _) | KVSOperation::Get(k, _) | KVSOperation::Delete(k, _) => {
                 k.as_bytes()
             }
         }
@@ -38,18 +38,5 @@ impl<V> HasSequence for KVSOperation<V> {
     type Seq = usize;
     fn sequence(&self) -> Option<Self::Seq> {
         None
-    }
-}
-
-impl<Meta, V> RoutingKey for Envelope<Meta, KVSOperation<V>> {
-    fn routing_key(&self) -> &[u8] {
-        self.operation.routing_key()
-    }
-}
-
-impl<V> HasSequence for Envelope<usize, KVSOperation<V>> {
-    type Seq = usize;
-    fn sequence(&self) -> Option<Self::Seq> {
-        Some(self.metadata)
     }
 }

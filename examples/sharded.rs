@@ -68,10 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Workload inline
     let ops = vec![
-        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into())),
-        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into())),
-        KVSOperation::Get("user:1".into()),
-        KVSOperation::Get("user:2".into()),
+        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into()), None),
+        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into()), None),
+        KVSOperation::Get("user:1".into(), None),
+        KVSOperation::Get("user:2".into(), None),
     ];
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {
@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _) | KVSOperation::Get(key) | KVSOperation::Delete(key) => {
+        KVSOperation::Put(key, _, _) | KVSOperation::Get(key, _) | KVSOperation::Delete(key, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

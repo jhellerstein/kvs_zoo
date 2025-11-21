@@ -93,16 +93,16 @@ where
     for &idx in order.iter() {
         let timed_op = &operations[idx];
         match &timed_op.op {
-            KVSOperation::Put(k, v) => {
+            KVSOperation::Put(k, v, _) => {
                 state.insert(k.clone(), v.clone());
             }
-            KVSOperation::Get(k) => {
+            KVSOperation::Get(k, _) => {
                 let expected = state.get(k).cloned();
                 if timed_op.response_value != expected {
                     return false;
                 }
             }
-            KVSOperation::Delete(k) => {
+            KVSOperation::Delete(k, _) => {
                 state.remove(k);
             }
         }
@@ -118,25 +118,25 @@ fn test_linearizable_sequential_operations() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 20,
             response_time: 30,
             response_value: Some("1".to_string()),
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "2".to_string()),
+            op: KVSOperation::Put("x".to_string(), "2".to_string(), Some(1)),
             invocation_time: 40,
             response_time: 50,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 60,
             response_time: 70,
             response_value: Some("2".to_string()),
@@ -157,25 +157,25 @@ fn test_linearizable_concurrent_operations() {
     // Two concurrent writes to different keys
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 20,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Put("y".to_string(), "2".to_string()),
+            op: KVSOperation::Put("y".to_string(), "2".to_string(), Some(2)),
             invocation_time: 5,
             response_time: 25,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 30,
             response_time: 40,
             response_value: Some("1".to_string()),
         },
         TimedOperation {
-            op: KVSOperation::Get("y".to_string()),
+            op: KVSOperation::Get("y".to_string(), Some(2)),
             invocation_time: 35,
             response_time: 45,
             response_value: Some("2".to_string()),
@@ -194,13 +194,13 @@ fn test_linearizable_read_your_writes() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 15, // Starts after write completes
             response_time: 25,
             response_value: Some("1".to_string()), // Must see the write
@@ -219,19 +219,19 @@ fn test_non_linearizable_stale_read() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "2".to_string()),
+            op: KVSOperation::Put("x".to_string(), "2".to_string(), Some(1)),
             invocation_time: 20,
             response_time: 30,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 40, // Starts after second write completes
             response_time: 50,
             response_value: Some("1".to_string()), // Returns first value - STALE!
@@ -252,20 +252,20 @@ fn test_linearizable_overlapping_writes() {
     let operations = vec![
         // Two overlapping writes
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 20,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "2".to_string()),
+            op: KVSOperation::Put("x".to_string(), "2".to_string(), Some(2)),
             invocation_time: 10, // Overlaps with first write
             response_time: 30,
             response_value: None,
         },
         // Read after both complete - should see one of them
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 40,
             response_time: 50,
             response_value: Some("2".to_string()), // Sees second write
@@ -284,37 +284,37 @@ fn test_linearizable_multiple_keys() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Put("y".to_string(), "2".to_string()),
+            op: KVSOperation::Put("y".to_string(), "2".to_string(), Some(2)),
             invocation_time: 5,
             response_time: 15,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 20,
             response_time: 30,
             response_value: Some("1".to_string()),
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "3".to_string()),
+            op: KVSOperation::Put("x".to_string(), "3".to_string(), Some(1)),
             invocation_time: 25,
             response_time: 35,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 40,
             response_time: 50,
             response_value: Some("3".to_string()),
         },
         TimedOperation {
-            op: KVSOperation::Get("y".to_string()),
+            op: KVSOperation::Get("y".to_string(), Some(2)),
             invocation_time: 45,
             response_time: 55,
             response_value: Some("2".to_string()),
@@ -333,19 +333,19 @@ fn test_linearizable_empty_read() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None, // Key doesn't exist
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 20,
             response_time: 30,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 40,
             response_time: 50,
             response_value: Some("1".to_string()), // Now key exists
@@ -369,21 +369,21 @@ fn test_paxos_provides_total_order() {
     let operations = vec![
         // Client 1 writes
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 15,
             response_value: None,
         },
         // Client 2 writes (overlapping)
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "2".to_string()),
+            op: KVSOperation::Put("x".to_string(), "2".to_string(), Some(2)),
             invocation_time: 5,
             response_time: 20,
             response_value: None,
         },
         // Client 3 reads - must see one of them in the total order
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(3)),
             invocation_time: 25,
             response_time: 35,
             response_value: Some("2".to_string()), // Paxos chose this order
@@ -403,25 +403,25 @@ fn test_non_linearizable_time_travel() {
 
     let operations = vec![
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 10,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "2".to_string()),
+            op: KVSOperation::Put("x".to_string(), "2".to_string(), Some(1)),
             invocation_time: 20,
             response_time: 30,
             response_value: None,
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 40,
             response_time: 50,
             response_value: Some("2".to_string()), // Sees second write
         },
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(1)),
             invocation_time: 60, // Later read
             response_time: 70,
             response_value: Some("1".to_string()), // But sees first write - TIME TRAVEL!
@@ -459,35 +459,35 @@ fn test_linearizability_with_paxos_semantics() {
     let operations = vec![
         // Client A: PUT x=1 (slot 0)
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "1".to_string()),
+            op: KVSOperation::Put("x".to_string(), "1".to_string(), Some(1)),
             invocation_time: 0,
             response_time: 20,
             response_value: None,
         },
         // Client B: PUT y=2 (slot 1) - concurrent with A
         TimedOperation {
-            op: KVSOperation::Put("y".to_string(), "2".to_string()),
+            op: KVSOperation::Put("y".to_string(), "2".to_string(), Some(2)),
             invocation_time: 5,
             response_time: 25,
             response_value: None,
         },
         // Client C: PUT x=3 (slot 2) - concurrent with A and B
         TimedOperation {
-            op: KVSOperation::Put("x".to_string(), "3".to_string()),
+            op: KVSOperation::Put("x".to_string(), "3".to_string(), Some(3)),
             invocation_time: 10,
             response_time: 30,
             response_value: None,
         },
         // Client D: GET x after all writes complete (should see slot 2's value)
         TimedOperation {
-            op: KVSOperation::Get("x".to_string()),
+            op: KVSOperation::Get("x".to_string(), Some(4)),
             invocation_time: 35,
             response_time: 45,
             response_value: Some("3".to_string()),
         },
         // Client E: GET y after all writes complete (should see slot 1's value)
         TimedOperation {
-            op: KVSOperation::Get("y".to_string()),
+            op: KVSOperation::Get("y".to_string(), Some(5)),
             invocation_time: 36,
             response_time: 46,
             response_value: Some("2".to_string()),

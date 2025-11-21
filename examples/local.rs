@@ -65,10 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use futures::{SinkExt, StreamExt};
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into())),
-        Op::Get("alpha".into()),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into())),
-        Op::Get("alpha".into()),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
+        Op::Get("alpha".into(), None),
+        Op::Put("alpha".into(), LwwWrapper::new("two".into()), None),
+        Op::Get("alpha".into(), None),
     ];
     for op in ops {
         input.send(op).await?;
