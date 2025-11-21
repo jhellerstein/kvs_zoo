@@ -120,10 +120,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo operations across shards
     let ops = vec![
-        KVSOperation::Put("user:alice".into(), LwwWrapper::new("A".into())),
-        KVSOperation::Put("user:bob".into(), LwwWrapper::new("B".into())),
-        KVSOperation::Get("user:alice".into()),
-        KVSOperation::Get("user:bob".into()),
+        KVSOperation::Put("user:alice".into(), LwwWrapper::new("A".into()), None),
+        KVSOperation::Put("user:bob".into(), LwwWrapper::new("B".into()), None),
+        KVSOperation::Get("user:alice".into(), None),
+        KVSOperation::Get("user:bob".into(), None),
     ];
     for op in ops {
         input.send(op).await?;

@@ -3,8 +3,8 @@ source: tests/examples_snapshots.rs
 expression: sanitize(&stdout)
 ---
 🚀 Replicated KVS Demo (gossip)
-→ PUT alpha = OK
-→ GET alpha = one
-→ PUT beta = OK
-→ GET beta = two
+→ PUT OK
+→ GET = one
+→ PUT OK
+→ GET = two
 ✅ Replicated (gossip) demo complete

@@ -128,10 +128,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo operations
     let ops = vec![
-        KVSOperation::Put("acct".into(), LwwWrapper::new("100".into())),
-        KVSOperation::Get("acct".into()),
-        KVSOperation::Put("acct".into(), LwwWrapper::new("200".into())),
-        KVSOperation::Get("acct".into()),
+        KVSOperation::Put("acct".into(), LwwWrapper::new("100".into()), None),
+        KVSOperation::Get("acct".into(), None),
+        KVSOperation::Put("acct".into(), LwwWrapper::new("200".into()), None),
+        KVSOperation::Get("acct".into(), None),
     ];
     for op in ops {
         input.send(op).await?;

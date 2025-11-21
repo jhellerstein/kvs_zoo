@@ -90,10 +90,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         CausalString::new(vc, v.to_string())
     }
     let ops = vec![
-        KVSOperation::Put("user:alice".into(), causal("a", "x")),
-        KVSOperation::Put("user:bob".into(), causal("b", "y")),
-        KVSOperation::Get("user:alice".into()),
-        KVSOperation::Get("user:bob".into()),
+        KVSOperation::Put("user:alice".into(), causal("a", "x"), None),
+        KVSOperation::Put("user:bob".into(), causal("b", "y"), None),
+        KVSOperation::Get("user:alice".into(), None),
+        KVSOperation::Get("user:bob".into(), None),
     ];
 
     for op in &ops {
@@ -115,7 +115,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<CausalString>, shard_count: usize) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _) | KVSOperation::Get(key) | KVSOperation::Delete(key) => {
+        KVSOperation::Put(key, _, _) | KVSOperation::Get(key, _) | KVSOperation::Delete(key, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shard_count,

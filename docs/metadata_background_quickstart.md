@@ -9,7 +9,7 @@ The current pipeline exposes two primary streams from `KVSCore`—**DataEvent** 
 | Stream      | Producer            | Typical Consumers                        | Notes |
 |-------------|---------------------|-------------------------------------------|-------|
 | `DataEvent` | `KVSCore::process`  | After pipeline (client responses, replication) | Read-side effects clients care about (Put/Delete/Get). |
-| `MetaEvent` | `KVSCore::process`  | Background stages, After stages that opt-in | Tombs, summaries, reclaim frontiers, compaction digests, and future metadata. |
+| `MetaEvent` | `KVSCore::process`  | Background stages, After stages that opt-in | Tombs, summaries, compaction digests, and future metadata. |
 
 `MetaEvent` variants are intentionally small. Phase 1 (current) includes:
 
@@ -17,7 +17,6 @@ The current pipeline exposes two primary streams from `KVSCore`—**DataEvent** 
 pub enum MetaEvent {
     Tomb { key: String },
     TombSummary { total_tombs: usize, last_tomb_key: Option<String> },
-    ReclaimFrontier { frontier_seq: Option<u64>, epoch: u64 },
     CompactionDigest { format: MetaDigestFormat, bytes: Vec<u8> },
 }
 ```
@@ -68,7 +67,6 @@ The old `after_storage::control` module, `CtrlMsg` enum, and associated property
 
 ## Next Steps
 
-- Build a concrete `ReclaimFrontier` consumer/background stage that reacts to the new meta events and coordinates tomb retention.
 - Extend property/integration tests to cover the digest payload contract (JSON schema) and any downstream consumers.
 - Document guidance for downstream systems on decoding digests (e.g. CLI example, metrics hook).
 

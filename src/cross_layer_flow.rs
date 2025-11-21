@@ -79,7 +79,7 @@ where
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
 
     // 5) before_storage (leaf): route replicated PUTs, apply without responses
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v)));
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, None)));
     let leaf_replicated_ops = leaf_before
         .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));
@@ -90,9 +90,12 @@ where
     } = crate::kvs_core::KVSCore::process_replicated_ops(leaf_replicated_ops);
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
-    let responses = local_responses
+    let combined_responses = local_responses
         .interleave(replicate_responses)
-        .assume_ordering(nondet!(/** client responses in leaf order */));
+        .assume_ordering::<TotalOrder>(nondet!(/** client responses in leaf order */));
+
+    // Convert KVSResponse to String for compatibility with existing code
+    let responses = combined_responses.map(q!(|response| response.to_string()));
 
     let data = local_data
         .interleave(replicate_data)

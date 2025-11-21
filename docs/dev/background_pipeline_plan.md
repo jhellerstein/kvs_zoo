@@ -7,7 +7,7 @@ This document replaces the sprawling restart plan with a concise snapshot that c
 ## Executive Summary
 
 - `KVSCore::process` now emits distinct `DataEvent<V>` and `MetaEvent` streams and every helper (`plumb_kvs_dataflow`, detail examples) forwards both.
-- `MetaEvent` covers `Tomb`, `TombSummary`, `ReclaimFrontier`, and JSON digests via `CompactionDigest`/`MetaDigestFormat::TombIndexJsonV1`.
+- `MetaEvent` covers `Tomb`, `TombSummary`, and JSON digests via `CompactionDigest`/`MetaDigestFormat::TombIndexJsonV1`.
 - `TombIndexBackground` attaches through `MetaBackground`, logs stats optionally, emits summaries, and produces the digest payload for downstream maintenance.
 - Integration coverage: `meta_stream_tests` exercise tomb emission, background plumb wiring, and digest surfacing; `cargo nextest run` passes (104 tests, 8 skipped).
 - User-facing docs refreshed (README, example READMEs, quickstart) to point at the metadata/background story.
@@ -28,10 +28,9 @@ This document replaces the sprawling restart plan with a concise snapshot that c
 
 ## Outstanding Follow-Ups
 
-1. **Reclaim frontier consumer** – implement a background stage (or storage hook) that reacts to `MetaEvent::ReclaimFrontier` and tunes tomb retention.
-2. **Digest consumers** – provide a reference reader (CLI/tooling) that decodes `MetaDigestFormat::TombIndexJsonV1` and surfaces metrics.
-3. **After-stage opt-in** – audit after-storage strategies for optional metadata handling (e.g., replication strategies emitting tomb awareness).
-4. **Property tests** – rebuild the old control-channel property coverage around the new metadata stream semantics once reclaim/digest consumers land.
+1. **Digest consumers** – provide a reference reader (CLI/tooling) that decodes `MetaDigestFormat::TombIndexJsonV1` and surfaces metrics.
+2. **After-stage opt-in** – audit after-storage strategies for optional metadata handling (e.g., replication strategies emitting tomb awareness).
+3. **Property tests** – rebuild the old control-channel property coverage around the new metadata stream semantics once digest consumers land.
 
 These items stay on the backlog but are not required for the current PR.
 

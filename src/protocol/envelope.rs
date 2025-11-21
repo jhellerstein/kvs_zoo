@@ -97,22 +97,28 @@ mod tests {
 
     #[test]
     fn envelope_construction() {
-        let env = Envelope::new(42usize, KVSOperation::Get::<String>("key".into()));
+        let env = Envelope::new(42usize, KVSOperation::Get::<String>("key".into(), None));
         assert_eq!(env.metadata, 42);
-        assert_eq!(env.operation, KVSOperation::Get("key".into()));
+        assert_eq!(env.operation, KVSOperation::Get("key".into(), None));
     }
 
     #[test]
     fn envelope_destructure() {
-        let env = Envelope::new(10usize, KVSOperation::Put::<String>("k".into(), "v".into()));
+        let env = Envelope::new(
+            10usize,
+            KVSOperation::Put::<String>("k".into(), "v".into(), None),
+        );
         let (slot, op) = env.into_parts();
         assert_eq!(slot, 10);
-        assert_eq!(op, KVSOperation::Put::<String>("k".into(), "v".into()));
+        assert_eq!(
+            op,
+            KVSOperation::Put::<String>("k".into(), "v".into(), None)
+        );
     }
 
     #[test]
     fn envelope_map() {
-        let env = Envelope::new(5usize, KVSOperation::Get::<String>("key".into()));
+        let env = Envelope::new(5usize, KVSOperation::Get::<String>("key".into(), None));
         let mapped = env.map_metadata(|s| s * 2);
         assert_eq!(mapped.metadata, 10);
     }

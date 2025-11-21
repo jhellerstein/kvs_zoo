@@ -7,8 +7,8 @@ expression: sanitize(&stdout)
    → shard 1 for 'user:bob'
    → shard 1 for 'user:alice'
    → shard 1 for 'user:bob'
-→ PUT user:alice = OK
-→ PUT user:bob = OK
-→ GET user:alice = x
-→ GET user:bob = y
+→ PUT OK
+→ PUT OK
+→ GET = x
+→ GET = y
 ✅ Sharded+Replicated demo complete

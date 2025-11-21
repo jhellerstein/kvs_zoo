@@ -10,7 +10,6 @@ error[E0277]: the trait bound `SimpleGossip<LwwWrapper<std::string::String>>: Le
              NoReplication
              Responder
              SequencedReplication<R>
-             TombstoneCleanup
    = note: required for `kvs_zoo::kvs_layer::KVSNode<LeafLayer, (), SimpleGossip<LwwWrapper<std::string::String>>>` to implement `KVSSpec<LwwWrapper<std::string::String>>`
    = help: see issue #48214
 
@@ -26,7 +25,6 @@ error[E0277]: the trait bound `SimpleGossip<LwwWrapper<std::string::String>>: Le
              NoReplication
              Responder
              SequencedReplication<R>
-             TombstoneCleanup
    = note: required for `kvs_zoo::kvs_layer::KVSNode<LeafLayer, (), SimpleGossip<LwwWrapper<std::string::String>>>` to implement `KVSSpec<LwwWrapper<std::string::String>>`
 note: required by a bound in `_assert_spec`
   --> tests/compile_fail/leaf_requires_leafcompatible.rs:10:67

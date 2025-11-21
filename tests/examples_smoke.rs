@@ -67,12 +67,6 @@ fn example_sharded_replicated_runs() {
 
 #[ignore]
 #[test]
-fn example_replicated_with_tombstone_runs() {
-    run_example("replicated_with_tombstone", &[]);
-}
-
-#[ignore]
-#[test]
 fn example_three_level_recursive_runs() {
     run_example("three_level_recursive", &[]);
 }

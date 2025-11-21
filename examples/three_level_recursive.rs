@@ -2,7 +2,7 @@
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::{cleanup::TombstoneCleanup, replication::SimpleGossip};
+use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
@@ -25,7 +25,7 @@ type GeoKVS = KVSCluster<
         Datacenter,
         ShardedRouter,
         SimpleGossip<LwwWrapper<String>>,
-        KVSCluster<Node, SingleNodeRouter, TombstoneCleanup, ()>,
+        KVSCluster<Node, SingleNodeRouter, (), ()>,
     >,
 >;
 
@@ -54,13 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         KVSCluster::new(
             ShardedRouter::new(3),       // 3 datacenters per region
             SimpleGossip::new(250usize), // intra-region gossip among datacenters
-            KVSCluster::new(
-                SingleNodeRouter::new(),
-                TombstoneCleanup::new(
-                    kvs_zoo::after_storage::cleanup::TombstoneCleanupConfig::default(),
-                ), // local cleanup config
-                (),
-            ),
+            KVSCluster::new(SingleNodeRouter::new(), (), ()),
         ),
     );
 
@@ -106,10 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo workload
     let ops = vec![
-        KVSOperation::Put("acct:alice".into(), LwwWrapper::new("1".into())),
-        KVSOperation::Put("acct:bob".into(), LwwWrapper::new("2".into())),
-        KVSOperation::Get("acct:alice".into()),
-        KVSOperation::Get("acct:bob".into()),
+        KVSOperation::Put("acct:alice".into(), LwwWrapper::new("1".into()), None),
+        KVSOperation::Put("acct:bob".into(), LwwWrapper::new("2".into()), None),
+        KVSOperation::Get("acct:alice".into(), None),
+        KVSOperation::Get("acct:bob".into(), None),
     ];
     for op in ops {
         input.send(op).await?;

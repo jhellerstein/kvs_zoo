@@ -39,34 +39,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let initial_ops = operations_stream
         .entries()
-        .map(q!(|(_client_id, op)| op))
+        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-        nondet!(/** client op stream */),
-    );
+            nondet!(/** client op stream */),
+        );
 
     // Route each op by hashing its key to one of 3 shards
     let routed_ops = initial_ops
         .map(q!(|op| {
             match op {
-                KVSOperation::Put(k, v) => {
+                KVSOperation::Put(k, v, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw(idx),
-                        KVSOperation::Put(k, v),
+                        KVSOperation::Put(k, v, cid),
                     )
                 }
-                KVSOperation::Get(k) => {
+                KVSOperation::Get(k, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw(idx),
-                        KVSOperation::Get(k),
+                        KVSOperation::Get(k, cid),
                     )
                 }
-                KVSOperation::Delete(k) => {
+                KVSOperation::Delete(k, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw(idx),
-                        KVSOperation::Delete(k),
+                        KVSOperation::Delete(k, cid),
                     )
                 }
             }
@@ -95,7 +95,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
-        .map(q!(|(_member_id, response)| (0u64, response)))
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
         .into_keyed();
     complete_sink.complete(to_complete);
 
@@ -124,10 +126,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run demo operations
     let ops = vec![
-        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into())),
-        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into())),
-        KVSOperation::Get("user:1".into()),
-        KVSOperation::Get("user:2".into()),
+        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into()), None),
+        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into()), None),
+        KVSOperation::Get("user:1".into(), None),
+        KVSOperation::Get("user:2".into(), None),
     ];
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {
@@ -148,7 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _) | KVSOperation::Get(key) | KVSOperation::Delete(key) => {
+        KVSOperation::Put(key, _, _) | KVSOperation::Get(key, _) | KVSOperation::Delete(key, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

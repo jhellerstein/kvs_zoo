@@ -37,9 +37,9 @@ where
 {
     let cloned = operations.clone();
     let deltas = operations.filter_map(q!(|op| match op {
-        crate::protocol::KVSOperation::Put(k, v) => Some((k, v)),
-        crate::protocol::KVSOperation::Get(_) => None,
-        crate::protocol::KVSOperation::Delete(_) => None,
+        crate::protocol::KVSOperation::Put(k, v, _) => Some((k, v)),
+        crate::protocol::KVSOperation::Get(_, _) => None,
+        crate::protocol::KVSOperation::Delete(_, _) => None,
     }));
     (cloned, deltas)
 }
@@ -91,7 +91,7 @@ where
     // Build initial operation stream from external input
     let initial_ops = operations_stream
         .entries()
-        .map(q!(|(_client_id, op)| op))
+        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
         .assume_ordering(nondet!(/** client op stream */));
     // Downward pass via before_storage chain (KVSPlumb)
     let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
@@ -121,7 +121,7 @@ where
 
     let combined_responses = client_responses
         .interleave(replica_responses)
-        .assume_ordering(nondet!(/** combined client+replica responses */));
+        .assume_ordering::<TotalOrder>(nondet!(/** combined client+replica responses */));
 
     let data_events = client_data_events
         .interleave(replica_data_events)
@@ -130,33 +130,21 @@ where
         .interleave(replica_meta_stream)
         .assume_ordering::<TotalOrder>(nondet!(/** combined meta events */));
 
-    // Upward after_storage pass: traverse replication/responders chain from leaf to root.
-    let final_responses = kvs.after_responses(&layers, combined_responses);
-
     // Background plumbing (returns streams for potential chaining, sink locally for now)
     let (bg_data, bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
     bg_data.for_each(q!(|_data| ()));
     bg_meta.for_each(q!(|_meta| ()));
 
-    // Send responses back to proxy (optionally stamp member id)
-    let proxy_responses = final_responses.send_bincode(proxy);
-    let stamp_member = std::env::var("KVS_STAMP_MEMBER")
-        .map(|v| v != "0")
-        .unwrap_or(false);
-    let to_complete = if stamp_member {
-        proxy_responses
-            .entries()
-            .map(q!(|(member_id, response)| (
-                0u64,
-                format!("[{}] {}", member_id, response)
-            )))
-            .into_keyed()
-    } else {
-        proxy_responses
-            .entries()
-            .map(q!(|(_member_id, response)| (0u64, response)))
-            .into_keyed()
-    };
+    // Send KVSResponse structs to proxy (they contain client_id)
+    let proxy_responses = combined_responses.send_bincode(proxy);
+
+    // Extract client IDs and format responses for completion
+    let to_complete = proxy_responses
+        .entries()
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
+        .into_keyed();
 
     // Complete the bidirectional connection
     complete_sink.complete(to_complete);

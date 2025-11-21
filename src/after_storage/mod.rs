@@ -1,10 +1,9 @@
-//! After-storage stages (replication, cleanup, responders)
+//! After-storage stages (replication, responders)
 
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
-pub mod cleanup;
 pub mod meta;
 pub mod replication;
 pub mod responders;
@@ -35,7 +34,7 @@ pub trait LeafCompatible: ClusterCommunication {}
 /// Compose two maintenance strategies so they can run concurrently.
 ///
 /// This allows, for example, running a replication strategy (with its own
-/// tick/period) alongside a tombstone cleanup strategy (with a different
+/// tick/period) alongside an independent maintenance strategy (with a different
 /// tick/period). Each strategy can schedule itself independently; their
 /// emitted update streams are merged.
 #[derive(Clone, Debug)]
