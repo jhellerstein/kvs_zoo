@@ -9,18 +9,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::kvs_layer::ReplicationPlumb;
 
-type OperationStream<V, L> = Stream<crate::protocol::KVSOperation<V>, L, Unbounded>;
-type PutDeltaStream<V, L> = Stream<(String, V), L, Unbounded>;
+type OperationStream<K, V, L> = Stream<crate::protocol::KVSOperation<K, V>, L, Unbounded>;
+type PutDeltaStream<K, V, L> = Stream<(K, V), L, Unbounded>;
 
 // Traits are required in bounds; no direct uses here.
 
 /// Extract (key, value) deltas for each applied PUT while also returning
 /// the original operation sequence unchanged. Lightweight replacement for
 /// the former KVSCore::process_with_deltas helper.
-pub fn extract_put_deltas<'a, V, L>(
-    operations: OperationStream<V, L>,
-) -> (OperationStream<V, L>, PutDeltaStream<V, L>)
+pub fn extract_put_deltas<'a, K, V, L>(
+    operations: OperationStream<K, V, L>,
+) -> (OperationStream<K, V, L>, PutDeltaStream<K, V, L>)
 where
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: Clone
         + Serialize
         + for<'de> Deserialize<'de>
@@ -52,16 +62,26 @@ where
 ///
 /// Users then assign hosts to the returned cluster handles using standard Hydro
 /// deployment APIs (`.with_cluster(layers.get::<Name>(), ...)`).
-pub fn plumb_kvs_dataflow<'a, V, K>(
+pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
     flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
     mut kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
-    ExternalBincodeBidi<KVSOperation<V>, String, hydro_lang::location::external_process::Many>,
+    ExternalBincodeBidi<KVSOperation<KeyType, V>, String, hydro_lang::location::external_process::Many>,
 )
 where
+    KeyType: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: Clone
         + Serialize
         + for<'de> Deserialize<'de>
@@ -75,10 +95,10 @@ where
         + Sync
         + 'static,
     K: crate::kvs_layer::KVSSpec<V>
-        + crate::kvs_layer::KVSPlumb<V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V>
         + crate::kvs_layer::AfterPlumb<V>
-        + ReplicationPlumb<V>
-        + crate::background::BackgroundPlumb<V>,
+        + ReplicationPlumb<KeyType, V>
+        + crate::background::BackgroundPlumb<KeyType, V>,
 {
     // Create all clusters for all layers
     let mut layers = crate::kvs_layer::KVSClusters::new();
@@ -86,7 +106,7 @@ where
 
     // Create bidirectional external connection
     let (bidi_port, operations_stream, _membership, complete_sink) =
-        proxy.bidi_external_many_bincode::<_, KVSOperation<V>, String>(client_external);
+        proxy.bidi_external_many_bincode::<_, KVSOperation<KeyType, V>, String>(client_external);
 
     // Build initial operation stream from external input
     let initial_ops = operations_stream
@@ -108,7 +128,7 @@ where
         responses: client_responses,
         data: client_data_events,
         meta: client_meta_stream,
-    } = crate::kvs_core::KVSCore::process(client_ops);
+    } = crate::kvs_core::KVSCore::process_hashmap::<KeyType, V, _>(client_ops);
 
     // Replicated operations flow through the same core path.
     // Replicated ops have client_id=None, so they won't generate responses.
@@ -116,7 +136,7 @@ where
         responses: replica_responses,
         data: replica_data_events,
         meta: replica_meta_stream,
-    } = crate::kvs_core::KVSCore::process(
+    } = crate::kvs_core::KVSCore::process_hashmap::<KeyType, V, _>(
         replication_ops.assume_ordering::<TotalOrder>(nondet!(/** replicated op order */)),
     );
 

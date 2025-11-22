@@ -3,13 +3,14 @@
 
 use serde::{Deserialize, Serialize};
 
+
 /// DataEvent captures the observable outcome of an operation.
 /// (Future: add Scan variants.)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DataEvent<V> {
-    Put { key: String, value: V },
-    Delete { key: String },
-    Get { key: String, value: Option<V> },
+pub enum DataEvent<K, V> {
+    Put { key: K, value: V },
+    Delete { key: K },
+    Get { key: K, value: Option<V> },
 }
 
 /// Wire format for background digests.
@@ -21,13 +22,13 @@ pub enum MetaDigestFormat {
 
 /// MetaEvent carries maintenance/system metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MetaEvent {
+pub enum MetaEvent<K> {
     Tomb {
-        key: String,
+        key: K,
     },
     TombSummary {
         total_tombs: usize,
-        last_tomb_key: Option<String>,
+        last_tomb_key: Option<K>,
     },
     CompactionDigest {
         format: MetaDigestFormat,
@@ -37,49 +38,49 @@ pub enum MetaEvent {
 }
 
 /// A consumer of DataEvents (After or Background pipeline stage).
-pub trait DataConsumer<D> {
-    fn on_data(&mut self, ev: &D);
+pub trait DataConsumer<K, V> {
+    fn on_data(&mut self, ev: &DataEvent<K, V>);
 }
 
 /// A consumer of MetaEvents.
-pub trait MetaConsumer<M> {
-    fn on_meta(&mut self, meta: &M);
+pub trait MetaConsumer<K> {
+    fn on_meta(&mut self, meta: &MetaEvent<K>);
 }
 
-impl<D> DataConsumer<D> for () {
-    fn on_data(&mut self, _ev: &D) {}
+impl<K, V> DataConsumer<K, V> for () {
+    fn on_data(&mut self, _ev: &DataEvent<K, V>) {}
 }
 
-impl<M> MetaConsumer<M> for () {
-    fn on_meta(&mut self, _meta: &M) {}
+impl<K> MetaConsumer<K> for () {
+    fn on_meta(&mut self, _meta: &MetaEvent<K>) {}
 }
 
 /// Convenience trait for stages that consume both.
-pub trait DataMetaConsumer<D, M>: DataConsumer<D> + MetaConsumer<M> {}
-impl<T, D, M> DataMetaConsumer<D, M> for T where T: DataConsumer<D> + MetaConsumer<M> {}
+pub trait DataMetaConsumer<K, V>: DataConsumer<K, V> + MetaConsumer<K> {}
+impl<T, K, V> DataMetaConsumer<K, V> for T where T: DataConsumer<K, V> + MetaConsumer<K> {}
 
 /// Phase 0 Tee skeleton: duplicates DataEvent into optional background consumer.
 /// This is intentionally minimal — no cloning beyond reference passing.
-pub struct TeeAfter<D, Next, BgData> {
+pub struct TeeAfter<K, V, Next, BgData> {
     pub next: Next,
     pub bg_data: Option<BgData>,
-    _pd: std::marker::PhantomData<D>,
+    _phantom: std::marker::PhantomData<(K, V)>,
 }
 
-impl<D, Next, BgData> TeeAfter<D, Next, BgData>
+impl<K, V, Next, BgData> TeeAfter<K, V, Next, BgData>
 where
-    Next: DataConsumer<D>,
-    BgData: DataConsumer<D>,
+    Next: DataConsumer<K, V>,
+    BgData: DataConsumer<K, V>,
 {
     pub fn new(next: Next, bg_data: Option<BgData>) -> Self {
         Self {
             next,
             bg_data,
-            _pd: std::marker::PhantomData,
+            _phantom: std::marker::PhantomData,
         }
     }
 
-    pub fn on_data(&mut self, ev: &D) {
+    pub fn on_data(&mut self, ev: &DataEvent<K, V>) {
         self.next.on_data(ev);
         if let Some(bg) = &mut self.bg_data {
             bg.on_data(ev);
@@ -88,26 +89,26 @@ where
 }
 
 /// Phase 0 Tee for MetaEvent stream so background stages can observe metadata too.
-pub struct MetaTeeAfter<M, Next, BgMeta> {
+pub struct MetaTeeAfter<K, Next, BgMeta> {
     pub next: Next,
     pub bg_meta: Option<BgMeta>,
-    _pm: std::marker::PhantomData<M>,
+    _phantom: std::marker::PhantomData<K>,
 }
 
-impl<M, Next, BgMeta> MetaTeeAfter<M, Next, BgMeta>
+impl<K, Next, BgMeta> MetaTeeAfter<K, Next, BgMeta>
 where
-    Next: MetaConsumer<M>,
-    BgMeta: MetaConsumer<M>,
+    Next: MetaConsumer<K>,
+    BgMeta: MetaConsumer<K>,
 {
     pub fn new(next: Next, bg_meta: Option<BgMeta>) -> Self {
         Self {
             next,
             bg_meta,
-            _pm: std::marker::PhantomData,
+            _phantom: std::marker::PhantomData,
         }
     }
 
-    pub fn on_meta(&mut self, meta: &M) {
+    pub fn on_meta(&mut self, meta: &MetaEvent<K>) {
         self.next.on_meta(meta);
         if let Some(bg) = &mut self.bg_meta {
             bg.on_meta(meta);
@@ -117,12 +118,12 @@ where
 
 /// Simple dispatcher (future enhancement) — currently unused.
 #[allow(dead_code)]
-pub struct EventDispatcher<D, M> {
-    data_consumers: Vec<Box<dyn DataConsumer<D>>>,
-    meta_consumers: Vec<Box<dyn MetaConsumer<M>>>,
+pub struct EventDispatcher<K, V> {
+    data_consumers: Vec<Box<dyn DataConsumer<K, V>>>,
+    meta_consumers: Vec<Box<dyn MetaConsumer<K>>>,
 }
 
-impl<D, M> Default for EventDispatcher<D, M> {
+impl<K, V> Default for EventDispatcher<K, V> {
     fn default() -> Self {
         Self {
             data_consumers: Vec::new(),
@@ -131,9 +132,9 @@ impl<D, M> Default for EventDispatcher<D, M> {
     }
 }
 
-impl<D: Clone, M: Clone> EventDispatcher<D, M> {
+impl<K: Clone, V: Clone> EventDispatcher<K, V> {
     #[allow(dead_code)]
-    pub fn emit_data(&mut self, ev: D) {
+    pub fn emit_data(&mut self, ev: DataEvent<K, V>) {
         if self.data_consumers.is_empty() {
             return;
         }
@@ -142,7 +143,7 @@ impl<D: Clone, M: Clone> EventDispatcher<D, M> {
         }
     }
     #[allow(dead_code)]
-    pub fn emit_meta(&mut self, meta: M) {
+    pub fn emit_meta(&mut self, meta: MetaEvent<K>) {
         if self.meta_consumers.is_empty() {
             return;
         }

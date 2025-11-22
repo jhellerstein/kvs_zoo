@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
             &client_external,
         );
 
@@ -51,21 +51,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 KVSOperation::Put(k, v, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
-                        hydro_lang::location::MemberId::from_raw(idx),
+                        hydro_lang::location::MemberId::from_raw_id(idx),
                         KVSOperation::Put(k, v, cid),
                     )
                 }
                 KVSOperation::Get(k, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
-                        hydro_lang::location::MemberId::from_raw(idx),
+                        hydro_lang::location::MemberId::from_raw_id(idx),
                         KVSOperation::Get(k, cid),
                     )
                 }
                 KVSOperation::Delete(k, cid) => {
                     let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
-                        hydro_lang::location::MemberId::from_raw(idx),
+                        hydro_lang::location::MemberId::from_raw_id(idx),
                         KVSOperation::Delete(k, cid),
                     )
                 }
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process(ordered_ops);
+    } = KVSCore::process_hashmap::<_, _, _>(ordered_ops);
     data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
     meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
 
@@ -148,7 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn shard_info(op: &KVSOperation<LwwWrapper<String>>, shards: u64) -> Option<String> {
+fn shard_info(op: &KVSOperation<String, LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
         KVSOperation::Put(key, _, _) | KVSOperation::Get(key, _) | KVSOperation::Delete(key, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(

@@ -20,23 +20,33 @@ use crate::protocol::KVSOperation;
 /// Composite output from the cross-layer helper so background stages can
 /// subscribe to the same data/meta feed without relying on legacy control
 /// helpers.
-pub struct CrossLayerFlowResult<'a, V> {
+pub struct CrossLayerFlowResult<'a, K, V> {
     pub responses: Stream<String, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
-    pub data: Stream<DataEvent<V>, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
-    pub meta: Stream<MetaEvent, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
+    pub data: Stream<DataEvent<K, V>, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
+    pub meta: Stream<MetaEvent<K>, Cluster<'a, KVSNode>, Unbounded, TotalOrder>,
 }
 
 /// Pipeline over arbitrary input items convertible into KVSOperation
 /// Works across ClusterKVS<ClusterKVS<...>> layers as well as
 /// ClusterKVS<KVSNode> (which is two different kinds of layers)
-pub fn cross_layer_flow<'a, V, DParent, After, DLeaf, In>(
+pub fn cross_layer_flow<'a, K, V, DParent, After, DLeaf, In>(
     parent_cluster: &Cluster<'a, KVSNode>,
     parent_before: &DParent,
     parent_after: &After,
     leaf_before: &DLeaf,
     inputs: Stream<In, Process<'a, ()>, Unbounded>,
-) -> CrossLayerFlowResult<'a, V>
+) -> CrossLayerFlowResult<'a, K, V>
 where
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: Clone
         + Serialize
         + for<'de> Deserialize<'de>
@@ -49,10 +59,10 @@ where
         + Send
         + Sync
         + 'static,
-    DParent: Before<V> + Clone,
-    After: ReplicationStrategy<V> + Clone,
-    DLeaf: Before<V> + Clone,
-    In: Into<KVSOperation<V>> + 'static,
+    DParent: Before<K, V> + Clone,
+    After: ReplicationStrategy<K, V> + Clone,
+    DLeaf: Before<K, V> + Clone,
+    In: Into<KVSOperation<K, V>> + 'static,
 {
     // Convert inputs to bare operations
     let operations = inputs.map(q!(|x| x.into()));
@@ -72,7 +82,7 @@ where
         responses: local_responses,
         data: local_data,
         meta: local_meta,
-    } = crate::kvs_core::KVSCore::process(leaf_ops_ordered.clone());
+    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(leaf_ops_ordered.clone());
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops_ordered);
 
     // 4) after_storage (parent): replicate applied PUT deltas
@@ -87,7 +97,7 @@ where
         responses: replicate_responses,
         data: replicate_data,
         meta: replicate_meta,
-    } = crate::kvs_core::KVSCore::process(leaf_replicated_ops);
+    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(leaf_replicated_ops);
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     let combined_responses = local_responses

@@ -21,7 +21,7 @@ enum LatticeKind {
 struct Replica;
 
 // KVS architecture type: single layer with RoundRobin + Gossip
-type ReplicatedKVS<V> = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<V>, ()>;
+type ReplicatedKVS<V> = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<String, V>, ()>;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run_example<V>(
     args: &Args,
-    ops: Vec<kvs_zoo::protocol::KVSOperation<V>>,
+    ops: Vec<kvs_zoo::protocol::KVSOperation<String, V>>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     V: Clone
@@ -76,7 +76,7 @@ where
     kvs_spec.after = SimpleGossip::new(100usize); // 100ms gossip interval
 
     // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<V, _>(&proxy, &client_external, &flow, kvs_spec);
+    let (layers, port) = plumb_kvs_dataflow::<String, V, _>(&proxy, &client_external, &flow, kvs_spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
@@ -119,7 +119,7 @@ where
     Ok(())
 }
 
-fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<LwwWrapper<String>>> {
+fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
@@ -130,7 +130,7 @@ fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<LwwWrapper<String>>> {
     ]
 }
 
-fn causal_ops() -> Vec<kvs_zoo::protocol::KVSOperation<CausalString>> {
+fn causal_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, CausalString>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     fn causal(node: &str, value: &str) -> CausalString {

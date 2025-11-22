@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
             &client_external,
         );
 
@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routed_ops = initial_ops
         .map(q!(|op| (
-            hydro_lang::location::MemberId::from_raw(0u32),
+            hydro_lang::location::MemberId::from_raw_id(0u32),
             op
         )))
         .into_keyed()
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_ops_clone, local_put_deltas) = extract_put_deltas(ordered_ops.clone());
 
     // Use the After-stage gossip strategy to replicate PUT deltas to peers
-    let gossip = SimpleGossip::<LwwWrapper<String>>::default();
+    let gossip = SimpleGossip::<String, LwwWrapper<String>>::default();
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
     // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process(all_ops);
+    } = KVSCore::process_hashmap::<_, _, _>(all_ops);
     data.for_each(q!(|event| println!("[after] data {:?}", event)));
     meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
 

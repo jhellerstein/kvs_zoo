@@ -15,18 +15,19 @@ impl SingleNodeRouter {
     }
 }
 
-impl<V> Before<V> for SingleNodeRouter {
+impl<K, V> Before<K, V> for SingleNodeRouter {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -35,16 +36,17 @@ impl<V> Before<V> for SingleNodeRouter {
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()

@@ -71,13 +71,13 @@ impl From<usize> for SimpleGossipConfig {
 
 /// Simple gossip replication
 #[derive(Clone, Debug)]
-pub struct SimpleGossip<V> {
+pub struct SimpleGossip<K, V> {
     #[allow(dead_code)]
     config: SimpleGossipConfig,
-    _phantom: std::marker::PhantomData<V>,
+    _phantom: std::marker::PhantomData<(K, V)>,
 }
 
-impl<V> Default for SimpleGossip<V> {
+impl<K, V> Default for SimpleGossip<K, V> {
     fn default() -> Self {
         Self {
             config: SimpleGossipConfig::default(),
@@ -86,7 +86,7 @@ impl<V> Default for SimpleGossip<V> {
     }
 }
 
-impl<V> SimpleGossip<V> {
+impl<K, V> SimpleGossip<K, V> {
     /// Create a new epidemic gossip strategy with custom configuration
     /// Accepts either an `SimpleGossipConfig` or any value that can convert into one (e.g., `usize` milliseconds)
     pub fn new<C>(config: C) -> Self
@@ -110,8 +110,19 @@ impl<V> SimpleGossip<V> {
     }
 }
 
-impl<V> ReplicationStrategy<V> for SimpleGossip<V>
+impl<K, V> ReplicationStrategy<K, V> for SimpleGossip<K, V>
 where
+    K: Clone
+        + std::fmt::Debug
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + PartialEq
+        + Eq
+        + Default
+        + std::hash::Hash,
     V: Clone
         + std::fmt::Debug
         + Serialize
@@ -128,8 +139,8 @@ where
     fn replicate_updates<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
         let cluster_members =
             Self::get_cluster_members(cluster).assume_retries(nondet!(/** member list OK */));
 
@@ -174,14 +185,25 @@ where
     }
 }
 
-impl<V> ClusterCommunication for SimpleGossip<V> {
+impl<K, V> ClusterCommunication for SimpleGossip<K, V> {
     fn requires_cluster_scope() -> bool {
         true
     }
 }
 
-impl<V> SimpleGossip<V>
+impl<K, V> SimpleGossip<K, V>
 where
+    K: Clone
+        + std::fmt::Debug
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + PartialEq
+        + Eq
+        + Default
+        + std::hash::Hash,
     V: Clone
         + std::fmt::Debug
         + Serialize
@@ -199,8 +221,8 @@ where
     pub fn handle_gossip_simple<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         let cluster_members = Self::get_cluster_members(cluster);
 
         // Immediate forwarding to all peers for reliable convergence
@@ -223,7 +245,7 @@ where
 }
 
 // Upward pass hook: Simple gossip doesn't modify responses by default
-impl<V> AfterResponses for SimpleGossip<V> {
+impl<K, V> AfterResponses for SimpleGossip<K, V> {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
@@ -239,14 +261,14 @@ mod tests {
 
     #[test]
     fn test_epidemic_gossip_creation() {
-        let _gossip = SimpleGossip::<String>::default();
-        let _gossip_default = SimpleGossip::<String>::default();
+        let _gossip = SimpleGossip::<String, String>::default();
+        let _gossip_default = SimpleGossip::<String, String>::default();
     }
 
     #[test]
     fn test_epidemic_gossip_with_config() {
         let config = SimpleGossipConfig::small_cluster();
-        let _gossip = SimpleGossip::<String>::new(config);
+        let _gossip = SimpleGossip::<String, String>::new(config);
     }
 
     #[test]
@@ -258,8 +280,9 @@ mod tests {
 
     #[test]
     fn test_epidemic_gossip_implements_replication_strategy() {
-        fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(SimpleGossip::<
+        fn _test_replication_strategy<K, V>(_strategy: impl ReplicationStrategy<K, V>) {}
+        _test_replication_strategy::<String, crate::values::CausalString>(SimpleGossip::<
+            String,
             crate::values::CausalString,
         >::default());
     }

@@ -58,8 +58,9 @@ impl AfterResponses for Responder {
 // Allow Responder to serve as a leaf "maintenance" component by also implementing
 // the replication trait as a no-op. This satisfies existing generic bounds while
 // we evolve the separation between replication and after-hooks.
-impl<V> ReplicationStrategy<V> for Responder
+impl<K, V> ReplicationStrategy<K, V> for Responder
 where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
     fn is_active() -> bool {
@@ -69,8 +70,8 @@ where
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         // No replication at leaf after-hook layer
         local_data
     }
@@ -78,8 +79,8 @@ where
     fn replicate_slotted_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
         // Preserve slots; no additional replication
         local_slotted_data
     }

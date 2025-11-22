@@ -34,8 +34,8 @@ impl<V, Name, B, A, Child, Bg> KVSSpec<V> for crate::kvs_layer::KVSCluster<Name,
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-    B: Before<V> + Clone,
-    A: ReplicationStrategy<V> + Clone,
+    B: Before<String, V> + Clone,
+    A: ReplicationStrategy<String, V> + Clone,
     Child: KVSSpec<V>,
 {
     fn create_clusters<'a>(
@@ -60,8 +60,8 @@ impl<V, Name, B, A> KVSSpec<V> for crate::kvs_layer::KVSNode<Name, B, A>
 where
     Name: 'static,
     V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
-    B: Before<V> + Clone,
-    A: ReplicationStrategy<V> + Clone + LeafCompatible,
+    B: Before<String, V> + Clone,
+    A: ReplicationStrategy<String, V> + Clone + LeafCompatible,
 {
     fn create_clusters<'a>(
         &self,

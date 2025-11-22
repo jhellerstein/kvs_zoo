@@ -28,7 +28,7 @@ type ShardedReplicatedKVS = KVSCluster<
     Shard,
     ShardedRouter,
     (),
-    KVSCluster<Replica, RoundRobinRouter, BroadcastReplication<CausalString>, ()>,
+    KVSCluster<Replica, RoundRobinRouter, BroadcastReplication<String, CausalString>, ()>,
 >;
 
 #[tokio::main]
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn shard_info(op: &KVSOperation<CausalString>, shard_count: usize) -> Option<String> {
+fn shard_info(op: &KVSOperation<String, CausalString>, shard_count: usize) -> Option<String> {
     match op {
         KVSOperation::Put(key, _, _) | KVSOperation::Get(key, _) | KVSOperation::Delete(key, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(

@@ -14,36 +14,39 @@ pub mod routing;
 /* ------------------------------------------------------------------------- */
 
 /// Before-stage component for routing operations from proxy to cluster.
-pub trait Before<V> {
+pub trait Before<K, V> {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
+        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static;
 
     /// Hook for dispatchers that need to inspect sibling layers before routing.
     /// Most implementations ignore the additional cluster handles and fall back to `dispatch_from_process`.
     fn dispatch_from_process_with_layers<'a, Name: 'static>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
     {
         self.dispatch_from_process(operations, target_cluster)
     }
 
     fn dispatch_slotted_from_process<'a>(
         &self,
-        slotted_operations: Stream<(usize, KVSOperation<V>), Process<'a, ()>, Unbounded>,
+        slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<(usize, KVSOperation<K, V>), Cluster<'a, KVSNode>, Unbounded>
     where
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
     {
         let bare_ops = slotted_operations.map(q!(|(_slot, op)| op));
         let routed = self.dispatch_from_process(bare_ops, target_cluster);
@@ -52,16 +55,17 @@ pub trait Before<V> {
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -74,12 +78,13 @@ pub trait Before<V> {
     /// Default implementations fall back to `dispatch_from_cluster`.
     fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         self.dispatch_from_cluster(operations, source_cluster, target_cluster)
@@ -98,18 +103,19 @@ pub trait Before<V> {
 // (Trait renamed to `Before`; legacy alias removed.)
 
 /// Unit (No‑Op) Before-stage for leaf nodes
-impl<V> Before<V> for () {
+impl<K, V> Before<K, V> for () {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -118,16 +124,17 @@ impl<V> Before<V> for () {
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -146,13 +153,14 @@ impl IdentityDispatch {
     }
 }
 
-impl<V> Before<V> for IdentityDispatch {
+impl<K, V> Before<K, V> for IdentityDispatch {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations.broadcast_bincode(target_cluster, nondet!(/** identity */))
@@ -160,11 +168,12 @@ impl<V> Before<V> for IdentityDispatch {
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
@@ -194,18 +203,19 @@ impl<A: Default, B: Default> Default for Pipeline<A, B> {
     }
 }
 
-impl<A, B, V> Before<V> for Pipeline<A, B>
+impl<A, B, K, V> Before<K, V> for Pipeline<A, B>
 where
-    A: Before<V>,
-    B: Before<V>,
+    A: Before<K, V>,
+    B: Before<K, V>,
 {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
     {
         let first_out = self.first.dispatch_from_process(operations, target_cluster);
         self.second
@@ -214,11 +224,12 @@ where
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let mid = self
@@ -231,11 +242,12 @@ where
     fn dispatch_from_process_with_layers<'a, Name: 'static>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
     {
         let first_out = self.first.dispatch_from_process_with_layers::<Name>(
             layers,
@@ -252,12 +264,13 @@ where
 
     fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let mid = self.first.dispatch_from_cluster_with_layers::<Name>(
@@ -285,12 +298,12 @@ where
 }
 
 /// Fluent extension for chaining.
-pub trait BeforeExt<V>: Before<V> + Sized {
-    fn then<N: Before<V>>(self, next: N) -> Pipeline<Self, N> {
+pub trait BeforeExt<K, V>: Before<K, V> + Sized {
+    fn then<N: Before<K, V>>(self, next: N) -> Pipeline<Self, N> {
         Pipeline::new(self, next)
     }
 }
-impl<V, T: Before<V>> BeforeExt<V> for T {}
+impl<K, V, T: Before<K, V>> BeforeExt<K, V> for T {}
 
 /* ------------------------------------------------------------------------- */
 /* Marker trait to forbid `()` at cluster level                               */
@@ -300,7 +313,7 @@ pub trait ClusterLevelBefore {}
 impl ClusterLevelBefore for routing::SingleNodeRouter {}
 impl ClusterLevelBefore for routing::ShardedRouter {}
 impl ClusterLevelBefore for routing::RoundRobinRouter {}
-impl<V> ClusterLevelBefore for ordering::PaxosDispatcher<V> {}
+impl<K, V> ClusterLevelBefore for ordering::PaxosDispatcher<K, V> {}
 impl ClusterLevelBefore for IdentityDispatch {}
 impl<A, B> ClusterLevelBefore for Pipeline<A, B>
 where

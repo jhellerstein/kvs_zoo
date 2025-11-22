@@ -24,17 +24,20 @@ pub trait HasSequence {
 
 use crate::protocol::KVSOperation;
 
-impl<V> RoutingKey for KVSOperation<V> {
+impl<K, V> RoutingKey for KVSOperation<K, V>
+where
+    K: AsRef<[u8]>,
+{
     fn routing_key(&self) -> &[u8] {
         match self {
             KVSOperation::Put(k, _, _) | KVSOperation::Get(k, _) | KVSOperation::Delete(k, _) => {
-                k.as_bytes()
+                k.as_ref()
             }
         }
     }
 }
 
-impl<V> HasSequence for KVSOperation<V> {
+impl<K, V> HasSequence for KVSOperation<K, V> {
     type Seq = usize;
     fn sequence(&self) -> Option<Self::Seq> {
         None

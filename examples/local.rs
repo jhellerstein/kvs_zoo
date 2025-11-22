@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Build a Hydro graph for the LocalKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<LwwWrapper<String>, _>(
+    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
         &proxy,
         &client_external,
         &flow,

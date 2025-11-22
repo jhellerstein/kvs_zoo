@@ -29,12 +29,12 @@ struct ReplicaLeaf;
 // Values: LwwWrapper<String> to deliver linearizable semantics at the API.
 type LinearizableReplicatedKVS = KVSCluster<
     OrderedCluster,
-    Pipeline<PaxosDispatcher<LwwWrapper<String>>, RoundRobinRouter>,
+    Pipeline<PaxosDispatcher<String, LwwWrapper<String>>, RoundRobinRouter>,
     (),
     KVSCluster<
         SequenceReplicated,
         RoundRobinRouter,
-        Sequenced<BroadcastReplication<LwwWrapper<String>>>,
+        Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
         KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >,
 >;
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Define the nested KVS architecture with synchronous broadcast for snappy local demos
     // (Paxos → RR → Sequenced<Broadcast(synchronous)> → Slot/Responder)
-    let inner_after = Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::with_config(
+    let inner_after = Sequenced::new(BroadcastReplication::<String, LwwWrapper<String>>::with_config(
         BroadcastReplicationConfig::synchronous(),
     ));
     let inner_leaf = kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
@@ -70,13 +70,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let inner = kvs_zoo::kvs_layer::KVSCluster::<
         SequenceReplicated,
         RoundRobinRouter,
-        Sequenced<BroadcastReplication<LwwWrapper<String>>>,
+        Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
         kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >::new(RoundRobinRouter::new(), inner_after, inner_leaf);
 
     let kvs_spec: LinearizableReplicatedKVS = kvs_zoo::kvs_layer::KVSCluster::new(
         Pipeline::new(
-            PaxosDispatcher::<LwwWrapper<String>>::new(),
+            PaxosDispatcher::<String, LwwWrapper<String>>::new(),
             RoundRobinRouter::new(),
         ),
         (),
@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Plumb full dataflow with external I/O using the standard helper (down/up only)
     let (layers, bidi_port) =
-        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
