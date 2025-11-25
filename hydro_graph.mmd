@@ -1,0 +1,416 @@
+%%{init:{'theme':'base','themeVariables':{'clusterBkg':'#fafafa','clusterBorder':'#e0e0e0'},'elk':{'algorithm':'mrtree','elk.direction':'DOWN','elk.layered.spacing.nodeNodeBetweenLayers':'30'}}}%%
+graph TD
+classDef sourceClass fill:#8dd3c7,stroke:#86c8bd,text-align:left,white-space:pre
+classDef transformClass fill:#ffffb3,stroke:#f5f5a8,text-align:left,white-space:pre
+classDef joinClass fill:#bebada,stroke:#b5b1cf,text-align:left,white-space:pre
+classDef aggClass fill:#fb8072,stroke:#ee796b,text-align:left,white-space:pre
+classDef networkClass fill:#80b1d3,stroke:#79a8c8,text-align:left,white-space:pre
+classDef sinkClass fill:#fdb462,stroke:#f0aa5b,text-align:left,white-space:pre
+classDef teeClass fill:#b3de69,stroke:#aad362,text-align:left,white-space:pre
+linkStyle default stroke:#666666
+n70["map"]:::transformClass
+n79("tee"):::teeClass
+n22["cast"]:::transformClass
+n14["filtermap"]:::transformClass
+n18["map"]:::transformClass
+n23["cast"]:::transformClass
+n24["map"]:::transformClass
+n26["crossproduct"]:::joinClass
+n29["cast"]:::transformClass
+n48[["network"]]:::networkClass
+n4["cast"]:::transformClass
+n37("tee"):::teeClass
+n60["cast"]:::transformClass
+n16["filtermap"]:::transformClass
+n25["observenondet"]:::transformClass
+n30["cast"]:::transformClass
+n2[/"send_external"/]:::sinkClass
+n11["scan"]:::aggClass
+n43["map"]:::transformClass
+n52["observenondet"]:::transformClass
+n55("tee"):::teeClass
+n7["map"]:::transformClass
+n46["map"]:::transformClass
+n58["cast"]:::transformClass
+n59["map"]:::transformClass
+n68["map"]:::transformClass
+n71["chain"]:::transformClass
+n81["chain"]:::transformClass
+n54["filtermap"]:::transformClass
+n95["cast"]:::transformClass
+n88[/"for_each"/]:::sinkClass
+n87["observenondet"]:::transformClass
+n42["cast"]:::transformClass
+n91["chain"]:::transformClass
+n85["filtermap"]:::transformClass
+n89["filtermap"]:::transformClass
+n94["cast"]:::transformClass
+n3[["external_input"]]:::sourceClass
+n20["foldkeyed"]:::aggClass
+n97["cast"]:::transformClass
+n98[/"cycle_sink"/]:::sinkClass
+n80["filtermap"]:::transformClass
+n0[["cycle_source"]]:::sourceClass
+n32["observenondet"]:::transformClass
+n69["cast"]:::transformClass
+n86["chain"]:::transformClass
+n6["observenondet"]:::transformClass
+n57["map"]:::transformClass
+n47["cast"]:::transformClass
+n44("tee"):::teeClass
+n12("tee"):::teeClass
+n64["cast"]:::transformClass
+n92["observenondet"]:::transformClass
+n1["cast"]:::transformClass
+n61["map"]:::transformClass
+n84["filtermap"]:::transformClass
+n73["observenondet"]:::transformClass
+n96["filtermap"]:::transformClass
+n19["cast"]:::transformClass
+n36["filtermap"]:::transformClass
+n83[/"for_each"/]:::sinkClass
+n53["map"]:::transformClass
+n38[["source_iter"]]:::sourceClass
+n9[["network"]]:::networkClass
+n40["cast"]:::transformClass
+n63["map"]:::transformClass
+n93[["network"]]:::networkClass
+n90["filtermap"]:::transformClass
+n65[["network"]]:::networkClass
+n72["observenondet"]:::transformClass
+n8["cast"]:::transformClass
+n34["map"]:::transformClass
+n82["observenondet"]:::transformClass
+n78["scan"]:::aggClass
+n76["chain"]:::transformClass
+n15("tee"):::teeClass
+n17[["source_iter"]]:::sourceClass
+n51["map"]:::transformClass
+n66["cast"]:::transformClass
+n50["cast"]:::transformClass
+n13["filtermap"]:::transformClass
+n10("tee"):::teeClass
+n75["map"]:::transformClass
+n77["observenondet"]:::transformClass
+n31["map"]:::transformClass
+n49["cast"]:::transformClass
+n33("tee"):::teeClass
+n35("tee"):::teeClass
+n45["crossproduct"]:::joinClass
+n39["map"]:::transformClass
+n56[["source_iter"]]:::sourceClass
+n27["cast"]:::transformClass
+n5["map"]:::transformClass
+n21["filter"]:::transformClass
+n28[["network"]]:::networkClass
+n41["map"]:::transformClass
+n62["crossproduct"]:::joinClass
+n67["cast"]:::transformClass
+n74["filtermap"]:::transformClass
+subgraph loc_0 ["Process 0"]
+    n4
+    n2
+    n7
+    n95
+    n94
+    n3
+    n97
+    n98
+    n0
+    n6
+    n1
+    n96
+    n93
+    n8
+    n5
+end
+subgraph loc_2 ["Cluster 2"]
+    n70
+    n79
+    n22
+    n14
+    n18
+    n23
+    n24
+    n26
+    n29
+    n48
+    n37
+    n60
+    n16
+    n25
+    n30
+    n11
+    n43
+    n52
+    n55
+    n46
+    n58
+    n59
+    n68
+    n71
+    n81
+    n54
+    n88
+    n87
+    n42
+    n91
+    n85
+    n89
+    n20
+    n80
+    n32
+    n69
+    n86
+    n57
+    n47
+    n44
+    n12
+    n64
+    n92
+    n61
+    n84
+    n73
+    n19
+    n36
+    n83
+    n53
+    n38
+    n9
+    n40
+    n63
+    n90
+    n65
+    n72
+    n34
+    n82
+    n78
+    n76
+    n15
+    n17
+    n51
+    n66
+    n50
+    n13
+    n10
+    n75
+    n77
+    n31
+    n49
+    n33
+    n35
+    n45
+    n39
+    n56
+    n27
+    n21
+    n28
+    n41
+    n62
+    n67
+    n74
+end
+n0-->n1
+linkStyle 0 stroke:#2563eb
+n1-->n2
+linkStyle 1 stroke:#2563eb
+n3-->n4
+linkStyle 2 stroke:#2563eb
+n4-->n5
+linkStyle 3 stroke:#2563eb
+n5-->n6
+linkStyle 4 stroke:#2563eb
+n6-->n7
+linkStyle 5 stroke:#2563eb
+n7-->n8
+linkStyle 6 stroke:#2563eb
+n8-.->|to Some&#40;2&#41;|n9
+linkStyle 7 stroke:#2563eb
+n9-->n10
+linkStyle 8 stroke:#2563eb
+n10-->n11
+linkStyle 9 stroke:#2563eb
+n11-->n12
+linkStyle 10 stroke:#2563eb
+n12-->n13
+linkStyle 11 stroke:#2563eb
+n10-->n14
+linkStyle 12 stroke:#2563eb
+n14-->n15
+linkStyle 13 stroke:#2563eb
+n15-->n16
+linkStyle 14 stroke:#2563eb
+n17-->n18
+linkStyle 15 stroke:#2563eb
+n18-->n19
+linkStyle 16 stroke:#2563eb
+n19-->n20
+linkStyle 17 stroke:#2563eb
+n20-->n21
+linkStyle 18 stroke:#000000
+n21-->n22
+linkStyle 19 stroke:#000000
+n22-->n23
+linkStyle 20 stroke:#2563eb
+n23-->n24
+linkStyle 21 stroke:#2563eb
+n24-->n25
+linkStyle 22 stroke:#2563eb
+n25-->|left|n26
+linkStyle 23 stroke:#2563eb
+n15-->|right|n26
+linkStyle 24 stroke:#2563eb
+n26-->n27
+linkStyle 25 stroke:#2563eb
+n27-->|to Some&#40;2&#41;|n28
+linkStyle 26 stroke:#2563eb
+n28-->n29
+linkStyle 27 stroke:#2563eb
+n29-->n30
+linkStyle 28 stroke:#2563eb
+n30-->n31
+linkStyle 29 stroke:#2563eb
+n31-->n32
+linkStyle 30 stroke:#2563eb
+n32-->n33
+linkStyle 31 stroke:#2563eb
+n33-->n34
+linkStyle 32 stroke:#2563eb
+n34-->n35
+linkStyle 33 stroke:#2563eb
+n35-->n36
+linkStyle 34 stroke:#2563eb
+n36-->n37
+linkStyle 35 stroke:#2563eb
+n38-->n39
+linkStyle 36 stroke:#2563eb
+n39-->n40
+linkStyle 37 stroke:#2563eb
+n40-->n41
+linkStyle 38 stroke:#2563eb
+n41-->n42
+linkStyle 39 stroke:#2563eb
+n42-->n43
+linkStyle 40 stroke:#2563eb
+n43-->n44
+linkStyle 41 stroke:#2563eb
+n37-->|left|n45
+linkStyle 42 stroke:#2563eb
+n44-->|right|n45
+linkStyle 43 stroke:#2563eb
+n45-->n46
+linkStyle 44 stroke:#2563eb
+n46-->n47
+linkStyle 45 stroke:#2563eb
+n47-->|to Some&#40;2&#41;|n48
+linkStyle 46 stroke:#2563eb
+n48-->n49
+linkStyle 47 stroke:#2563eb
+n49-->n50
+linkStyle 48 stroke:#2563eb
+n50-->n51
+linkStyle 49 stroke:#2563eb
+n51-->n52
+linkStyle 50 stroke:#2563eb
+n52-->n53
+linkStyle 51 stroke:#2563eb
+n35-->n54
+linkStyle 52 stroke:#2563eb
+n54-->n55
+linkStyle 53 stroke:#2563eb
+n56-->n57
+linkStyle 54 stroke:#2563eb
+n57-->n58
+linkStyle 55 stroke:#2563eb
+n58-->n59
+linkStyle 56 stroke:#2563eb
+n59-->n60
+linkStyle 57 stroke:#2563eb
+n60-->n61
+linkStyle 58 stroke:#2563eb
+n55-->|left|n62
+linkStyle 59 stroke:#2563eb
+n61-->|right|n62
+linkStyle 60 stroke:#2563eb
+n62-->n63
+linkStyle 61 stroke:#2563eb
+n63-->n64
+linkStyle 62 stroke:#2563eb
+n64-->|to Some&#40;2&#41;|n65
+linkStyle 63 stroke:#2563eb
+n65-->n66
+linkStyle 64 stroke:#2563eb
+n66-->n67
+linkStyle 65 stroke:#2563eb
+n67-->n68
+linkStyle 66 stroke:#2563eb
+n68-->n69
+linkStyle 67 stroke:#2563eb
+n69-->n70
+linkStyle 68 stroke:#2563eb
+n53-->|first|n71
+linkStyle 69 stroke:#2563eb
+n70-->|second|n71
+linkStyle 70 stroke:#2563eb
+n71-->n72
+linkStyle 71 stroke:#2563eb
+n72-->n73
+linkStyle 72 stroke:#2563eb
+n73-->n74
+linkStyle 73 stroke:#2563eb
+n74-->n75
+linkStyle 74 stroke:#2563eb
+n16-->|first|n76
+linkStyle 75 stroke:#2563eb
+n75-->|second|n76
+linkStyle 76 stroke:#2563eb
+n76-->n77
+linkStyle 77 stroke:#2563eb
+n77-->n78
+linkStyle 78 stroke:#2563eb
+n78-->n79
+linkStyle 79 stroke:#2563eb
+n79-->n80
+linkStyle 80 stroke:#2563eb
+n13-->|first|n81
+linkStyle 81 stroke:#2563eb
+n80-->|second|n81
+linkStyle 82 stroke:#2563eb
+n81-->n82
+linkStyle 83 stroke:#2563eb
+n82-->n83
+linkStyle 84 stroke:#2563eb
+n12-->n84
+linkStyle 85 stroke:#2563eb
+n79-->n85
+linkStyle 86 stroke:#2563eb
+n84-->|first|n86
+linkStyle 87 stroke:#2563eb
+n85-->|second|n86
+linkStyle 88 stroke:#2563eb
+n86-->n87
+linkStyle 89 stroke:#2563eb
+n87-->n88
+linkStyle 90 stroke:#2563eb
+n12-->n89
+linkStyle 91 stroke:#2563eb
+n79-->n90
+linkStyle 92 stroke:#2563eb
+n89-->|first|n91
+linkStyle 93 stroke:#2563eb
+n90-->|second|n91
+linkStyle 94 stroke:#2563eb
+n91-->n92
+linkStyle 95 stroke:#2563eb
+n92-.->|to Some&#40;0&#41;|n93
+linkStyle 96 stroke:#2563eb
+n93-->n94
+linkStyle 97 stroke:#2563eb
+n94-->n95
+linkStyle 98 stroke:#2563eb
+n95-->n96
+linkStyle 99 stroke:#2563eb
+n96-->n97
+linkStyle 100 stroke:#2563eb
+n97-->n98
+linkStyle 101 stroke:#2563eb

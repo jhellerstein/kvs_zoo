@@ -46,7 +46,11 @@ async fn delete_emits_tomb_meta_event() {
     .await;
 }
 
-#[ignore = "() not yet implemented"]
+// TODO: This test needs to be updated to use an actual background implementation
+// instead of `()`. Once we implement a background stage (e.g., TombIndexBackground),
+// replace the `()` background parameter with the actual implementation configured
+// to emit summaries and digests.
+#[ignore = "Placeholder test: needs actual background stage implementation"]
 #[serial_test::serial]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn background_plumb_routes_meta_events() {
@@ -126,8 +130,11 @@ async fn background_plumb_routes_meta_events() {
     .await;
 }
 
+// TODO: This test needs to be updated to use an actual background implementation.
+// The test expects TombSummary events which are only emitted by real background stages,
+// not by the `()` placeholder. Implement a background stage and configure it here.
 #[serial_test::serial]
-#[ignore = "() not yet implemented"]
+#[ignore = "Placeholder test: needs actual background stage implementation"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn tomb_index_background_emits_summary() {
     hydro_lang::test_util::multi_location_test(

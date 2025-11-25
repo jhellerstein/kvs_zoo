@@ -48,8 +48,10 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let mut kvs_spec: ReplicatedTombstoneKVS<LwwWrapper<String>> = Default::default();
     kvs_spec.after = SimpleGossip::new(100usize); // 100ms gossip interval
 
-    // Build a Hydro graph for the ReplicatedTombstoneKVS type
-    let (layers, port) = plumb_kvs_dataflow_with_tombstones(&proxy, &client_external, &flow, kvs_spec);
+    // Build a Hydro graph for the ReplicatedTombstoneKVS type with tombstone storage
+    let (layers, port) = kvs_zoo::plumbing::plumb_kvs_dataflow_with_tombstones(
+        &proxy, &client_external, &flow, kvs_spec
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
@@ -129,117 +131,3 @@ fn tombstone_demo_ops() -> Vec<(kvs_zoo::protocol::KVSOperation<String, LwwWrapp
     ]
 }
 
-/// Custom plumbing function for tombstone-based storage.
-///
-/// This is a specialized version of `plumb_kvs_dataflow` that uses
-/// `LocalHashMapFst<V>` for tombstone-based deletion instead of
-/// standard `HashMap<String, V>`.
-fn plumb_kvs_dataflow_with_tombstones<'a, V, K>(
-    proxy: &hydro_lang::prelude::Process<'a, ()>,
-    client_external: &hydro_lang::prelude::External<'a, ()>,
-    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
-    mut kvs: K,
-) -> (
-    kvs_zoo::kvs_layer::KVSClusters<'a>,
-    hydro_lang::location::external_process::ExternalBincodeBidi<
-        kvs_zoo::protocol::KVSOperation<String, V>,
-        String,
-        hydro_lang::location::external_process::Many,
-    >,
-)
-where
-    V: Clone
-        + serde::Serialize
-        + for<'de> serde::Deserialize<'de>
-        + PartialEq
-        + Eq
-        + Default
-        + std::fmt::Debug
-        + std::fmt::Display
-        + lattices::Merge<V>
-        + lattices::LatticeFrom<V>
-        + lattices::IsBot
-        + Send
-        + Sync
-        + 'static,
-    K: kvs_zoo::kvs_layer::KVSSpec<V>
-        + kvs_zoo::kvs_layer::KVSPlumb<String, V>
-        + kvs_zoo::kvs_layer::AfterPlumb<V>
-        + kvs_zoo::kvs_layer::ReplicationPlumb<String, V>
-        + kvs_zoo::background::BackgroundPlumb<String, V>,
-{
-    use hydro_lang::live_collections::stream::TotalOrder;
-    use hydro_lang::prelude::*;
-    use kvs_zoo::protocol::KVSOperation;
-
-    // Create all clusters for all layers
-    let mut layers = kvs_zoo::kvs_layer::KVSClusters::new();
-    let _entry_cluster = kvs.create_clusters(flow, &mut layers);
-
-    // Create bidirectional external connection
-    let (bidi_port, operations_stream, _membership, complete_sink) =
-        proxy.bidi_external_many_bincode::<_, KVSOperation<String, V>, String>(client_external);
-
-    // Build initial operation stream from external input
-    let initial_ops = operations_stream
-        .entries()
-        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
-        .assume_ordering(nondet!(/** client op stream */));
-
-    // Downward pass via before_storage chain (KVSPlumb)
-    let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
-
-    // Split client operations so we can extract PUT deltas for replication
-    let (client_ops, local_put_deltas) = kvs_zoo::plumbing::extract_put_deltas(routed_ops);
-
-    // Fan out PUT deltas through any configured replication layers
-    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
-
-    // Core processing for client-originating operations with TOMBSTONE STORAGE
-    let kvs_zoo::kvs_core::CoreOutput {
-        responses: client_responses,
-        data: client_data_events,
-        meta: client_meta_stream,
-    } = kvs_zoo::kvs_core::KVSCore::process_tombstone_fst::<V, _>(client_ops);
-
-    // Replicated operations flow through the same core path with TOMBSTONE STORAGE
-    let kvs_zoo::kvs_core::CoreOutput {
-        responses: replica_responses,
-        data: replica_data_events,
-        meta: replica_meta_stream,
-    } = kvs_zoo::kvs_core::KVSCore::process_tombstone_fst::<V, _>(
-        replication_ops.assume_ordering::<TotalOrder>(nondet!(/** replicated op order */)),
-    );
-
-    let combined_responses = client_responses
-        .interleave(replica_responses)
-        .assume_ordering::<TotalOrder>(nondet!(/** combined client+replica responses */));
-
-    let data_events = client_data_events
-        .interleave(replica_data_events)
-        .assume_ordering::<TotalOrder>(nondet!(/** combined data events */));
-    let meta_stream = client_meta_stream
-        .interleave(replica_meta_stream)
-        .assume_ordering::<TotalOrder>(nondet!(/** combined meta events */));
-
-    // Background plumbing
-    let (bg_data, bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
-    bg_data.for_each(q!(|_data| ()));
-    bg_meta.for_each(q!(|_meta| ()));
-
-    // Send KVSResponse structs to proxy
-    let proxy_responses = combined_responses.send_bincode(proxy);
-
-    // Extract client IDs and format responses for completion
-    let to_complete = proxy_responses
-        .entries()
-        .filter_map(q!(|(_member_id, response)| {
-            response.client_id().map(|cid| (cid, response.to_string()))
-        }))
-        .into_keyed();
-
-    // Complete the bidirectional connection
-    complete_sink.complete(to_complete);
-
-    (layers, bidi_port)
-}

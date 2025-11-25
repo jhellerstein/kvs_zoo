@@ -10,6 +10,26 @@ pub type BackgroundMetaStream<'a, K> =
 
 
 /// Trait implemented by background stages that wish to consume data/meta events.
+///
+/// Background stages can:
+/// - Index tombstone metadata for compaction
+/// - Track statistics and emit summaries
+/// - Implement anti-entropy protocols
+/// - Perform background maintenance tasks
+///
+/// Example implementation (future):
+/// ```ignore
+/// struct TombIndexBackground {
+///     log_snapshots: bool,
+///     emit_summaries: bool,
+/// }
+///
+/// impl<K, V> MetaBackground<K, V> for TombIndexBackground {
+///     fn attach(...) -> (...) {
+///         // Transform meta stream to add summaries/digests
+///     }
+/// }
+/// ```
 pub trait MetaBackground<K, V> {
     fn attach<'a>(
         &mut self,
@@ -19,6 +39,13 @@ pub trait MetaBackground<K, V> {
     ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>);
 }
 
+/// Placeholder implementation: no background processing.
+///
+/// The unit type `()` is used when no background stages are needed.
+/// It simply passes through data and meta streams unchanged.
+///
+/// To implement actual background processing, create a struct that implements
+/// `MetaBackground<K, V>` and use it as the `Bg` type parameter in `KVSCluster`.
 impl<K, V> MetaBackground<K, V> for () {
     fn attach<'a>(
         &mut self,
@@ -31,6 +58,13 @@ impl<K, V> MetaBackground<K, V> for () {
 }
 
 /// Trait that wires background stages for each KVS layer.
+///
+/// This trait walks the KVS layer tree and gives each layer's background stage
+/// a chance to attach to and transform the data/meta event streams.
+///
+/// Concrete background stages should implement `MetaBackground<K, V>` rather than
+/// this trait directly. This trait is automatically implemented for `KVSCluster`
+/// and coordinates the attachment of all background stages in the hierarchy.
 pub trait BackgroundPlumb<K, V> {
     fn plumb_background<'a>(
         &mut self,
@@ -63,6 +97,10 @@ pub trait BackgroundPlumb<K, V> {
             + 'static;
 }
 
+/// Placeholder implementation: no background processing at this layer.
+///
+/// Used for terminal/leaf nodes in the KVS layer hierarchy or when
+/// no background processing is needed. Simply returns streams unchanged.
 impl<K, V> BackgroundPlumb<K, V> for () {
     fn plumb_background<'a>(
         &mut self,

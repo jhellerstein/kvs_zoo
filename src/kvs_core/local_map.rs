@@ -146,14 +146,16 @@ use crate::kvs_core::KVSStorage;
 /// - Get: use get_live (respects tombstones)
 /// - Delete: merge a delete_delta (adds key to tombstone set)
 ///
-/// This implementation is specialized for HashMap/HashSet combinations.
-impl<K, V> KVSStorage<K, V> for LocalMap<K, V, HashMap<K, V>, HashSet<K>>
+/// This implementation works for any HashMap-backed LocalMap with any tombstone set implementation.
+impl<K, V, T> KVSStorage<K, V> for LocalMap<K, V, HashMap<K, V>, T>
 where
     K: Clone + Eq + std::hash::Hash,
     V: Clone + Merge<V> + LatticeFrom<V> + IsBot,
+    T: lattices::tombstone::TombstoneSet<K> + Default + FromIterator<K> + IntoIterator<Item = K>,
+    HashMap<K, V>: FromIterator<(K, V)>,
 {
     fn apply_put(&mut self, key: K, value: V) {
-        let delta: LocalMap<K, V, HashMap<K, V>, HashSet<K>> = put_delta(key, value);
+        let delta: LocalMap<K, V, HashMap<K, V>, T> = put_delta(key, value);
         self.merge(delta);
     }
 
@@ -162,34 +164,7 @@ where
     }
 
     fn apply_delete(&mut self, key: K) {
-        let delta: LocalMap<K, V, HashMap<K, V>, HashSet<K>> = delete_delta(key);
-        self.merge(delta);
-    }
-}
-
-/// Implementation of KVSStorage for LocalMap with FST tombstone-based deletion.
-///
-/// This provides tombstone-based KVS behavior with FST-backed tombstone storage:
-/// - Put: merge a put_delta (adds key-value to map)
-/// - Get: use get_live (respects tombstones)
-/// - Delete: merge a delete_delta (adds key to FST tombstone set)
-///
-/// This implementation is specialized for HashMap/FstTombstoneSet combinations with String keys.
-impl<V> KVSStorage<String, V> for LocalMap<String, V, HashMap<String, V>, FstTombstoneSet<String>>
-where
-    V: Clone + Merge<V> + LatticeFrom<V> + IsBot,
-{
-    fn apply_put(&mut self, key: String, value: V) {
-        let delta: LocalMap<String, V, HashMap<String, V>, FstTombstoneSet<String>> = put_delta(key, value);
-        self.merge(delta);
-    }
-
-    fn apply_get(&self, key: &String) -> Option<&V> {
-        get_live(self, key)
-    }
-
-    fn apply_delete(&mut self, key: String) {
-        let delta: LocalMap<String, V, HashMap<String, V>, FstTombstoneSet<String>> = delete_delta(key);
+        let delta: LocalMap<K, V, HashMap<K, V>, T> = delete_delta(key);
         self.merge(delta);
     }
 }
