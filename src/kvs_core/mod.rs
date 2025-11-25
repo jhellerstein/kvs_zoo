@@ -61,10 +61,10 @@ where
 }
 
 #[derive(Clone)]
-struct CoreEmission<K, V> {
-    response: Option<KVSResponse<K, V>>,
-    data: Option<DataEvent<K, V>>,
-    meta: Option<MetaEvent<K>>,
+pub struct CoreEmission<K, V> {
+    pub response: Option<KVSResponse<K, V>>,
+    pub data: Option<DataEvent<K, V>>,
+    pub meta: Option<MetaEvent<K>>,
 }
 
 /// Output bundle produced by `KVSCore::process`.
@@ -150,56 +150,7 @@ impl KVSCore {
         let combined = operations.scan(
             q!(|| Store::default()),
             q!(|state: &mut Store, operation: KVSOperation<K, V>| {
-                let client_id = operation.client_id();
-
-                // Only generate response if client_id is Some
-                let should_emit_response = client_id.is_some();
-
-                let (response, data, meta) = match operation {
-                    KVSOperation::Put(key, value, _) => {
-                        let value_for_event = value.clone();
-                        state.apply_put(key.clone(), value);
-
-                        let response = if should_emit_response {
-                            Some(KVSResponse::PutOk { client_id })
-                        } else {
-                            None
-                        };
-                        let data = Some(DataEvent::Put {
-                            key: key.clone(),
-                            value: value_for_event,
-                        });
-                        (response, data, None)
-                    }
-                    KVSOperation::Get(key, _) => {
-                        let value = state.apply_get(&key).cloned();
-                        let response = if should_emit_response {
-                            Some(KVSResponse::GetResult {
-                                client_id,
-                                value: value.clone(),
-                            })
-                        } else {
-                            None
-                        };
-                        let data = Some(DataEvent::Get {
-                            key: key.clone(),
-                            value,
-                        });
-                        (response, data, None)
-                    }
-                    KVSOperation::Delete(key, _) => {
-                        state.apply_delete(key.clone());
-                        let response = if should_emit_response {
-                            Some(KVSResponse::DeleteOk { client_id })
-                        } else {
-                            None
-                        };
-                        let data = Some(DataEvent::Delete { key: key.clone() });
-                        let meta = Some(MetaEvent::Tomb { key: key.clone() });
-                        (response, data, meta)
-                    }
-                };
-                Some(CoreEmission { response, data, meta })
+                Some(KVSCore::process_operation(state, operation))
             }),
         );
 
@@ -247,7 +198,7 @@ impl KVSCore {
         let combined = operations.scan(
             q!(|| std::collections::HashMap::new()),
             q!(|state, operation| {
-                Self::process_operation(state, operation)
+                Some(KVSCore::process_operation(state, operation))
             }),
         );
 
@@ -287,7 +238,7 @@ impl KVSCore {
         let combined = operations.scan(
             q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()),
             q!(|state, operation| {
-                Self::process_operation(state, operation)
+                Some(KVSCore::process_operation(state, operation))
             }),
         );
 
@@ -305,10 +256,10 @@ impl KVSCore {
     /// This extracts the common operation handling used by both process_hashmap
     /// and process_tombstone_fst, avoiding code duplication while staying compatible
     /// with stageleft's constraints.
-    fn process_operation<K, V, Store>(
+    pub fn process_operation<K, V, Store>(
         state: &mut Store,
         operation: KVSOperation<K, V>,
-    ) -> Option<CoreEmission<K, V>>
+    ) -> CoreEmission<K, V>
     where
         K: Clone,
         V: Clone + PartialEq + Eq + std::fmt::Debug + std::fmt::Display,
@@ -361,11 +312,11 @@ impl KVSCore {
                 (response, data, meta)
             }
         };
-        Some(CoreEmission {
+        CoreEmission {
             response,
             data,
             meta,
-        })
+        }
     }
 }
 
