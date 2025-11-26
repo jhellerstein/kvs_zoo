@@ -7,7 +7,7 @@ struct LeafLayer;
 fn main() {
     fn _assert_spec()
     where
-        KVSNode<LeafLayer, (), SimpleGossip<LwwWrapper<String>>>: KVSSpec<LwwWrapper<String>>,
+        KVSNode<LeafLayer, (), SimpleGossip<String, LwwWrapper<String>>>: KVSSpec<LwwWrapper<String>>,
     {
     }
 

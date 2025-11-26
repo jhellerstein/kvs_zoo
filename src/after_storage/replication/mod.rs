@@ -34,10 +34,11 @@ impl<R> SequencedReplication<R> {
     }
 }
 
-impl<V, R> ReplicationStrategy<V> for SequencedReplication<R>
+impl<K, V, R> ReplicationStrategy<K, V> for SequencedReplication<R>
 where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    R: ReplicationStrategy<V> + Clone,
+    R: ReplicationStrategy<K, V> + Clone,
 {
     fn is_active() -> bool {
         R::is_active()
@@ -47,8 +48,8 @@ where
     fn replicate_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         self.inner.replicate_data(cluster, local_data)
     }
 
@@ -56,8 +57,8 @@ where
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
         // Step 1: Use inner strategy to disseminate slotted operations
         let replicated_slotted = self
             .inner
@@ -91,18 +92,19 @@ impl<R> AfterResponses for SequencedReplication<R> {
 }
 
 /// Gap-filling sequence logic for slot-indexed operations
-fn sequence_slotted_operations<'a, V>(
+fn sequence_slotted_operations<'a, K, V>(
     cluster: &Cluster<'a, KVSNode>,
-    slotted_operations: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>
+    slotted_operations: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
+) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>
 where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
     let tick = cluster.tick();
 
     // Create cycles for buffering out-of-order operations
     let (buffered_ops_complete, buffered_ops) =
-        tick.cycle::<Stream<(usize, String, V), Tick<Cluster<'a, KVSNode>>, Bounded>>();
+        tick.cycle::<Stream<(usize, K, V), Tick<Cluster<'a, KVSNode>>, Bounded>>();
 
     // Batch incoming operations and combine with buffered ones
     let batched_ops = slotted_operations

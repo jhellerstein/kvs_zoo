@@ -55,7 +55,7 @@ fn test_single_client_flow() {
         let op_client_id = op.client_id();
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
             KVSOperation::Put(key, value, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -284,7 +284,7 @@ fn test_multiple_concurrent_clients() {
 
     // Simulate the core processing
     let mut state = HashMap::new();
-    let mut responses_by_client: HashMap<u64, Vec<KVSResponse<LwwWrapper<String>>>> =
+    let mut responses_by_client: HashMap<u64, Vec<KVSResponse<String, LwwWrapper<String>>>> =
         HashMap::new();
 
     for (expected_client_id, op) in operations {
@@ -301,7 +301,7 @@ fn test_multiple_concurrent_clients() {
         let op_client_id = op.client_id();
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
             KVSOperation::Put(key, value, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -524,7 +524,7 @@ fn test_replication_without_client_responses() {
         let should_respond = is_client_op;
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
             KVSOperation::Put(key, value, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -699,7 +699,7 @@ fn test_end_to_end_pipeline_simulation() {
         .map(|(client_id, op)| {
             // Simulate serialization/deserialization
             let serialized = serde_json::to_string(&op).unwrap();
-            let deserialized: KVSOperation<LwwWrapper<String>> =
+            let deserialized: KVSOperation<String, LwwWrapper<String>> =
                 serde_json::from_str(&serialized).unwrap();
 
             // Verify client_id preserved through serialization
@@ -722,7 +722,7 @@ fn test_end_to_end_pipeline_simulation() {
             let op_client_id = op.client_id();
             let should_emit_response = should_respond && op_client_id.is_some();
 
-            let response: Option<KVSResponse<LwwWrapper<String>>> = match op {
+            let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
                 KVSOperation::Put(key, value, _) => {
                     state.insert(key.clone(), value.clone());
                     if should_emit_response {

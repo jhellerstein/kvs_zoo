@@ -63,12 +63,12 @@ impl BroadcastReplicationConfig {
 
 /// Broadcast replication: sends updates to all cluster nodes
 #[derive(Clone, Debug)]
-pub struct BroadcastReplication<V> {
+pub struct BroadcastReplication<K, V> {
     config: BroadcastReplicationConfig,
-    _phantom: std::marker::PhantomData<V>,
+    _phantom: std::marker::PhantomData<(K, V)>,
 }
 
-impl<V> Default for BroadcastReplication<V> {
+impl<K, V> Default for BroadcastReplication<K, V> {
     fn default() -> Self {
         Self {
             config: BroadcastReplicationConfig::default(),
@@ -77,7 +77,7 @@ impl<V> Default for BroadcastReplication<V> {
     }
 }
 
-impl<V> BroadcastReplication<V> {
+impl<K, V> BroadcastReplication<K, V> {
     /// Create a new broadcast replication strategy with default configuration
     pub fn new() -> Self {
         Self::default()
@@ -92,14 +92,25 @@ impl<V> BroadcastReplication<V> {
     }
 }
 
-impl<V> ClusterCommunication for BroadcastReplication<V> {
+impl<K, V> ClusterCommunication for BroadcastReplication<K, V> {
     fn requires_cluster_scope() -> bool {
         true
     }
 }
 
-impl<V> ReplicationStrategy<V> for BroadcastReplication<V>
+impl<K, V> ReplicationStrategy<K, V> for BroadcastReplication<K, V>
 where
+    K: Clone
+        + std::fmt::Debug
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + PartialEq
+        + Eq
+        + Default
+        + std::hash::Hash,
     V: Clone
         + std::fmt::Debug
         + Serialize
@@ -115,8 +126,8 @@ where
     fn replicate_updates<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded> {
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
         let unslotted_in = updates.clone().filter_map(q!(|u| match u {
             ReplicationUpdate::Unslotted(t) => Some(t),
             _ => None,
@@ -152,8 +163,19 @@ where
     }
 }
 
-impl<V> BroadcastReplication<V>
+impl<K, V> BroadcastReplication<K, V>
 where
+    K: Clone
+        + std::fmt::Debug
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + Send
+        + Sync
+        + 'static
+        + PartialEq
+        + Eq
+        + Default
+        + std::hash::Hash,
     V: Clone
         + std::fmt::Debug
         + Serialize
@@ -170,8 +192,8 @@ where
     pub fn handle_replication_immediate<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         local_put_tuples
             .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
@@ -182,8 +204,8 @@ where
     pub fn handle_replication_periodic<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         let ticker = cluster.tick();
         let batch_timeout_ms = self.config.batch_timeout_ms;
 
@@ -212,7 +234,7 @@ where
 }
 
 // Upward pass hook: Broadcast replication doesn't modify responses by default
-impl<V> AfterResponses for BroadcastReplication<V> {
+impl<K, V> AfterResponses for BroadcastReplication<K, V> {
     fn after_responses<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
@@ -228,8 +250,8 @@ mod tests {
 
     #[test]
     fn test_broadcast_replication_creation() {
-        let _broadcast = BroadcastReplication::<String>::new();
-        let _broadcast_default = BroadcastReplication::<String>::default();
+        let _broadcast = BroadcastReplication::<String, String>::new();
+        let _broadcast_default = BroadcastReplication::<String, String>::default();
     }
 
     #[test]
@@ -245,21 +267,23 @@ mod tests {
 
     #[test]
     fn test_broadcast_replication_implements_replication_strategy() {
-        fn _test_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
-        _test_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+        fn _test_replication_strategy<K, V>(_strategy: impl ReplicationStrategy<K, V>) {}
+        _test_replication_strategy::<String, crate::values::CausalString>(BroadcastReplication::<
+            String,
             crate::values::CausalString,
         >::new());
     }
 
     #[test]
     fn test_broadcast_vs_gossip_replication_strategies() {
-        fn _accepts_replication_strategy<V>(_strategy: impl ReplicationStrategy<V>) {}
+        fn _accepts_replication_strategy<K, V>(_strategy: impl ReplicationStrategy<K, V>) {}
 
-        _accepts_replication_strategy::<crate::values::CausalString>(BroadcastReplication::<
+        _accepts_replication_strategy::<String, crate::values::CausalString>(BroadcastReplication::<
+            String,
             crate::values::CausalString,
         >::new());
-        _accepts_replication_strategy::<crate::values::CausalString>(
-            crate::after_storage::replication::SimpleGossip::<crate::values::CausalString>::default(
+        _accepts_replication_strategy::<String, crate::values::CausalString>(
+            crate::after_storage::replication::SimpleGossip::<String, crate::values::CausalString>::default(
             ),
         );
     }

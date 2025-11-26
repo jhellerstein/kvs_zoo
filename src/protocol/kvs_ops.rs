@@ -3,16 +3,16 @@ use std::fmt::{self, Display};
 
 /// KVS operation types that clients can send to the server
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum KVSOperation<V> {
+pub enum KVSOperation<K, V> {
     /// Store a key-value pair (key, value, client_id)
-    Put(String, V, Option<u64>),
+    Put(K, V, Option<u64>),
     /// Retrieve the value for a key (key, client_id)
-    Get(String, Option<u64>),
+    Get(K, Option<u64>),
     /// Tombstone (logically delete) a key (key, client_id)
-    Delete(String, Option<u64>),
+    Delete(K, Option<u64>),
 }
 
-impl<V> KVSOperation<V> {
+impl<K, V> KVSOperation<K, V> {
     /// Extract the client ID from the operation
     pub fn client_id(&self) -> Option<u64> {
         match self {
@@ -32,7 +32,7 @@ impl<V> KVSOperation<V> {
     }
 
     /// Extract the key from the operation
-    pub fn key(&self) -> &str {
+    pub fn key(&self) -> &K {
         match self {
             KVSOperation::Put(k, _, _) => k,
             KVSOperation::Get(k, _) => k,
@@ -43,7 +43,7 @@ impl<V> KVSOperation<V> {
 
 /// Response types that the server sends back to clients
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub enum KVSResponse<V> {
+pub enum KVSResponse<K, V> {
     /// Successful PUT operation
     PutOk { client_id: Option<u64> },
     /// Successful DELETE (tombstone) operation
@@ -53,26 +53,30 @@ pub enum KVSResponse<V> {
         client_id: Option<u64>,
         value: Option<V>,
     },
+    #[allow(dead_code)]
+    _Phantom(std::marker::PhantomData<K>),
 }
 
-impl<V> KVSResponse<V> {
+impl<K, V> KVSResponse<K, V> {
     /// Extract the client ID from the response
     pub fn client_id(&self) -> Option<u64> {
         match self {
             KVSResponse::PutOk { client_id } => *client_id,
             KVSResponse::DeleteOk { client_id } => *client_id,
             KVSResponse::GetResult { client_id, .. } => *client_id,
+            KVSResponse::_Phantom(_) => None,
         }
     }
 }
 
-impl<V: Display> Display for KVSResponse<V> {
+impl<K, V: Display> Display for KVSResponse<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             KVSResponse::PutOk { .. } => write!(f, "PUT OK"),
             KVSResponse::DeleteOk { .. } => write!(f, "DELETE OK"),
             KVSResponse::GetResult { value: Some(v), .. } => write!(f, "GET = {}", v),
             KVSResponse::GetResult { value: None, .. } => write!(f, "GET = NOT FOUND"),
+            KVSResponse::_Phantom(_) => write!(f, "PHANTOM"),
         }
     }
 }

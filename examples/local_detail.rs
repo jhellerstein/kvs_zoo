@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
             &client_external,
         );
 
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let routed_ops = operations_stream
         .entries()
         .map(q!(|(client_id, op)| (
-            hydro_lang::location::MemberId::from_raw(0u32),
+            hydro_lang::location::MemberId::from_raw_id(0u32),
             op.with_client_id(Some(client_id))
         )))
         .into_keyed()
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process(ordered_ops);
+    } = KVSCore::process_hashmap::<_, _, _>(ordered_ops);
     data.for_each(q!(|_data| ())); // Local demo currently ignores data events
     meta.for_each(q!(|_meta| ())); // Local demo currently ignores metadata
 

@@ -78,7 +78,7 @@ where
 /// Readability alias for "no after-stage/replication".
 ///
 /// This is equivalent to the unit type `()` which already implements
-/// `ReplicationStrategy<V>`. Prefer `ZeroAfter` in examples and type
+/// `ReplicationStrategy<String, V>`. Prefer `ZeroAfter` in examples and type
 /// signatures when you want to emphasize that there is intentionally no
 /// background maintenance.
 pub type ZeroAfter = ();
@@ -88,9 +88,9 @@ pub type ZeroAfter = ();
 /// Replication strategies can accept and emit both unslotted (unordered)
 /// and slotted (slot-ordered) updates through a single API via this enum.
 #[derive(Clone, Debug)]
-pub enum ReplicationUpdate<V> {
-    Unslotted((String, V)),
-    Slotted((usize, String, V)),
+pub enum ReplicationUpdate<K, V> {
+    Unslotted((K, V)),
+    Slotted((usize, K, V)),
 }
 
 /// Core trait for replication strategies
@@ -98,7 +98,7 @@ pub enum ReplicationUpdate<V> {
 /// Replication strategies handle background data synchronization between nodes,
 /// operating independently of operation processing. They ensure data consistency
 /// and availability across the distributed system.
-pub trait ReplicationStrategy<V>: ClusterCommunication {
+pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Whether this strategy is active. Strategies like `NoReplication` or unit `()` override this
     /// to short-circuit the replication pipeline without relying on type-id checks.
     fn is_active() -> bool {
@@ -113,9 +113,10 @@ pub trait ReplicationStrategy<V>: ClusterCommunication {
     fn replicate_updates<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<V>, Cluster<'a, KVSNode>, Unbounded>
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let unslotted_in = updates.clone().filter_map(q!(|u| match u {
@@ -147,9 +148,10 @@ pub trait ReplicationStrategy<V>: ClusterCommunication {
     fn replicate_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let updates = local_data.map(q!(|t| ReplicationUpdate::Unslotted(t)));
@@ -171,9 +173,10 @@ pub trait ReplicationStrategy<V>: ClusterCommunication {
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         let updates = local_slotted_data.map(q!(|(s, k, v)| ReplicationUpdate::Slotted((s, k, v))));
@@ -232,7 +235,10 @@ impl ClusterCommunication for NoReplication {
 
 impl LeafCompatible for NoReplication {}
 
-impl<V> ReplicationStrategy<V> for NoReplication {
+impl<K, V> ReplicationStrategy<K, V> for NoReplication
+where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+{
     fn is_active() -> bool {
         false
     }
@@ -240,8 +246,8 @@ impl<V> ReplicationStrategy<V> for NoReplication {
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -265,7 +271,10 @@ impl AfterResponses for NoReplication {
 ///
 /// The unit type `()` can be used as a convenient no-op replication strategy,
 /// providing the same behavior as NoReplication with even less overhead.
-impl<V> ReplicationStrategy<V> for () {
+impl<K, V> ReplicationStrategy<K, V> for ()
+where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+{
     fn is_active() -> bool {
         false
     }
@@ -273,8 +282,8 @@ impl<V> ReplicationStrategy<V> for () {
     fn replicate_data<'a>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
     where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -292,11 +301,12 @@ impl ClusterCommunication for () {
 impl LeafCompatible for () {}
 
 // Blanket impls for combining two maintenance strategies
-impl<V, A, B> ReplicationStrategy<V> for CombinedAfter<A, B>
+impl<K, V, A, B> ReplicationStrategy<K, V> for CombinedAfter<A, B>
 where
+    K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    A: ReplicationStrategy<V>,
-    B: ReplicationStrategy<V>,
+    A: ReplicationStrategy<K, V>,
+    B: ReplicationStrategy<K, V>,
 {
     fn is_active() -> bool {
         A::is_active() || B::is_active()
@@ -305,8 +315,8 @@ where
     fn replicate_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
         let a_out = self.a.replicate_data(cluster, local_data.clone());
         let b_out = self.b.replicate_data(cluster, local_data);
         a_out
@@ -317,8 +327,8 @@ where
     fn replicate_slotted_data<'a>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
         let a_out = self
             .a
             .replicate_slotted_data(cluster, local_slotted_data.clone());

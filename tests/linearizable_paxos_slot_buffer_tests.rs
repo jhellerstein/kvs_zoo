@@ -18,8 +18,8 @@ struct ReplicaLeaf;
 
 type LinearizableKVS = KVSCluster<
     OrderedCluster,
-    PaxosDispatcher<LwwWrapper<String>>,
-    Sequenced<BroadcastReplication<LwwWrapper<String>>>,
+    PaxosDispatcher<String, LwwWrapper<String>>,
+    Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
@@ -32,12 +32,12 @@ fn get_waits_for_prior_put_slot() {
 
     let kvs = LinearizableKVS::new(
         PaxosDispatcher::new(),
-        Sequenced::new(BroadcastReplication::<LwwWrapper<String>>::new()),
+        Sequenced::new(BroadcastReplication::<String, LwwWrapper<String>>::new()),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 
     let (layers, bidi_port) =
-        plumb_kvs_dataflow::<LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs);
+        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs);
 
     // Responses are already plumbed inside plumb_kvs_dataflow; nothing to add here.
 

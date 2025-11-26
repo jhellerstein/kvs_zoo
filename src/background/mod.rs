@@ -2,44 +2,87 @@ use hydro_lang::prelude::*;
 
 use crate::kvs_core::events::{DataEvent, MetaEvent};
 
-pub type BackgroundDataStream<'a, V> =
-    Stream<DataEvent<V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
-pub type BackgroundMetaStream<'a> =
-    Stream<MetaEvent, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+pub type BackgroundDataStream<'a, K, V> =
+    Stream<DataEvent<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+pub type BackgroundMetaStream<'a, K> =
+    Stream<MetaEvent<K>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
 
-pub mod tomb_index;
-pub use tomb_index::{TombIndexBackground, TombIndexStats};
+
 
 /// Trait implemented by background stages that wish to consume data/meta events.
-pub trait MetaBackground<V> {
+///
+/// Background stages can:
+/// - Index tombstone metadata for compaction
+/// - Track statistics and emit summaries
+/// - Implement anti-entropy protocols
+/// - Perform background maintenance tasks
+///
+/// Example implementation (future):
+/// ```ignore
+/// struct TombIndexBackground {
+///     log_snapshots: bool,
+///     emit_summaries: bool,
+/// }
+///
+/// impl<K, V> MetaBackground<K, V> for TombIndexBackground {
+///     fn attach(...) -> (...) {
+///         // Transform meta stream to add summaries/digests
+///     }
+/// }
+/// ```
+pub trait MetaBackground<K, V> {
     fn attach<'a>(
         &mut self,
         cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>);
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>);
 }
 
-impl<V> MetaBackground<V> for () {
+/// Placeholder implementation: no background processing.
+///
+/// The unit type `()` is used when no background stages are needed.
+/// It simply passes through data and meta streams unchanged.
+///
+/// To implement actual background processing, create a struct that implements
+/// `MetaBackground<K, V>` and use it as the `Bg` type parameter in `KVSCluster`.
+impl<K, V> MetaBackground<K, V> for () {
     fn attach<'a>(
         &mut self,
         _cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>) {
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>) {
         (data, meta)
     }
 }
 
 /// Trait that wires background stages for each KVS layer.
-pub trait BackgroundPlumb<V> {
+///
+/// This trait walks the KVS layer tree and gives each layer's background stage
+/// a chance to attach to and transform the data/meta event streams.
+///
+/// Concrete background stages should implement `MetaBackground<K, V>` rather than
+/// this trait directly. This trait is automatically implemented for `KVSCluster`
+/// and coordinates the attachment of all background stages in the hierarchy.
+pub trait BackgroundPlumb<K, V> {
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
     where
+        K: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -54,14 +97,28 @@ pub trait BackgroundPlumb<V> {
             + 'static;
 }
 
-impl<V> BackgroundPlumb<V> for () {
+/// Placeholder implementation: no background processing at this layer.
+///
+/// Used for terminal/leaf nodes in the KVS layer hierarchy or when
+/// no background processing is needed. Simply returns streams unchanged.
+impl<K, V> BackgroundPlumb<K, V> for () {
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
     where
+        K: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -79,20 +136,30 @@ impl<V> BackgroundPlumb<V> for () {
     }
 }
 
-impl<V, Name, B, A, Child, Bg> BackgroundPlumb<V>
+impl<K, V, Name, B, A, Child, Bg> BackgroundPlumb<K, V>
     for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
 where
     Name: 'static,
-    Child: BackgroundPlumb<V>,
-    Bg: MetaBackground<V>,
+    Child: BackgroundPlumb<K, V>,
+    Bg: MetaBackground<K, V>,
 {
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
     where
+        K: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -112,14 +179,24 @@ where
     }
 }
 
-impl<V, Name, B, A> BackgroundPlumb<V> for crate::kvs_layer::KVSNode<Name, B, A> {
+impl<K, V, Name, B, A> BackgroundPlumb<K, V> for crate::kvs_layer::KVSNode<Name, B, A> {
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, V>,
-        meta: BackgroundMetaStream<'a>,
-    ) -> (BackgroundDataStream<'a, V>, BackgroundMetaStream<'a>)
+        data: BackgroundDataStream<'a, K, V>,
+        meta: BackgroundMetaStream<'a, K>,
+    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
     where
+        K: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>

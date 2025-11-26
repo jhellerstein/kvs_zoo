@@ -9,14 +9,14 @@ use std::collections::HashMap;
 
 /// Represents an operation with timing information for linearizability checking
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TimedOperation<V> {
-    op: KVSOperation<V>,
+struct TimedOperation<K, V> {
+    op: KVSOperation<K, V>,
     invocation_time: u64,
     response_time: u64,
     response_value: Option<V>,
 }
 
-impl<V> TimedOperation<V> {
+impl<K, V> TimedOperation<K, V> {
     fn overlaps_with(&self, other: &Self) -> bool {
         // Two operations overlap if neither completes before the other starts
         !(self.response_time <= other.invocation_time
@@ -28,7 +28,7 @@ impl<V> TimedOperation<V> {
 /// by finding a valid linearization (total order) that is consistent with:
 /// 1. The real-time ordering of non-overlapping operations
 /// 2. Each read returning the most recent write in the order
-fn is_linearizable<V>(operations: &[TimedOperation<V>]) -> bool
+fn is_linearizable<V>(operations: &[TimedOperation<String, V>]) -> bool
 where
     V: Clone + Eq + std::fmt::Debug,
 {
@@ -43,7 +43,7 @@ where
 fn check_permutations<V>(
     indices: &mut [usize],
     start: usize,
-    operations: &[TimedOperation<V>],
+    operations: &[TimedOperation<String, V>],
 ) -> bool
 where
     V: Clone + Eq + std::fmt::Debug,
@@ -63,7 +63,7 @@ where
     false
 }
 
-fn validate_linearization<V>(order: &[usize], operations: &[TimedOperation<V>]) -> bool
+fn validate_linearization<V>(order: &[usize], operations: &[TimedOperation<String, V>]) -> bool
 where
     V: Clone + Eq + std::fmt::Debug,
 {
@@ -436,7 +436,7 @@ fn test_non_linearizable_time_travel() {
 
 /// Helper function to check if an operation overlaps with any operation in a list
 #[allow(dead_code)]
-fn has_overlapping_operations<V>(operations: &[TimedOperation<V>]) -> bool {
+fn has_overlapping_operations<V>(operations: &[TimedOperation<String, V>]) -> bool {
     for i in 0..operations.len() {
         for j in (i + 1)..operations.len() {
             if operations[i].overlaps_with(&operations[j]) {

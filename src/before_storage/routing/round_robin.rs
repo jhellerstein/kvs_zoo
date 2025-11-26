@@ -15,18 +15,19 @@ impl RoundRobinRouter {
     }
 }
 
-impl<V> Before<V> for RoundRobinRouter {
+impl<K, V> Before<K, V> for RoundRobinRouter {
     fn dispatch_from_process<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -35,15 +36,16 @@ impl<V> Before<V> for RoundRobinRouter {
 
     fn dispatch_slotted_from_process<'a>(
         &self,
-        slotted_operations: Stream<(usize, KVSOperation<V>), Process<'a, ()>, Unbounded>,
+        slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<(usize, KVSOperation<V>), Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<(usize, KVSOperation<K, V>), Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         slotted_operations
             .map(q!(|slotted_op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 slotted_op
             )))
             .into_keyed()
@@ -53,16 +55,17 @@ impl<V> Before<V> for RoundRobinRouter {
 
     fn dispatch_from_cluster<'a>(
         &self,
-        operations: Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
     where
+        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
             .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw(0u32),
+                hydro_lang::location::MemberId::from_raw_id(0u32),
                 op
             )))
             .into_keyed()
@@ -86,14 +89,14 @@ mod tests {
     #[test]
     fn test_round_robin_router_implements_dispatch() {
         let router = RoundRobinRouter::new();
-        fn _test_dispatch<V>(_dispatcher: impl Before<V>) {}
-        _test_dispatch::<String>(router);
+        fn _test_dispatch<K, V>(_dispatcher: impl Before<K, V>) {}
+        _test_dispatch::<String, String>(router);
     }
 
     #[test]
     fn test_round_robin_router_implements_dispatch_ext() {
         let router = RoundRobinRouter::new();
-        fn _test_dispatch_ext<V>(_dispatcher: impl BeforeExt<V>) {}
-        _test_dispatch_ext::<String>(router);
+        fn _test_dispatch_ext<K, V>(_dispatcher: impl BeforeExt<K, V>) {}
+        _test_dispatch_ext::<String, String>(router);
     }
 }
