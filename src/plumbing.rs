@@ -47,9 +47,9 @@ where
 {
     let cloned = operations.clone();
     let deltas = operations.filter_map(q!(|op| match op {
-        crate::protocol::KVSOperation::Put(k, v, _) => Some((k, v)),
-        crate::protocol::KVSOperation::Get(_, _) => None,
-        crate::protocol::KVSOperation::Delete(_, _) => None,
+        crate::protocol::KVSOperation::Put(k, v, _, _) => Some((k, v)),
+        crate::protocol::KVSOperation::Get(_, _, _) => None,
+        crate::protocol::KVSOperation::Delete(_, _, _) => None,
     }));
     (cloned, deltas)
 }

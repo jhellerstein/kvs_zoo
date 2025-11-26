@@ -105,27 +105,27 @@ fn tombstone_demo_ops() -> Vec<(kvs_zoo::protocol::KVSOperation<String, LwwWrapp
 
     vec![
         (
-            Op::Put("x".to_string(), LwwWrapper::new("1".into()), None),
+            Op::Put("x".to_string(), LwwWrapper::new("1".into()), 1, None),
             "PUT x = \"1\"",
         ),
         (
-            Op::Get("x".to_string(), None),
+            Op::Get("x".to_string(), 2, None),
             "GET x (expect \"1\")",
         ),
         (
-            Op::Delete("x".to_string(), None),
+            Op::Delete("x".to_string(), 3, None),
             "DELETE x (tombstone created)",
         ),
         (
-            Op::Get("x".to_string(), None),
+            Op::Get("x".to_string(), 4, None),
             "GET x (expect None - tombstoned)",
         ),
         (
-            Op::Put("x".to_string(), LwwWrapper::new("2".into()), None),
+            Op::Put("x".to_string(), LwwWrapper::new("2".into()), 5, None),
             "PUT x = \"2\" (attempt resurrection)",
         ),
         (
-            Op::Get("x".to_string(), None),
+            Op::Get("x".to_string(), 6, None),
             "GET x (expect None - tombstone is permanent!)",
         ),
     ]

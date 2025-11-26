@@ -19,21 +19,24 @@ fn test_linearizable_kvs_strict_ordering() {
         KVSOperation::Put(
             "account".to_string(),
             LwwWrapper::new("1000".to_string()),
+            1,
             None,
         ),
-        KVSOperation::Get("account".to_string(), None),
+        KVSOperation::Get("account".to_string(), 2, None),
         KVSOperation::Put(
             "account".to_string(),
             LwwWrapper::new("900".to_string()),
+            3,
             None,
         ),
-        KVSOperation::Get("account".to_string(), None),
+        KVSOperation::Get("account".to_string(), 4, None),
         KVSOperation::Put(
             "account".to_string(),
             LwwWrapper::new("950".to_string()),
+            5,
             None,
         ),
-        KVSOperation::Get("account".to_string(), None),
+        KVSOperation::Get("account".to_string(), 6, None),
     ];
 
     // Simulate what should happen at each replica after Paxos ordering
@@ -44,15 +47,15 @@ fn test_linearizable_kvs_strict_ordering() {
         println!("Paxos slot {}: {:?}", slot, op);
 
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 replica_state.insert(key.clone(), value);
                 format!("PUT {} = OK [LINEARIZABLE]", key)
             }
-            KVSOperation::Get(key, _) => match replica_state.get(&key) {
+            KVSOperation::Get(key, _, _) => match replica_state.get(&key) {
                 Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
                 None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 replica_state.remove(&key);
                 format!("DELETE {} = OK [LINEARIZABLE]", key)
             }
@@ -78,12 +81,12 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
     // which would violate linearizability
 
     let operations = vec![
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), None),
-        KVSOperation::Get("x".to_string(), None), // Must see v1
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v2".to_string()), None),
-        KVSOperation::Get("x".to_string(), None), // Must see v2
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v3".to_string()), None),
-        KVSOperation::Get("x".to_string(), None), // Must see v3
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), 1, None),
+        KVSOperation::Get("x".to_string(), 2, None), // Must see v1
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("v2".to_string()), 3, None),
+        KVSOperation::Get("x".to_string(), 4, None), // Must see v2
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("v3".to_string()), 5, None),
+        KVSOperation::Get("x".to_string(), 6, None), // Must see v3
     ];
 
     // Simulate correct linearizable processing
@@ -92,15 +95,15 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
 
     for op in &operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 correct_state.insert(key.clone(), value.clone());
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match correct_state.get(key) {
+            KVSOperation::Get(key, _, _) => match correct_state.get(key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 correct_state.remove(key);
                 format!("DELETE {} = OK", key)
             }
@@ -114,7 +117,7 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
 
     // Process all PUTs first (incorrect!)
     for (i, op) in operations.iter().enumerate() {
-        if let KVSOperation::Put(key, value, _) = op {
+        if let KVSOperation::Put(key, value, _, _) = op {
             reordered_state.insert(key.clone(), value.clone());
             reordered_responses[i] = format!("PUT {} = OK", key);
         }
@@ -122,7 +125,7 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
 
     // Then process all GETs (incorrect!)
     for (i, op) in operations.iter().enumerate() {
-        if let KVSOperation::Get(key, _) = op {
+        if let KVSOperation::Get(key, _, _) = op {
             match reordered_state.get(key) {
                 Some(value) => reordered_responses[i] = format!("GET {} = {:?}", key, value),
                 None => reordered_responses[i] = format!("GET {} = NOT FOUND", key),
@@ -155,35 +158,39 @@ fn test_linearizable_kvs_concurrent_clients() {
         KVSOperation::Put(
             "shared_counter".to_string(),
             LwwWrapper::new("0".to_string()),
+            1,
             None,
         ),
         // Client B reads
-        KVSOperation::Get("shared_counter".to_string(), None),
+        KVSOperation::Get("shared_counter".to_string(), 2, None),
         // Client A increments
         KVSOperation::Put(
             "shared_counter".to_string(),
             LwwWrapper::new("1".to_string()),
+            3,
             None,
         ),
         // Client B reads again
-        KVSOperation::Get("shared_counter".to_string(), None),
+        KVSOperation::Get("shared_counter".to_string(), 4, None),
         // Client B increments
         KVSOperation::Put(
             "shared_counter".to_string(),
             LwwWrapper::new("2".to_string()),
+            5,
             None,
         ),
         // Client A reads
-        KVSOperation::Get("shared_counter".to_string(), None),
+        KVSOperation::Get("shared_counter".to_string(), 6, None),
         // Client A increments
         KVSOperation::Put(
             "shared_counter".to_string(),
             LwwWrapper::new("3".to_string()),
+            7,
             None,
         ),
         // Both clients read final value
-        KVSOperation::Get("shared_counter".to_string(), None),
-        KVSOperation::Get("shared_counter".to_string(), None),
+        KVSOperation::Get("shared_counter".to_string(), 8, None),
+        KVSOperation::Get("shared_counter".to_string(), 9, None),
     ];
 
     // Process in linearizable order (what Paxos + sequential processing provides)
@@ -194,15 +201,15 @@ fn test_linearizable_kvs_concurrent_clients() {
         println!("Linearizable slot {}: {:?}", slot, op);
 
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK [LINEARIZABLE]", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?} [LINEARIZABLE]", key, value),
                 None => format!("GET {} = NOT FOUND [LINEARIZABLE]", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK [LINEARIZABLE]", key)
             }
@@ -234,22 +241,25 @@ fn test_linearizable_kvs_replica_consistency() {
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("value1".to_string()),
+            1,
             None,
         ),
         KVSOperation::Put(
             "key2".to_string(),
             LwwWrapper::new("value2".to_string()),
+            2,
             None,
         ),
-        KVSOperation::Get("key1".to_string(), None),
-        KVSOperation::Get("key2".to_string(), None),
+        KVSOperation::Get("key1".to_string(), 3, None),
+        KVSOperation::Get("key2".to_string(), 4, None),
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("updated1".to_string()),
+            5,
             None,
         ),
-        KVSOperation::Get("key1".to_string(), None),
-        KVSOperation::Get("key2".to_string(), None),
+        KVSOperation::Get("key1".to_string(), 6, None),
+        KVSOperation::Get("key2".to_string(), 7, None),
     ];
 
     // Simulate processing at replica 1
@@ -258,15 +268,15 @@ fn test_linearizable_kvs_replica_consistency() {
 
     for op in &operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 replica1_state.insert(key.clone(), value.clone());
                 format!("PUT {} = OK [REPLICA1]", key)
             }
-            KVSOperation::Get(key, _) => match replica1_state.get(key) {
+            KVSOperation::Get(key, _, _) => match replica1_state.get(key) {
                 Some(value) => format!("GET {} = {:?} [REPLICA1]", key, value),
                 None => format!("GET {} = NOT FOUND [REPLICA1]", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 replica1_state.remove(key);
                 format!("DELETE {} = OK [REPLICA1]", key)
             }
@@ -280,15 +290,15 @@ fn test_linearizable_kvs_replica_consistency() {
 
     for op in &operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 replica2_state.insert(key.clone(), value.clone());
                 format!("PUT {} = OK [REPLICA2]", key)
             }
-            KVSOperation::Get(key, _) => match replica2_state.get(key) {
+            KVSOperation::Get(key, _, _) => match replica2_state.get(key) {
                 Some(value) => format!("GET {} = {:?} [REPLICA2]", key, value),
                 None => format!("GET {} = NOT FOUND [REPLICA2]", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 replica2_state.remove(key);
                 format!("DELETE {} = OK [REPLICA2]", key)
             }
@@ -324,26 +334,30 @@ fn test_linearizability_bug_regression() {
         KVSOperation::Put(
             "flag".to_string(),
             LwwWrapper::new("false".to_string()),
+            1,
             None,
         ),
         KVSOperation::Put(
             "data".to_string(),
             LwwWrapper::new("initial".to_string()),
+            2,
             None,
         ),
-        KVSOperation::Get("flag".to_string(), None), // Should see "false"
+        KVSOperation::Get("flag".to_string(), 3, None), // Should see "false"
         KVSOperation::Put(
             "data".to_string(),
             LwwWrapper::new("updated".to_string()),
+            4,
             None,
         ),
         KVSOperation::Put(
             "flag".to_string(),
             LwwWrapper::new("true".to_string()),
+            5,
             None,
         ),
-        KVSOperation::Get("flag".to_string(), None), // Should see "true"
-        KVSOperation::Get("data".to_string(), None), // Should see "updated"
+        KVSOperation::Get("flag".to_string(), 6, None), // Should see "true"
+        KVSOperation::Get("data".to_string(), 7, None), // Should see "updated"
     ];
 
     // Process in correct linearizable order
@@ -352,15 +366,15 @@ fn test_linearizability_bug_regression() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }

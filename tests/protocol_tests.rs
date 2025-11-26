@@ -4,74 +4,81 @@ use kvs_zoo::protocol::{KVSOperation, KVSResponse};
 #[test]
 fn test_operation_creation() {
     // Test PUT operation
-    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string(), Some(42));
+    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string(), 1, Some(42));
     assert_eq!(
         put_op,
-        KVSOperation::Put("key1".to_string(), "value1".to_string(), Some(42))
+        KVSOperation::Put("key1".to_string(), "value1".to_string(), 1, Some(42))
     );
 
     // Test GET operation
-    let get_op: KVSOperation<String, String> = KVSOperation::Get("key1".to_string(), None);
-    assert_eq!(get_op, KVSOperation::Get("key1".to_string(), None));
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key1".to_string(), 2, None);
+    assert_eq!(get_op, KVSOperation::Get("key1".to_string(), 2, None));
 }
 
 #[test]
 fn test_operation_pattern_matching() {
-    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string(), Some(1));
+    let put_op = KVSOperation::Put("key1".to_string(), "value1".to_string(), 1, Some(1));
     match put_op {
-        KVSOperation::Put(key, value, client_id) => {
+        KVSOperation::Put(key, value, request_id, client_id) => {
             assert_eq!(key, "key1");
             assert_eq!(value, "value1");
+            assert_eq!(request_id, 1);
             assert_eq!(client_id, Some(1));
         }
-        KVSOperation::Get(_, _) | KVSOperation::Delete(_, _) => panic!("Expected PUT operation"),
+        KVSOperation::Get(_, _, _) | KVSOperation::Delete(_, _, _) => panic!("Expected PUT operation"),
     }
 
-    let get_op: KVSOperation<String, String> = KVSOperation::Get("key1".to_string(), Some(2));
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key1".to_string(), 2, Some(2));
     match get_op {
-        KVSOperation::Get(key, client_id) => {
+        KVSOperation::Get(key, request_id, client_id) => {
             assert_eq!(key, "key1");
+            assert_eq!(request_id, 2);
             assert_eq!(client_id, Some(2));
         }
-        KVSOperation::Put(_, _, _) | KVSOperation::Delete(_, _) => panic!("Expected GET operation"),
+        KVSOperation::Put(_, _, _, _) | KVSOperation::Delete(_, _, _) => panic!("Expected GET operation"),
     }
 
-    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key1".to_string(), None);
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key1".to_string(), 3, None);
     match del_op {
-        KVSOperation::Delete(key, client_id) => {
+        KVSOperation::Delete(key, request_id, client_id) => {
             assert_eq!(key, "key1");
+            assert_eq!(request_id, 3);
             assert_eq!(client_id, None);
         }
-        KVSOperation::Put(_, _, _) | KVSOperation::Get(_, _) => panic!("Expected DELETE operation"),
+        KVSOperation::Put(_, _, _, _) | KVSOperation::Get(_, _, _) => panic!("Expected DELETE operation"),
     }
 }
 
 #[test]
 fn test_response_creation() {
     // Test PutOk response
-    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { client_id: Some(1) };
-    assert_eq!(put_response, KVSResponse::PutOk { client_id: Some(1) });
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 1, client_id: Some(1) };
+    assert_eq!(put_response, KVSResponse::PutOk { request_id: 1, client_id: Some(1) });
 
     // Test GetResult responses
     let get_found: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 2,
         client_id: Some(2),
         value: Some("value".to_string()),
     };
     assert_eq!(
         get_found,
         KVSResponse::GetResult {
+            request_id: 2,
             client_id: Some(2),
             value: Some("value".to_string())
         }
     );
 
     let get_not_found: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 3,
         client_id: None,
         value: None,
     };
     assert_eq!(
         get_not_found,
         KVSResponse::GetResult {
+            request_id: 3,
             client_id: None,
             value: None
         }
@@ -81,14 +88,17 @@ fn test_response_creation() {
 #[test]
 fn test_response_pattern_matching() {
     let get_response: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 1,
         client_id: Some(1),
         value: Some("value".to_string()),
     };
     match get_response {
         KVSResponse::GetResult {
+            request_id,
             value: Some(value),
             client_id,
         } => {
+            assert_eq!(request_id, 1);
             assert_eq!(value, "value");
             assert_eq!(client_id, Some(1));
         }
@@ -97,14 +107,17 @@ fn test_response_pattern_matching() {
     }
 
     let not_found_response: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 2,
         client_id: Some(2),
         value: None,
     };
     match not_found_response {
         KVSResponse::GetResult {
+            request_id,
             value: None,
             client_id,
         } => {
+            assert_eq!(request_id, 2);
             assert_eq!(client_id, Some(2));
         }
         KVSResponse::GetResult { value: Some(_), .. } => panic!("Expected not found"),
@@ -116,29 +129,29 @@ fn test_response_pattern_matching() {
 
 #[test]
 fn test_operation_client_id_extraction() {
-    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), Some(42));
+    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), 1, Some(42));
     assert_eq!(put_op.client_id(), Some(42));
 
-    let get_op: KVSOperation<String, String> = KVSOperation::Get("key".to_string(), Some(100));
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key".to_string(), 2, Some(100));
     assert_eq!(get_op.client_id(), Some(100));
 
-    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key".to_string(), None);
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key".to_string(), 3, None);
     assert_eq!(del_op.client_id(), None);
 }
 
 #[test]
 fn test_operation_with_client_id() {
-    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), None);
+    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), 1, None);
     let updated = put_op.with_client_id(Some(99));
     assert_eq!(updated.client_id(), Some(99));
     assert_eq!(updated.key(), "key");
 
-    let get_op: KVSOperation<String, String> = KVSOperation::Get("key2".to_string(), Some(1));
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key2".to_string(), 2, Some(1));
     let updated = get_op.with_client_id(Some(2));
     assert_eq!(updated.client_id(), Some(2));
     assert_eq!(updated.key(), "key2");
 
-    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key3".to_string(), Some(5));
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key3".to_string(), 3, Some(5));
     let updated = del_op.with_client_id(None);
     assert_eq!(updated.client_id(), None);
     assert_eq!(updated.key(), "key3");
@@ -146,27 +159,29 @@ fn test_operation_with_client_id() {
 
 #[test]
 fn test_operation_key_extraction() {
-    let put_op = KVSOperation::Put("put_key".to_string(), "value".to_string(), Some(1));
+    let put_op = KVSOperation::Put("put_key".to_string(), "value".to_string(), 1, Some(1));
     assert_eq!(put_op.key(), "put_key");
 
-    let get_op: KVSOperation<String, String> = KVSOperation::Get("get_key".to_string(), None);
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("get_key".to_string(), 2, None);
     assert_eq!(get_op.key(), "get_key");
 
-    let del_op: KVSOperation<String, String> = KVSOperation::Delete("del_key".to_string(), Some(2));
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("del_key".to_string(), 3, Some(2));
     assert_eq!(del_op.key(), "del_key");
 }
 
 #[test]
 fn test_response_client_id_extraction() {
     let put_response: KVSResponse<String, String> = KVSResponse::PutOk {
+        request_id: 1,
         client_id: Some(10),
     };
     assert_eq!(put_response.client_id(), Some(10));
 
-    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { client_id: None };
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 2, client_id: None };
     assert_eq!(del_response.client_id(), None);
 
     let get_response: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 3,
         client_id: Some(20),
         value: Some("val".to_string()),
     };
@@ -175,19 +190,21 @@ fn test_response_client_id_extraction() {
 
 #[test]
 fn test_response_display_formatting() {
-    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { client_id: Some(1) };
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 1, client_id: Some(1) };
     assert_eq!(format!("{}", put_response), "PUT OK");
 
-    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { client_id: Some(2) };
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 2, client_id: Some(2) };
     assert_eq!(format!("{}", del_response), "DELETE OK");
 
     let get_found: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 3,
         client_id: Some(3),
         value: Some("myvalue".to_string()),
     };
     assert_eq!(format!("{}", get_found), "GET = myvalue");
 
     let get_not_found: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 4,
         client_id: Some(4),
         value: None,
     };
@@ -200,6 +217,11 @@ use proptest::prelude::*;
 
 // Generators for property-based testing (Task 8.3)
 
+/// Generator for request IDs
+fn arb_request_id() -> impl Strategy<Value = u64> {
+    any::<u64>()
+}
+
 /// Generator for client IDs with edge cases
 fn arb_client_id() -> impl Strategy<Value = Option<u64>> {
     prop_oneof![
@@ -211,22 +233,23 @@ fn arb_client_id() -> impl Strategy<Value = Option<u64>> {
     ]
 }
 
-/// Generator for KVS operations with random client IDs
+/// Generator for KVS operations with random request IDs and client IDs
 fn arb_kvs_operation() -> impl Strategy<Value = KVSOperation<String, String>> {
     prop_oneof![
-        (any::<String>(), any::<String>(), arb_client_id())
-            .prop_map(|(k, v, cid)| KVSOperation::Put(k, v, cid)),
-        (any::<String>(), arb_client_id()).prop_map(|(k, cid)| KVSOperation::Get(k, cid)),
-        (any::<String>(), arb_client_id()).prop_map(|(k, cid)| KVSOperation::Delete(k, cid)),
+        (any::<String>(), any::<String>(), arb_request_id(), arb_client_id())
+            .prop_map(|(k, v, rid, cid)| KVSOperation::Put(k, v, rid, cid)),
+        (any::<String>(), arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, cid)),
+        (any::<String>(), arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, cid)),
     ]
 }
 
-/// Generator for KVS responses with random client IDs
+/// Generator for KVS responses with random request IDs and client IDs
 fn arb_kvs_response() -> impl Strategy<Value = KVSResponse<String, String>> {
     prop_oneof![
-        arb_client_id().prop_map(|cid| KVSResponse::PutOk { client_id: cid }),
-        arb_client_id().prop_map(|cid| KVSResponse::DeleteOk { client_id: cid }),
-        (arb_client_id(), any::<Option<String>>()).prop_map(|(cid, val)| KVSResponse::GetResult {
+        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::PutOk { request_id: rid, client_id: cid }),
+        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::DeleteOk { request_id: rid, client_id: cid }),
+        (arb_request_id(), arb_client_id(), any::<Option<String>>()).prop_map(|(rid, cid, val)| KVSResponse::GetResult {
+            request_id: rid,
             client_id: cid,
             value: val
         }),
@@ -320,14 +343,15 @@ proptest! {
     #[test]
     fn prop_replicated_operations_have_none_client_id(
         key in any::<String>(),
-        value in any::<String>()
+        value in any::<String>(),
+        request_id in arb_request_id()
     ) {
         // Simulate the replication process: when a PUT operation is replicated,
         // the replicated operation is created from the (key, value) delta tuple
         // This simulates what happens in cross_layer_flow.rs and plumb_after.rs
 
         // Create a replicated operation from a PUT delta (as done in the actual code)
-        let replicated_op = KVSOperation::Put(key.clone(), value.clone(), None);
+        let replicated_op = KVSOperation::Put(key.clone(), value.clone(), request_id, None);
 
         // Verify that the replicated operation has None client_id
         prop_assert_eq!(
@@ -338,9 +362,10 @@ proptest! {
 
         // Verify that the key and value are preserved
         match replicated_op {
-            KVSOperation::Put(k, v, cid) => {
+            KVSOperation::Put(k, v, rid, cid) => {
                 prop_assert_eq!(k, key);
                 prop_assert_eq!(v, value);
+                prop_assert_eq!(rid, request_id);
                 prop_assert_eq!(cid, None);
             }
             _ => prop_assert!(false, "Should be a Put operation"),
@@ -375,30 +400,31 @@ proptest! {
         let mut state = std::collections::HashMap::new();
         let responses: Vec<_> = operations_with_ids.iter()
             .map(|(expected_client_id, op)| {
+                let request_id = op.request_id();
                 let client_id = op.client_id();
                 let should_emit_response = client_id.is_some();
 
                 let response: Option<KVSResponse<String, String>> = match op {
-                    KVSOperation::Put(key, value, _) => {
+                    KVSOperation::Put(key, value, _, _) => {
                         state.insert(key.clone(), value.clone());
                         if should_emit_response {
-                            Some(KVSResponse::PutOk { client_id })
+                            Some(KVSResponse::PutOk { request_id, client_id })
                         } else {
                             None
                         }
                     }
-                    KVSOperation::Get(key, _) => {
+                    KVSOperation::Get(key, _, _) => {
                         let value = state.get(key).cloned();
                         if should_emit_response {
-                            Some(KVSResponse::GetResult { client_id, value })
+                            Some(KVSResponse::GetResult { request_id, client_id, value })
                         } else {
                             None
                         }
                     }
-                    KVSOperation::Delete(key, _) => {
+                    KVSOperation::Delete(key, _, _) => {
                         state.remove(key);
                         if should_emit_response {
-                            Some(KVSResponse::DeleteOk { client_id })
+                            Some(KVSResponse::DeleteOk { request_id, client_id })
                         } else {
                             None
                         }
@@ -462,10 +488,12 @@ proptest! {
     ) {
         // Simulate responses flowing through after-storage layers
         let original_client_id = response.client_id();
+        let original_request_id = response.request_id();
 
         // 1. Response generated from core
         let from_core = response.clone();
         prop_assert_eq!(from_core.client_id(), original_client_id);
+        prop_assert_eq!(from_core.request_id(), original_request_id);
 
         // 2. Serialization/deserialization (simulating network transmission in replication)
         let serialized = serde_json::to_string(&from_core)
@@ -477,6 +505,11 @@ proptest! {
             original_client_id,
             "Client ID should be preserved through serialization/deserialization"
         );
+        prop_assert_eq!(
+            after_network.request_id(),
+            original_request_id,
+            "Request ID should be preserved through serialization/deserialization"
+        );
 
         // 3. Cloning (simulating broadcast to multiple nodes)
         let cloned = after_network.clone();
@@ -485,17 +518,22 @@ proptest! {
             original_client_id,
             "Client ID should be preserved through cloning"
         );
+        prop_assert_eq!(
+            cloned.request_id(),
+            original_request_id,
+            "Request ID should be preserved through cloning"
+        );
 
         // 4. Pattern matching and reconstruction (simulating responder processing)
         let reconstructed: KVSResponse<String, String> = match cloned {
-            KVSResponse::PutOk { client_id } => {
-                KVSResponse::PutOk { client_id }
+            KVSResponse::PutOk { request_id, client_id } => {
+                KVSResponse::PutOk { request_id, client_id }
             }
-            KVSResponse::DeleteOk { client_id } => {
-                KVSResponse::DeleteOk { client_id }
+            KVSResponse::DeleteOk { request_id, client_id } => {
+                KVSResponse::DeleteOk { request_id, client_id }
             }
-            KVSResponse::GetResult { client_id, value } => {
-                KVSResponse::GetResult { client_id, value }
+            KVSResponse::GetResult { request_id, client_id, value } => {
+                KVSResponse::GetResult { request_id, client_id, value }
             }
             KVSResponse::_Phantom(_) => unreachable!(),
         };
@@ -504,20 +542,36 @@ proptest! {
             original_client_id,
             "Client ID should be preserved through pattern matching and reconstruction"
         );
+        prop_assert_eq!(
+            reconstructed.request_id(),
+            original_request_id,
+            "Request ID should be preserved through pattern matching and reconstruction"
+        );
 
         // 5. Extraction for routing (simulating proxy completion)
         let extracted_id = reconstructed.client_id();
+        let extracted_rid = reconstructed.request_id();
         prop_assert_eq!(
             extracted_id,
             original_client_id,
             "Client ID extraction should return the original client ID"
         );
+        prop_assert_eq!(
+            extracted_rid,
+            original_request_id,
+            "Request ID extraction should return the original request ID"
+        );
 
-        // Throughout all after-storage transformations, the client ID should remain unchanged
+        // Throughout all after-storage transformations, both IDs should remain unchanged
         prop_assert_eq!(
             reconstructed.client_id(),
             response.client_id(),
             "Client ID should be preserved through all after-storage layers"
+        );
+        prop_assert_eq!(
+            reconstructed.request_id(),
+            response.request_id(),
+            "Request ID should be preserved through all after-storage layers"
         );
     }
 }

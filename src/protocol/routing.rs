@@ -30,7 +30,7 @@ where
 {
     fn routing_key(&self) -> &[u8] {
         match self {
-            KVSOperation::Put(k, _, _) | KVSOperation::Get(k, _) | KVSOperation::Delete(k, _) => {
+            KVSOperation::Put(k, _, _, _) | KVSOperation::Get(k, _, _) | KVSOperation::Delete(k, _, _) => {
                 k.as_ref()
             }
         }

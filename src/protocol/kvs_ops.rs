@@ -4,39 +4,57 @@ use std::fmt::{self, Display};
 /// KVS operation types that clients can send to the server
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum KVSOperation<K, V> {
-    /// Store a key-value pair (key, value, client_id)
-    Put(K, V, Option<u64>),
-    /// Retrieve the value for a key (key, client_id)
-    Get(K, Option<u64>),
-    /// Tombstone (logically delete) a key (key, client_id)
-    Delete(K, Option<u64>),
+    /// Store a key-value pair (key, value, request_id, client_id)
+    Put(K, V, u64, Option<u64>),
+    /// Retrieve the value for a key (key, request_id, client_id)
+    Get(K, u64, Option<u64>),
+    /// Tombstone (logically delete) a key (key, request_id, client_id)
+    Delete(K, u64, Option<u64>),
 }
 
 impl<K, V> KVSOperation<K, V> {
+    /// Extract the request ID from the operation
+    pub fn request_id(&self) -> u64 {
+        match self {
+            KVSOperation::Put(_, _, rid, _) => *rid,
+            KVSOperation::Get(_, rid, _) => *rid,
+            KVSOperation::Delete(_, rid, _) => *rid,
+        }
+    }
+
     /// Extract the client ID from the operation
     pub fn client_id(&self) -> Option<u64> {
         match self {
-            KVSOperation::Put(_, _, cid) => *cid,
-            KVSOperation::Get(_, cid) => *cid,
-            KVSOperation::Delete(_, cid) => *cid,
+            KVSOperation::Put(_, _, _, cid) => *cid,
+            KVSOperation::Get(_, _, cid) => *cid,
+            KVSOperation::Delete(_, _, cid) => *cid,
+        }
+    }
+
+    /// Set or update the request ID for this operation
+    pub fn with_request_id(self, request_id: u64) -> Self {
+        match self {
+            KVSOperation::Put(k, v, _, cid) => KVSOperation::Put(k, v, request_id, cid),
+            KVSOperation::Get(k, _, cid) => KVSOperation::Get(k, request_id, cid),
+            KVSOperation::Delete(k, _, cid) => KVSOperation::Delete(k, request_id, cid),
         }
     }
 
     /// Set or update the client ID for this operation
     pub fn with_client_id(self, client_id: Option<u64>) -> Self {
         match self {
-            KVSOperation::Put(k, v, _) => KVSOperation::Put(k, v, client_id),
-            KVSOperation::Get(k, _) => KVSOperation::Get(k, client_id),
-            KVSOperation::Delete(k, _) => KVSOperation::Delete(k, client_id),
+            KVSOperation::Put(k, v, rid, _) => KVSOperation::Put(k, v, rid, client_id),
+            KVSOperation::Get(k, rid, _) => KVSOperation::Get(k, rid, client_id),
+            KVSOperation::Delete(k, rid, _) => KVSOperation::Delete(k, rid, client_id),
         }
     }
 
     /// Extract the key from the operation
     pub fn key(&self) -> &K {
         match self {
-            KVSOperation::Put(k, _, _) => k,
-            KVSOperation::Get(k, _) => k,
-            KVSOperation::Delete(k, _) => k,
+            KVSOperation::Put(k, _, _, _) => k,
+            KVSOperation::Get(k, _, _) => k,
+            KVSOperation::Delete(k, _, _) => k,
         }
     }
 }
@@ -45,11 +63,18 @@ impl<K, V> KVSOperation<K, V> {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum KVSResponse<K, V> {
     /// Successful PUT operation
-    PutOk { client_id: Option<u64> },
+    PutOk {
+        request_id: u64,
+        client_id: Option<u64>,
+    },
     /// Successful DELETE (tombstone) operation
-    DeleteOk { client_id: Option<u64> },
+    DeleteOk {
+        request_id: u64,
+        client_id: Option<u64>,
+    },
     /// GET operation result - Some(value) if found and live, None if not found or tombstoned
     GetResult {
+        request_id: u64,
         client_id: Option<u64>,
         value: Option<V>,
     },
@@ -58,11 +83,21 @@ pub enum KVSResponse<K, V> {
 }
 
 impl<K, V> KVSResponse<K, V> {
+    /// Extract the request ID from the response
+    pub fn request_id(&self) -> u64 {
+        match self {
+            KVSResponse::PutOk { request_id, .. } => *request_id,
+            KVSResponse::DeleteOk { request_id, .. } => *request_id,
+            KVSResponse::GetResult { request_id, .. } => *request_id,
+            KVSResponse::_Phantom(_) => 0,
+        }
+    }
+
     /// Extract the client ID from the response
     pub fn client_id(&self) -> Option<u64> {
         match self {
-            KVSResponse::PutOk { client_id } => *client_id,
-            KVSResponse::DeleteOk { client_id } => *client_id,
+            KVSResponse::PutOk { client_id, .. } => *client_id,
+            KVSResponse::DeleteOk { client_id, .. } => *client_id,
             KVSResponse::GetResult { client_id, .. } => *client_id,
             KVSResponse::_Phantom(_) => None,
         }
