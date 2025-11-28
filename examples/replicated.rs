@@ -28,7 +28,7 @@ struct Args {
     #[clap(flatten)]
     graph: GraphConfig,
     /// Choose lattice semantics for replicated values
-    #[clap(long, value_enum, default_value_t = LatticeKind::Lww)]
+    #[clap(long, value_enum, default_value_t = LatticeKind::Causal)]
     lattice: LatticeKind,
 }
 

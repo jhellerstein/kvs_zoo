@@ -68,10 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Workload inline
     let ops = vec![
-        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into()), None),
-        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into()), None),
-        KVSOperation::Get("user:1".into(), None),
-        KVSOperation::Get("user:2".into(), None),
+        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into()), 1, None),
+        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into()), 2, None),
+        KVSOperation::Get("user:1".into(), 3, None),
+        KVSOperation::Get("user:2".into(), 4, None),
     ];
     for op in &ops {
         if let Some(info) = shard_info(op, 3) {

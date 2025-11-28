@@ -8,11 +8,11 @@ edition = "2024"
 name = "kvs_zoo"
 
 [dependencies]
-dfir_rs = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = ["deploy"] }
-hydro_std = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-lattices = { git = "https://github.com/hydro-project/hydro.git", package = "lattices", branch = "main", features = ["serde"] }
+dfir_rs = { path = "../../monorepo/hydro/dfir_rs" }
+hydro_lang = { path = "../../monorepo/hydro/hydro_lang" , features = ["deploy"] }
+hydro_std = { path = "../../monorepo/hydro/hydro_std" }
+hydro_deploy = { path = "../../monorepo/hydro/hydro_deploy/core" }
+lattices = { path = "../../monorepo/hydro/lattices", features = ["serde"] }
 stageleft = "0.10.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -33,8 +33,8 @@ tombstone_fst = []
 stageleft_tool = "0.10.3"
 
 [dev-dependencies]
-hydro_deploy = { git = "https://github.com/hydro-project/hydro.git", branch = "main" }
-hydro_lang = { git = "https://github.com/hydro-project/hydro.git", branch = "main", features = [
+hydro_deploy = { path = "../../monorepo/hydro/hydro_deploy/core" }
+hydro_lang = { path = "../../monorepo/hydro/hydro_lang", features = [
     "deploy",
     "viz",
     "sim",

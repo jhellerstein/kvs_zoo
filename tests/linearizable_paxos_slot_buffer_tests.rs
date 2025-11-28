@@ -76,12 +76,13 @@ fn get_waits_for_prior_put_slot() {
             .send(kvs_zoo::protocol::KVSOperation::Put(
                 "x".into(),
                 LwwWrapper::new("1".into()),
+                1,
                 Some(1),
             ))
             .await
             .unwrap();
         input
-            .send(kvs_zoo::protocol::KVSOperation::Get("x".into(), Some(1)))
+            .send(kvs_zoo::protocol::KVSOperation::Get("x".into(), 2, Some(1)))
             .await
             .unwrap();
         let r1 = out.next().await.unwrap();
