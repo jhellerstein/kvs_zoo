@@ -89,7 +89,7 @@ where
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
 
     // 5) before_storage (leaf): route replicated PUTs, apply without responses
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, 0, None)));
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
     let leaf_replicated_ops = leaf_before
         .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster)
         .assume_ordering(nondet!(/** sequential apply of replicated PUTs */));

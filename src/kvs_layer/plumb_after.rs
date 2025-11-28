@@ -272,7 +272,7 @@ where
             let replicated = self
                 .after
                 .replicate_data(my_cluster, replication_input)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, 0, None)))
+                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)))
                 .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at layer */));
 
             let routed = self
@@ -352,7 +352,7 @@ where
             let replicated = self
                 .after
                 .replicate_data(my_cluster, deltas)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, 0, None)))
+                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)))
                 .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at node */));
             (pass_up, replicated)
         }

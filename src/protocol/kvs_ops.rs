@@ -4,11 +4,27 @@ use std::fmt::{self, Display};
 /// KVS operation types that clients can send to the server
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum KVSOperation<K, V> {
-    /// Store a key-value pair (key, value, request_id, client_id)
+    /// Store a key-value pair in the key-value store.
+    ///
+    /// # Fields
+    /// - `K`: The key to store.
+    /// - `V`: The value to associate with the key.
+    /// - `u64`: Request ID for tracking this specific operation. Used to correlate requests and responses.
+    /// - `Option<u64>`: Optional client ID. Use `Some(id)` for client-originated requests; use `None` for replicated/internal operations.
     Put(K, V, u64, Option<u64>),
-    /// Retrieve the value for a key (key, request_id, client_id)
+    /// Retrieve the value associated with a key.
+    ///
+    /// # Fields
+    /// - `K`: The key whose value is to be retrieved.
+    /// - `u64`: Request ID for tracking this specific operation. Used to correlate requests and responses.
+    /// - `Option<u64>`: Optional client ID. Use `Some(id)` for client-originated requests; use `None` for replicated/internal operations.
     Get(K, u64, Option<u64>),
-    /// Tombstone (logically delete) a key (key, request_id, client_id)
+    /// Tombstone (logically delete) a key from the store.
+    ///
+    /// # Fields
+    /// - `K`: The key to delete.
+    /// - `u64`: Request ID for tracking this specific operation. Used to correlate requests and responses.
+    /// - `Option<u64>`: Optional client ID. Use `Some(id)` for client-originated requests; use `None` for replicated/internal operations.
     Delete(K, u64, Option<u64>),
 }
 
