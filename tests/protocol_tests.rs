@@ -140,6 +140,18 @@ fn test_operation_client_id_extraction() {
 }
 
 #[test]
+fn test_operation_request_id_extraction() {
+    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), 42, Some(1));
+    assert_eq!(put_op.request_id(), 42);
+
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key".to_string(), 100, None);
+    assert_eq!(get_op.request_id(), 100);
+
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key".to_string(), 200, None);
+    assert_eq!(del_op.request_id(), 200);
+}
+
+#[test]
 fn test_operation_with_client_id() {
     let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), 1, None);
     let updated = put_op.with_client_id(Some(99));
@@ -207,6 +219,18 @@ fn test_response_client_id_extraction() {
         value: Some("val".to_string()),
     };
     assert_eq!(get_response.client_id(), Some(20));
+}
+
+#[test]
+fn test_response_request_id_extraction() {
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 10, client_id: Some(1) };
+    assert_eq!(put_response.request_id(), 10);
+
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 20, client_id: None };
+    assert_eq!(del_response.request_id(), 20);
+
+    let get_response: KVSResponse<String, String> = KVSResponse::GetResult { request_id: 30, client_id: Some(2), value: None };
+    assert_eq!(get_response.request_id(), 30);
 }
 
 #[test]
