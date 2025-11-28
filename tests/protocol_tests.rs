@@ -158,6 +158,27 @@ fn test_operation_with_client_id() {
 }
 
 #[test]
+fn test_operation_with_request_id() {
+    let put_op = KVSOperation::Put("key".to_string(), "value".to_string(), 1, None);
+    let updated = put_op.with_request_id(99);
+    assert_eq!(updated.request_id(), 99);
+    assert_eq!(updated.key(), "key");
+    assert_eq!(updated.client_id(), None);
+
+    let get_op: KVSOperation<String, String> = KVSOperation::Get("key2".to_string(), 2, Some(1));
+    let updated = get_op.with_request_id(200);
+    assert_eq!(updated.request_id(), 200);
+    assert_eq!(updated.key(), "key2");
+    assert_eq!(updated.client_id(), Some(1));
+
+    let del_op: KVSOperation<String, String> = KVSOperation::Delete("key3".to_string(), 3, Some(5));
+    let updated = del_op.with_request_id(300);
+    assert_eq!(updated.request_id(), 300);
+    assert_eq!(updated.key(), "key3");
+    assert_eq!(updated.client_id(), Some(5));
+}
+
+#[test]
 fn test_operation_key_extraction() {
     let put_op = KVSOperation::Put("put_key".to_string(), "value".to_string(), 1, Some(1));
     assert_eq!(put_op.key(), "put_key");
