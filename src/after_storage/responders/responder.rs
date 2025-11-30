@@ -14,7 +14,7 @@ pub trait LeafAfterHook {
         &self,
         leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>;
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>;
 }
 
 /// Simple responder that only forwards responses for original (non-replica) ops.
@@ -32,14 +32,14 @@ impl LeafAfterHook for Responder {
         &self,
         _leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder> {
         tagged_responses
             .filter_map(q!(|(is_replica, resp)| if !is_replica {
                 Some(resp)
             } else {
                 None
             }))
-            .assume_ordering(nondet!(/** local responses only for originals */))
+            .weakest_ordering()
     }
 }
 
@@ -75,8 +75,8 @@ where
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
-        // No replication at leaf - convert to NoOrder for consistency
-        local_data.assume_ordering(nondet!(/** leaf responder passthrough */))
+        // No replication at leaf - just relax ordering to match trait signature
+        local_data.weakest_ordering()
     }
 
     fn replicate_slotted_data<'a, O>(
@@ -87,8 +87,8 @@ where
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
-        // Preserve slots; convert to NoOrder for consistency
-        local_slotted_data.assume_ordering(nondet!(/** leaf responder slotted passthrough */))
+        // No replication at leaf - just relax ordering to match trait signature
+        local_slotted_data.weakest_ordering()
     }
 }
 

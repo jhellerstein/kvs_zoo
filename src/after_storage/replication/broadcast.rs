@@ -194,14 +194,14 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         local_put_tuples
             .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
-            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** broadcast messages unordered */))
     }
 
     /// Periodic background broadcast replication
@@ -209,7 +209,7 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -235,7 +235,7 @@ where
 
         periodic_broadcast
             .values()
-            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** broadcast messages unordered */))
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }

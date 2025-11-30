@@ -223,7 +223,7 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -243,7 +243,7 @@ where
 
         gossip_sent
             .values()
-            .assume_ordering(nondet!(/** gossip messages unordered */))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** gossip messages unordered */))
             .assume_retries(nondet!(/** gossip retries OK */))
     }
 }

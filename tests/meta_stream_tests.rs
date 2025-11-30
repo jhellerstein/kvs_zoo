@@ -83,11 +83,14 @@ async fn background_plumb_routes_meta_events() {
 
             let meta_stream = cluster_entry
                 .source_iter(q!(vec!["alpha".to_string()]))
-                .map(q!(|key: String| kvs_zoo::MetaEvent::Tomb { key }))
-                .assume_ordering(nondet!(/** single tomb meta event */));
+                .map(q!(|key: String| vec![kvs_zoo::MetaEvent::Tomb { key }]))
+                .flatten_unordered()
+                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])));
 
             let (bg_data, bg_meta) = spec.plumb_background(&layers, data_stream, meta_stream);
-            bg_data.for_each(q!(|_data| ()));
+            bg_data
+                .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** test */))
+                .for_each(q!(|_data| ()));
 
             bg_meta
                 .send_bincode(process)
@@ -100,21 +103,28 @@ async fn background_plumb_routes_meta_events() {
             let mut digest_observed = false;
 
             for _ in 0..16 {
-                let maybe_event = timeout(Duration::from_millis(300), stream.next()).await;
-                match maybe_event {
-                    Ok(Some(MetaEvent::Tomb { ref key })) if key == "alpha" => {
-                        tomb_observed = true;
+                let maybe_lattice = timeout(Duration::from_millis(300), stream.next()).await;
+                match maybe_lattice {
+                    Ok(Some(lattice)) => {
+                        // Unwrap the lattice to get the events
+                        for event in lattice.into_reveal() {
+                            match event {
+                                MetaEvent::Tomb { ref key } if key == "alpha" => {
+                                    tomb_observed = true;
+                                }
+                                MetaEvent::TombSummary {
+                                    total_tombs,
+                                    ref last_tomb_key,
+                                } if total_tombs == 1 && last_tomb_key.as_deref() == Some("alpha") => {
+                                    summary_observed = true;
+                                }
+                                MetaEvent::CompactionDigest { .. } => {
+                                    digest_observed = true;
+                                }
+                                _ => {}
+                            }
+                        }
                     }
-                    Ok(Some(MetaEvent::TombSummary {
-                        total_tombs,
-                        ref last_tomb_key,
-                    })) if total_tombs == 1 && last_tomb_key.as_deref() == Some("alpha") => {
-                        summary_observed = true;
-                    }
-                    Ok(Some(MetaEvent::CompactionDigest { .. })) => {
-                        digest_observed = true;
-                    }
-                    Ok(Some(_)) => {}
                     Ok(None) | Err(_) => break,
                 }
 
