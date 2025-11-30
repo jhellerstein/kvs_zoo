@@ -65,16 +65,18 @@ async fn test_local_kvs_service() {
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("value1".to_string()),
+            1,
             None,
         ),
-        KVSOperation::Get("key1".to_string(), None),
+        KVSOperation::Get("key1".to_string(), 2, None),
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("updated_value1".to_string()),
+            3,
             None,
         ),
-        KVSOperation::Get("key1".to_string(), None),
-        KVSOperation::Get("nonexistent".to_string(), None),
+        KVSOperation::Get("key1".to_string(), 4, None),
+        KVSOperation::Get("nonexistent".to_string(), 5, None),
     ];
 
     let expected_responses = [
@@ -142,10 +144,10 @@ async fn test_replicated_kvs_service() {
     let val2 = create_causal_string("node2", "value2");
 
     let operations = vec![
-        KVSOperation::Put("alpha".to_string(), val1, None),
-        KVSOperation::Put("alpha".to_string(), val2, None), // Concurrent write - should merge
-        KVSOperation::Get("alpha".to_string(), None),
-        KVSOperation::Get("nonexistent".to_string(), None),
+        KVSOperation::Put("alpha".to_string(), val1, 1, None),
+        KVSOperation::Put("alpha".to_string(), val2, 2, None), // Concurrent write - should merge
+        KVSOperation::Get("alpha".to_string(), 3, None),
+        KVSOperation::Get("nonexistent".to_string(), 4, None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -243,16 +245,18 @@ async fn test_sharded_kvs_service() {
         KVSOperation::Put(
             "shard_key_0".to_string(),
             LwwWrapper::new("value_0".to_string()),
+            1,
             None,
         ),
         KVSOperation::Put(
             "shard_key_1".to_string(),
             LwwWrapper::new("value_1".to_string()),
+            2,
             None,
         ),
-        KVSOperation::Get("shard_key_0".to_string(), None),
-        KVSOperation::Get("shard_key_1".to_string(), None),
-        KVSOperation::Get("nonexistent".to_string(), None),
+        KVSOperation::Get("shard_key_0".to_string(), 3, None),
+        KVSOperation::Get("shard_key_1".to_string(), 4, None),
+        KVSOperation::Get("nonexistent".to_string(), 5, None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {
@@ -371,10 +375,10 @@ async fn test_sharded_replicated_kvs_service() {
     let val2 = create_causal_string("node2", "value_1");
 
     let operations = vec![
-        KVSOperation::Put("shard_key_0".to_string(), val1, None),
-        KVSOperation::Put("shard_key_1".to_string(), val2, None),
-        KVSOperation::Get("shard_key_0".to_string(), None),
-        KVSOperation::Get("shard_key_1".to_string(), None),
+        KVSOperation::Put("shard_key_0".to_string(), val1, 1, None),
+        KVSOperation::Put("shard_key_1".to_string(), val2, 2, None),
+        KVSOperation::Get("shard_key_0".to_string(), 3, None),
+        KVSOperation::Get("shard_key_1".to_string(), 4, None),
     ];
 
     for (i, op) in operations.into_iter().enumerate() {

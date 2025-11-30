@@ -16,9 +16,10 @@ async fn delete_emits_tomb_meta_event() {
                     kvs_zoo::protocol::KVSOperation::Put(
                         "alpha".to_string(),
                         kvs_zoo::values::LwwWrapper::new("one".to_string()),
+                        1,
                         Some(1),
                     ),
-                    kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string(), Some(1)),
+                    kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string(), 2, Some(1)),
                 ]))
                 .assume_ordering(nondet!(/** deterministic demo ops */));
 
@@ -145,7 +146,7 @@ async fn tomb_index_background_emits_summary() {
                     String,
                     kvs_zoo::values::LwwWrapper<String>,
                 >::Delete(
-                    "alpha".to_string(), Some(1),
+                    "alpha".to_string(), 1, Some(1),
                 ),]))
                 .assume_ordering(nondet!(/** single delete */));
 

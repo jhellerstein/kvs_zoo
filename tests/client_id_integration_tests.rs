@@ -23,18 +23,20 @@ fn test_single_client_flow() {
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("value1".to_string()),
+            1,
             Some(client_id),
         ),
-        KVSOperation::Get("key1".to_string(), Some(client_id)),
+        KVSOperation::Get("key1".to_string(), 2, Some(client_id)),
         KVSOperation::Put(
             "key2".to_string(),
             LwwWrapper::new("value2".to_string()),
+            3,
             Some(client_id),
         ),
-        KVSOperation::Get("key2".to_string(), Some(client_id)),
-        KVSOperation::Get("key1".to_string(), Some(client_id)),
-        KVSOperation::Delete("key1".to_string(), Some(client_id)),
-        KVSOperation::Get("key1".to_string(), Some(client_id)),
+        KVSOperation::Get("key2".to_string(), 4, Some(client_id)),
+        KVSOperation::Get("key1".to_string(), 5, Some(client_id)),
+        KVSOperation::Delete("key1".to_string(), 6, Some(client_id)),
+        KVSOperation::Get("key1".to_string(), 7, Some(client_id)),
     ];
 
     // Simulate the core processing (as it would happen in the real system)
@@ -56,20 +58,22 @@ fn test_single_client_flow() {
         let should_emit_response = should_respond && op_client_id.is_some();
 
         let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
                     Some(KVSResponse::PutOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
                     None
                 }
             }
-            KVSOperation::Get(key, _) => {
+            KVSOperation::Get(key, request_id, _) => {
                 let value = state.get(&key).cloned();
                 if should_emit_response {
                     Some(KVSResponse::GetResult {
+                        request_id,
                         client_id: op_client_id,
                         value,
                     })
@@ -77,10 +81,11 @@ fn test_single_client_flow() {
                     None
                 }
             }
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, request_id, _) => {
                 state.remove(&key);
                 if should_emit_response {
                     Some(KVSResponse::DeleteOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
@@ -119,47 +124,54 @@ fn test_single_client_flow() {
     assert!(matches!(
         responses[0],
         KVSResponse::PutOk {
-            client_id: Some(42)
+            client_id: Some(42),
+            ..
         }
     ));
     assert!(matches!(
         responses[1],
         KVSResponse::GetResult {
             client_id: Some(42),
-            value: Some(_)
+            value: Some(_),
+            ..
         }
     ));
     assert!(matches!(
         responses[2],
         KVSResponse::PutOk {
-            client_id: Some(42)
+            client_id: Some(42),
+            ..
         }
     ));
     assert!(matches!(
         responses[3],
         KVSResponse::GetResult {
             client_id: Some(42),
-            value: Some(_)
+            value: Some(_),
+            ..
         }
     ));
     assert!(matches!(
         responses[4],
         KVSResponse::GetResult {
             client_id: Some(42),
-            value: Some(_)
+            value: Some(_),
+            ..
         }
     ));
     assert!(matches!(
         responses[5],
         KVSResponse::DeleteOk {
-            client_id: Some(42)
+            client_id: Some(42),
+            ..
         }
     ));
     assert!(matches!(
         responses[6],
         KVSResponse::GetResult {
             client_id: Some(42),
-            value: None
+            value: None,
+            ..
         }
     ));
 
@@ -209,6 +221,7 @@ fn test_multiple_concurrent_clients() {
             KVSOperation::Put(
                 "shared_key".to_string(),
                 LwwWrapper::new("a1".to_string()),
+                1,
                 Some(client_a),
             ),
         ),
@@ -217,26 +230,28 @@ fn test_multiple_concurrent_clients() {
             KVSOperation::Put(
                 "shared_key".to_string(),
                 LwwWrapper::new("b1".to_string()),
+                2,
                 Some(client_b),
             ),
         ),
         (
             client_c,
-            KVSOperation::Get("shared_key".to_string(), Some(client_c)),
+            KVSOperation::Get("shared_key".to_string(), 3, Some(client_c)),
         ),
         (
             client_a,
-            KVSOperation::Get("shared_key".to_string(), Some(client_a)),
+            KVSOperation::Get("shared_key".to_string(), 4, Some(client_a)),
         ),
         (
             client_b,
-            KVSOperation::Get("shared_key".to_string(), Some(client_b)),
+            KVSOperation::Get("shared_key".to_string(), 5, Some(client_b)),
         ),
         (
             client_a,
             KVSOperation::Put(
                 "key_a".to_string(),
                 LwwWrapper::new("value_a".to_string()),
+                6,
                 Some(client_a),
             ),
         ),
@@ -245,6 +260,7 @@ fn test_multiple_concurrent_clients() {
             KVSOperation::Put(
                 "key_b".to_string(),
                 LwwWrapper::new("value_b".to_string()),
+                7,
                 Some(client_b),
             ),
         ),
@@ -253,32 +269,33 @@ fn test_multiple_concurrent_clients() {
             KVSOperation::Put(
                 "key_c".to_string(),
                 LwwWrapper::new("value_c".to_string()),
+                8,
                 Some(client_c),
             ),
         ),
         (
             client_a,
-            KVSOperation::Get("key_a".to_string(), Some(client_a)),
+            KVSOperation::Get("key_a".to_string(), 9, Some(client_a)),
         ),
         (
             client_b,
-            KVSOperation::Get("key_b".to_string(), Some(client_b)),
+            KVSOperation::Get("key_b".to_string(), 10, Some(client_b)),
         ),
         (
             client_c,
-            KVSOperation::Get("key_c".to_string(), Some(client_c)),
+            KVSOperation::Get("key_c".to_string(), 11, Some(client_c)),
         ),
         (
             client_a,
-            KVSOperation::Delete("key_a".to_string(), Some(client_a)),
+            KVSOperation::Delete("key_a".to_string(), 12, Some(client_a)),
         ),
         (
             client_b,
-            KVSOperation::Delete("key_b".to_string(), Some(client_b)),
+            KVSOperation::Delete("key_b".to_string(), 13, Some(client_b)),
         ),
         (
             client_c,
-            KVSOperation::Delete("key_c".to_string(), Some(client_c)),
+            KVSOperation::Delete("key_c".to_string(), 14, Some(client_c)),
         ),
     ];
 
@@ -302,20 +319,22 @@ fn test_multiple_concurrent_clients() {
         let should_emit_response = should_respond && op_client_id.is_some();
 
         let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
                     Some(KVSResponse::PutOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
                     None
                 }
             }
-            KVSOperation::Get(key, _) => {
+            KVSOperation::Get(key, request_id, _) => {
                 let value = state.get(&key).cloned();
                 if should_emit_response {
                     Some(KVSResponse::GetResult {
+                        request_id,
                         client_id: op_client_id,
                         value,
                     })
@@ -323,10 +342,11 @@ fn test_multiple_concurrent_clients() {
                     None
                 }
             }
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, request_id, _) => {
                 state.remove(&key);
                 if should_emit_response {
                     Some(KVSResponse::DeleteOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
@@ -450,6 +470,7 @@ fn test_replication_without_client_responses() {
             KVSOperation::Put(
                 "key1".to_string(),
                 LwwWrapper::new("value1".to_string()),
+                1,
                 Some(client_id),
             ),
         ),
@@ -459,19 +480,21 @@ fn test_replication_without_client_responses() {
             KVSOperation::Put(
                 "key1".to_string(),
                 LwwWrapper::new("value1_replica".to_string()),
+                2,
                 None,
             ),
         ),
         // Client operation: should generate response
-        (true, KVSOperation::Get("key1".to_string(), Some(client_id))),
+        (true, KVSOperation::Get("key1".to_string(), 3, Some(client_id))),
         // Replicated operation: should NOT generate response
-        (false, KVSOperation::Get("key1".to_string(), None)),
+        (false, KVSOperation::Get("key1".to_string(), 4, None)),
         // Client operation: should generate response
         (
             true,
             KVSOperation::Put(
                 "key2".to_string(),
                 LwwWrapper::new("value2".to_string()),
+                5,
                 Some(client_id),
             ),
         ),
@@ -481,16 +504,17 @@ fn test_replication_without_client_responses() {
             KVSOperation::Put(
                 "key2".to_string(),
                 LwwWrapper::new("value2_replica".to_string()),
+                6,
                 None,
             ),
         ),
         // Client operation: should generate response
         (
             true,
-            KVSOperation::Delete("key1".to_string(), Some(client_id)),
+            KVSOperation::Delete("key1".to_string(), 7, Some(client_id)),
         ),
         // Replicated operation: should NOT generate response
-        (false, KVSOperation::Delete("key1".to_string(), None)),
+        (false, KVSOperation::Delete("key1".to_string(), 8, None)),
     ];
 
     // Simulate the core processing
@@ -525,20 +549,22 @@ fn test_replication_without_client_responses() {
         let should_emit_response = should_respond && op_client_id.is_some();
 
         let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
                     Some(KVSResponse::PutOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
                     None
                 }
             }
-            KVSOperation::Get(key, _) => {
+            KVSOperation::Get(key, request_id, _) => {
                 let value = state.get(&key).cloned();
                 if should_emit_response {
                     Some(KVSResponse::GetResult {
+                        request_id,
                         client_id: op_client_id,
                         value,
                     })
@@ -546,10 +572,11 @@ fn test_replication_without_client_responses() {
                     None
                 }
             }
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, request_id, _) => {
                 state.remove(&key);
                 if should_emit_response {
                     Some(KVSResponse::DeleteOk {
+                        request_id,
                         client_id: op_client_id,
                     })
                 } else {
@@ -608,7 +635,8 @@ fn test_replication_without_client_responses() {
     assert!(matches!(
         client_responses[0],
         KVSResponse::PutOk {
-            client_id: Some(100)
+            client_id: Some(100),
+            ..
         }
     ));
     assert!(matches!(
@@ -621,13 +649,15 @@ fn test_replication_without_client_responses() {
     assert!(matches!(
         client_responses[2],
         KVSResponse::PutOk {
-            client_id: Some(100)
+            client_id: Some(100),
+            ..
         }
     ));
     assert!(matches!(
         client_responses[3],
         KVSResponse::DeleteOk {
-            client_id: Some(100)
+            client_id: Some(100),
+            ..
         }
     ));
 
@@ -652,25 +682,26 @@ fn test_end_to_end_pipeline_simulation() {
     let external_inputs = vec![
         (
             1u64,
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), None),
+            KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), 1, None),
         ),
         (
             2u64,
-            KVSOperation::Put("y".to_string(), LwwWrapper::new("v2".to_string()), None),
+            KVSOperation::Put("y".to_string(), LwwWrapper::new("v2".to_string()), 2, None),
         ),
-        (1u64, KVSOperation::Get("x".to_string(), None)),
-        (2u64, KVSOperation::Get("y".to_string(), None)),
-        (3u64, KVSOperation::Get("x".to_string(), None)),
+        (1u64, KVSOperation::Get("x".to_string(), 3, None)),
+        (2u64, KVSOperation::Get("y".to_string(), 4, None)),
+        (3u64, KVSOperation::Get("x".to_string(), 5, None)),
         (
             1u64,
             KVSOperation::Put(
                 "x".to_string(),
                 LwwWrapper::new("v1_updated".to_string()),
+                6,
                 None,
             ),
         ),
-        (2u64, KVSOperation::Delete("y".to_string(), None)),
-        (3u64, KVSOperation::Get("y".to_string(), None)),
+        (2u64, KVSOperation::Delete("y".to_string(), 7, None)),
+        (3u64, KVSOperation::Get("y".to_string(), 8, None)),
     ];
 
     // Step 1: Attach client IDs at entry point (simulating plumbing.rs)
@@ -723,20 +754,22 @@ fn test_end_to_end_pipeline_simulation() {
             let should_emit_response = should_respond && op_client_id.is_some();
 
             let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, request_id, _) => {
                     state.insert(key.clone(), value.clone());
                     if should_emit_response {
                         Some(KVSResponse::PutOk {
+                            request_id: *request_id,
                             client_id: op_client_id,
                         })
                     } else {
                         None
                     }
                 }
-                KVSOperation::Get(key, _) => {
+                KVSOperation::Get(key, request_id, _) => {
                     let value = state.get(key).cloned();
                     if should_emit_response {
                         Some(KVSResponse::GetResult {
+                            request_id: *request_id,
                             client_id: op_client_id,
                             value,
                         })
@@ -744,10 +777,11 @@ fn test_end_to_end_pipeline_simulation() {
                         None
                     }
                 }
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, request_id, _) => {
                     state.remove(key);
                     if should_emit_response {
                         Some(KVSResponse::DeleteOk {
+                            request_id: *request_id,
                             client_id: op_client_id,
                         })
                     } else {

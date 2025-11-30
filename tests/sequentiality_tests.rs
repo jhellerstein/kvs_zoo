@@ -17,27 +17,31 @@ fn test_strict_sequential_order() {
         KVSOperation::Put(
             "counter".to_string(),
             LwwWrapper::new("0".to_string()),
+            1,
             None,
         ),
-        KVSOperation::Get("counter".to_string(), None),
+        KVSOperation::Get("counter".to_string(), 2, None),
         KVSOperation::Put(
             "counter".to_string(),
             LwwWrapper::new("1".to_string()),
+            3,
             None,
         ),
-        KVSOperation::Get("counter".to_string(), None),
+        KVSOperation::Get("counter".to_string(), 4, None),
         KVSOperation::Put(
             "counter".to_string(),
             LwwWrapper::new("2".to_string()),
+            5,
             None,
         ),
-        KVSOperation::Get("counter".to_string(), None),
+        KVSOperation::Get("counter".to_string(), 6, None),
         KVSOperation::Put(
             "counter".to_string(),
             LwwWrapper::new("3".to_string()),
+            7,
             None,
         ),
-        KVSOperation::Get("counter".to_string(), None),
+        KVSOperation::Get("counter".to_string(), 8, None),
     ];
 
     // Simulate sequential processing
@@ -46,15 +50,15 @@ fn test_strict_sequential_order() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }
@@ -82,12 +86,12 @@ fn test_ordering_violation_detection() {
     // It should demonstrate why sequential processing is necessary
 
     let operations = vec![
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("first".to_string()), None),
-        KVSOperation::Get("x".to_string(), None),
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("second".to_string()), None),
-        KVSOperation::Get("x".to_string(), None),
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("third".to_string()), None),
-        KVSOperation::Get("x".to_string(), None),
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("first".to_string()), 1, None),
+        KVSOperation::Get("x".to_string(), 2, None),
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("second".to_string()), 3, None),
+        KVSOperation::Get("x".to_string(), 4, None),
+        KVSOperation::Put("x".to_string(), LwwWrapper::new("third".to_string()), 5, None),
+        KVSOperation::Get("x".to_string(), 6, None),
     ];
 
     // Correct sequential processing
@@ -96,15 +100,15 @@ fn test_ordering_violation_detection() {
 
     for op in &operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 sequential_state.insert(key.clone(), value.clone());
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match sequential_state.get(key) {
+            KVSOperation::Get(key, _, _) => match sequential_state.get(key) {
                 Some(value) => format!("GET {} = {}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 sequential_state.remove(key);
                 format!("DELETE {} = OK", key)
             }
@@ -118,7 +122,7 @@ fn test_ordering_violation_detection() {
 
     // Process PUTs first (violates ordering)
     for (i, op) in operations.iter().enumerate() {
-        if let KVSOperation::Put(key, value, _) = op {
+        if let KVSOperation::Put(key, value, _, _) = op {
             out_of_order_state.insert(key.clone(), value.clone());
             out_of_order_responses[i] = format!("PUT {} = OK", key);
         }
@@ -126,7 +130,7 @@ fn test_ordering_violation_detection() {
 
     // Then process GETs (violates ordering)
     for (i, op) in operations.iter().enumerate() {
-        if let KVSOperation::Get(key, _) = op {
+        if let KVSOperation::Get(key, _, _) = op {
             match out_of_order_state.get(key) {
                 Some(value) => out_of_order_responses[i] = format!("GET {} = {:?}", key, value),
                 None => out_of_order_responses[i] = format!("GET {} = NOT FOUND", key),
@@ -155,15 +159,15 @@ fn test_interleaved_operations_ordering() {
     // to verify that ordering is maintained across all keys
 
     let operations = vec![
-        KVSOperation::Put("a".to_string(), LwwWrapper::new("a1".to_string()), None),
-        KVSOperation::Put("b".to_string(), LwwWrapper::new("b1".to_string()), None),
-        KVSOperation::Get("a".to_string(), None),
-        KVSOperation::Get("b".to_string(), None),
-        KVSOperation::Put("a".to_string(), LwwWrapper::new("a2".to_string()), None),
-        KVSOperation::Get("a".to_string(), None),
-        KVSOperation::Put("b".to_string(), LwwWrapper::new("b2".to_string()), None),
-        KVSOperation::Get("b".to_string(), None),
-        KVSOperation::Get("a".to_string(), None),
+        KVSOperation::Put("a".to_string(), LwwWrapper::new("a1".to_string()), 1, None),
+        KVSOperation::Put("b".to_string(), LwwWrapper::new("b1".to_string()), 2, None),
+        KVSOperation::Get("a".to_string(), 3, None),
+        KVSOperation::Get("b".to_string(), 4, None),
+        KVSOperation::Put("a".to_string(), LwwWrapper::new("a2".to_string()), 5, None),
+        KVSOperation::Get("a".to_string(), 6, None),
+        KVSOperation::Put("b".to_string(), LwwWrapper::new("b2".to_string()), 7, None),
+        KVSOperation::Get("b".to_string(), 8, None),
+        KVSOperation::Get("a".to_string(), 9, None),
     ];
 
     let mut state = std::collections::HashMap::new();
@@ -171,15 +175,15 @@ fn test_interleaved_operations_ordering() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }
@@ -205,21 +209,23 @@ fn test_interleaved_operations_ordering() {
 #[test]
 fn test_missing_keys_sequential_order() {
     let operations = vec![
-        KVSOperation::Get("nonexistent".to_string(), None),
+        KVSOperation::Get("nonexistent".to_string(), 1, None),
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("value1".to_string()),
+            2,
             None,
         ),
-        KVSOperation::Get("nonexistent".to_string(), None),
-        KVSOperation::Get("key1".to_string(), None),
+        KVSOperation::Get("nonexistent".to_string(), 3, None),
+        KVSOperation::Get("key1".to_string(), 4, None),
         KVSOperation::Put(
             "key1".to_string(),
             LwwWrapper::new("updated".to_string()),
+            5,
             None,
         ),
-        KVSOperation::Get("key1".to_string(), None),
-        KVSOperation::Get("nonexistent".to_string(), None),
+        KVSOperation::Get("key1".to_string(), 6, None),
+        KVSOperation::Get("nonexistent".to_string(), 7, None),
     ];
 
     let mut state = std::collections::HashMap::new();
@@ -227,15 +233,15 @@ fn test_missing_keys_sequential_order() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }
@@ -266,27 +272,30 @@ fn test_concurrent_clients_sequential_processing() {
         KVSOperation::Put(
             "shared".to_string(),
             LwwWrapper::new("client1_v1".to_string()),
+            1,
             None,
         ),
         // Client 2 operations
         KVSOperation::Put(
             "shared".to_string(),
             LwwWrapper::new("client2_v1".to_string()),
+            2,
             None,
         ),
         // Client 1 reads
-        KVSOperation::Get("shared".to_string(), None),
+        KVSOperation::Get("shared".to_string(), 3, None),
         // Client 2 reads
-        KVSOperation::Get("shared".to_string(), None),
+        KVSOperation::Get("shared".to_string(), 4, None),
         // Client 1 updates
         KVSOperation::Put(
             "shared".to_string(),
             LwwWrapper::new("client1_v2".to_string()),
+            5,
             None,
         ),
         // Both clients read
-        KVSOperation::Get("shared".to_string(), None),
-        KVSOperation::Get("shared".to_string(), None),
+        KVSOperation::Get("shared".to_string(), 6, None),
+        KVSOperation::Get("shared".to_string(), 7, None),
     ];
 
     let mut state = std::collections::HashMap::new();
@@ -294,15 +303,15 @@ fn test_concurrent_clients_sequential_processing() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }
@@ -332,27 +341,31 @@ fn test_linearizability_violation_regression() {
         KVSOperation::Put(
             "balance".to_string(),
             LwwWrapper::new("1000".to_string()),
+            1,
             None,
         ),
-        KVSOperation::Get("balance".to_string(), None), // Should see 1000
+        KVSOperation::Get("balance".to_string(), 2, None), // Should see 1000
         KVSOperation::Put(
             "balance".to_string(),
             LwwWrapper::new("900".to_string()),
+            3,
             None,
         ), // Withdraw 100
-        KVSOperation::Get("balance".to_string(), None), // Should see 900
+        KVSOperation::Get("balance".to_string(), 4, None), // Should see 900
         KVSOperation::Put(
             "balance".to_string(),
             LwwWrapper::new("800".to_string()),
+            5,
             None,
         ), // Withdraw 100
-        KVSOperation::Get("balance".to_string(), None), // Should see 800
+        KVSOperation::Get("balance".to_string(), 6, None), // Should see 800
         KVSOperation::Put(
             "balance".to_string(),
             LwwWrapper::new("850".to_string()),
+            7,
             None,
         ), // Deposit 50
-        KVSOperation::Get("balance".to_string(), None), // Should see 850
+        KVSOperation::Get("balance".to_string(), 8, None), // Should see 850
     ];
 
     let mut state = std::collections::HashMap::new();
@@ -360,15 +373,15 @@ fn test_linearizability_violation_regression() {
 
     for op in operations {
         let response = match op {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 state.insert(key.clone(), value);
                 format!("PUT {} = OK", key)
             }
-            KVSOperation::Get(key, _) => match state.get(&key) {
+            KVSOperation::Get(key, _, _) => match state.get(&key) {
                 Some(value) => format!("GET {} = {:?}", key, value),
                 None => format!("GET {} = NOT FOUND", key),
             },
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.remove(&key);
                 format!("DELETE {} = OK", key)
             }

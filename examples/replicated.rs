@@ -28,7 +28,7 @@ struct Args {
     #[clap(flatten)]
     graph: GraphConfig,
     /// Choose lattice semantics for replicated values
-    #[clap(long, value_enum, default_value_t = LatticeKind::Lww)]
+    #[clap(long, value_enum, default_value_t = LatticeKind::Causal)]
     lattice: LatticeKind,
 }
 
@@ -123,10 +123,10 @@ fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>>
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
-        Op::Get("alpha".into(), None),
-        Op::Put("beta".into(), LwwWrapper::new("two".into()), None),
-        Op::Get("beta".into(), None),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Get("alpha".into(), 2, None),
+        Op::Put("beta".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Get("beta".into(), 4, None),
     ]
 }
 
@@ -140,9 +140,9 @@ fn causal_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, CausalString>> {
     }
 
     vec![
-        Op::Put("alpha".into(), causal("client", "one"), None),
-        Op::Get("alpha".into(), None),
-        Op::Put("beta".into(), causal("client", "two"), None),
-        Op::Get("beta".into(), None),
+        Op::Put("alpha".into(), causal("client", "one"), 1, None),
+        Op::Get("alpha".into(), 2, None),
+        Op::Put("beta".into(), causal("client", "two"), 3, None),
+        Op::Get("beta".into(), 4, None),
     ]
 }

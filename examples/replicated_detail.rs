@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
     // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, None)));
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, 0, None)));
     let all_ops = ordered_ops
         .clone()
         .interleave(replicated_ops)
@@ -122,10 +122,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), None),
-        Op::Get("alpha".into(), None),
-        Op::Put("beta".into(), LwwWrapper::new("two".into()), None),
-        Op::Get("beta".into(), None),
+        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Get("alpha".into(), 2, None),
+        Op::Put("beta".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Get("beta".into(), 4, None),
     ];
 
     for (i, op) in ops.into_iter().enumerate() {

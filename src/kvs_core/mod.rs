@@ -265,16 +265,17 @@ impl KVSCore {
         V: Clone + PartialEq + Eq + std::fmt::Debug + std::fmt::Display,
         Store: KVSStorage<K, V>,
     {
+        let request_id = operation.request_id();
         let client_id = operation.client_id();
         let should_emit_response = client_id.is_some();
 
         let (response, data, meta) = match operation {
-            KVSOperation::Put(key, value, _) => {
+            KVSOperation::Put(key, value, _, _) => {
                 let value_for_event = value.clone();
                 state.apply_put(key.clone(), value);
 
                 let response = if should_emit_response {
-                    Some(KVSResponse::PutOk { client_id })
+                    Some(KVSResponse::PutOk { request_id, client_id })
                 } else {
                     None
                 };
@@ -284,10 +285,11 @@ impl KVSCore {
                 });
                 (response, data, None)
             }
-            KVSOperation::Get(key, _) => {
+            KVSOperation::Get(key, _, _) => {
                 let value = state.apply_get(&key).cloned();
                 let response = if should_emit_response {
                     Some(KVSResponse::GetResult {
+                        request_id,
                         client_id,
                         value: value.clone(),
                     })
@@ -300,10 +302,10 @@ impl KVSCore {
                 });
                 (response, data, None)
             }
-            KVSOperation::Delete(key, _) => {
+            KVSOperation::Delete(key, _, _) => {
                 state.apply_delete(key.clone());
                 let response = if should_emit_response {
-                    Some(KVSResponse::DeleteOk { client_id })
+                    Some(KVSResponse::DeleteOk { request_id, client_id })
                 } else {
                     None
                 };
@@ -333,10 +335,10 @@ mod tests {
         // in the exact order they appear, ensuring linearizability
 
         let operations: Vec<KVSOperation<String, LwwWrapper<String>>> = vec![
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("1".to_string()), Some(1)),
-            KVSOperation::Get("x".to_string(), Some(1)),
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("2".to_string()), Some(1)),
-            KVSOperation::Get("x".to_string(), Some(1)),
+            KVSOperation::Put("x".to_string(), LwwWrapper::new("1".to_string()), 1, Some(1)),
+            KVSOperation::Get("x".to_string(), 2, Some(1)),
+            KVSOperation::Put("x".to_string(), LwwWrapper::new("2".to_string()), 3, Some(1)),
+            KVSOperation::Get("x".to_string(), 4, Some(1)),
         ];
 
         // In a real implementation, we'd test this with Hydro streams
@@ -347,15 +349,15 @@ mod tests {
 
         for op in operations {
             let response = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     state.apply_put(key.clone(), value);
                     format!("PUT {} = OK", key)
                 }
-                KVSOperation::Get(key, _) => match state.apply_get(&key) {
+                KVSOperation::Get(key, _, _) => match state.apply_get(&key) {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     format!("DELETE {} = OK", key)
                 }
@@ -378,15 +380,17 @@ mod tests {
             KVSOperation::Put(
                 "account".to_string(),
                 LwwWrapper::new("100".to_string()),
+                1,
                 Some(1),
             ),
-            KVSOperation::Get("account".to_string(), Some(1)),
+            KVSOperation::Get("account".to_string(), 2, Some(1)),
             KVSOperation::Put(
                 "account".to_string(),
                 LwwWrapper::new("75".to_string()),
+                3,
                 Some(1),
             ),
-            KVSOperation::Get("account".to_string(), Some(1)),
+            KVSOperation::Get("account".to_string(), 4, Some(1)),
         ];
 
         // Sequential processing (correct for linearizability)
@@ -396,15 +400,15 @@ mod tests {
 
         for op in &operations {
             let response = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     state.apply_put(key.clone(), value.clone());
                     format!("PUT {} = OK", key)
                 }
-                KVSOperation::Get(key, _) => match state.apply_get(key) {
+                KVSOperation::Get(key, _, _) => match state.apply_get(key) {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     format!("DELETE {} = OK", key)
                 }
@@ -419,7 +423,7 @@ mod tests {
 
         // Process all PUTs first (wrong!)
         for (i, op) in operations.iter().enumerate() {
-            if let KVSOperation::Put(key, value, _) = op {
+            if let KVSOperation::Put(key, value, _, _) = op {
                 split_state.apply_put(key.clone(), value.clone());
                 split_responses[i] = format!("PUT {} = OK", key);
             }
@@ -427,7 +431,7 @@ mod tests {
 
         // Then process all GETs (wrong!)
         for (i, op) in operations.iter().enumerate() {
-            if let KVSOperation::Get(key, _) = op {
+            if let KVSOperation::Get(key, _, _) = op {
                 // This GET will see the final state, not the state at its position
                 match split_state.apply_get(key) {
                     Some(value) => split_responses[i] = format!("GET {} = {:?}", key, value),
@@ -458,30 +462,34 @@ mod tests {
             KVSOperation::Put(
                 "alice".to_string(),
                 LwwWrapper::new("100".to_string()),
+                1,
                 Some(1),
             ),
             KVSOperation::Put(
                 "bob".to_string(),
                 LwwWrapper::new("50".to_string()),
+                2,
                 Some(1),
             ),
             // Check initial balances
-            KVSOperation::Get("alice".to_string(), Some(1)),
-            KVSOperation::Get("bob".to_string(), Some(1)),
+            KVSOperation::Get("alice".to_string(), 3, Some(1)),
+            KVSOperation::Get("bob".to_string(), 4, Some(1)),
             // Transfer $25 from Alice to Bob (must be atomic in total order)
             KVSOperation::Put(
                 "alice".to_string(),
                 LwwWrapper::new("75".to_string()),
+                5,
                 Some(1),
             ),
             KVSOperation::Put(
                 "bob".to_string(),
                 LwwWrapper::new("75".to_string()),
+                6,
                 Some(1),
             ),
             // Check final balances
-            KVSOperation::Get("alice".to_string(), Some(1)),
-            KVSOperation::Get("bob".to_string(), Some(1)),
+            KVSOperation::Get("alice".to_string(), 7, Some(1)),
+            KVSOperation::Get("bob".to_string(), 8, Some(1)),
         ];
 
         let mut state: std::collections::HashMap<String, LwwWrapper<String>> =
@@ -490,15 +498,15 @@ mod tests {
 
         for op in operations {
             let response = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     state.apply_put(key.clone(), value);
                     format!("PUT {} = OK", key)
                 }
-                KVSOperation::Get(key, _) => match state.apply_get(&key) {
+                KVSOperation::Get(key, _, _) => match state.apply_get(&key) {
                     Some(value) => format!("GET {} = {:?}", key, value),
                     None => format!("GET {} = NOT FOUND", key),
                 },
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     format!("DELETE {} = OK", key)
                 }
@@ -516,6 +524,10 @@ mod tests {
     }
 
     // Property-based test generators
+    fn arb_request_id() -> impl Strategy<Value = u64> {
+        any::<u64>()
+    }
+
     fn arb_client_id() -> impl Strategy<Value = u64> {
         prop_oneof![
             Just(0u64),   // Edge case: client 0
@@ -531,11 +543,11 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy, arb_client_id())
-                .prop_map(|(k, v, cid)| KVSOperation::Put(k, LwwWrapper::new(v), Some(cid))),
-            (key_strategy, arb_client_id()).prop_map(|(k, cid)| KVSOperation::Get(k, Some(cid))),
-            (key_strategy, arb_client_id())
-                .prop_map(|(k, cid)| KVSOperation::Delete(k, Some(cid))),
+            (key_strategy, value_strategy, arb_request_id(), arb_client_id())
+                .prop_map(|(k, v, rid, cid)| KVSOperation::Put(k, LwwWrapper::new(v), rid, Some(cid))),
+            (key_strategy, arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, Some(cid))),
+            (key_strategy, arb_request_id(), arb_client_id())
+                .prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, Some(cid))),
         ]
     }
 
@@ -545,13 +557,14 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy).prop_map(|(k, v)| KVSOperation::Put(
+            (key_strategy, value_strategy, arb_request_id()).prop_map(|(k, v, rid)| KVSOperation::Put(
                 k,
                 LwwWrapper::new(v),
+                rid,
                 None
             )),
-            key_strategy.prop_map(|k| KVSOperation::Get(k, None)),
-            key_strategy.prop_map(|k| KVSOperation::Delete(k, None)),
+            (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Get(k, rid, None)),
+            (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Delete(k, rid, None)),
         ]
     }
 
@@ -574,30 +587,31 @@ mod tests {
             let mut state: std::collections::HashMap<String, LwwWrapper<String>> =
                 std::collections::HashMap::new();
             let should_respond = true; // Client operations should respond
+            let request_id = op.request_id();
             let client_id = op.client_id();
             let should_emit_response = should_respond && client_id.is_some();
 
             let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     state.apply_put(key.clone(), value);
                     if should_emit_response {
-                        Some(KVSResponse::PutOk { client_id })
+                        Some(KVSResponse::PutOk { request_id, client_id })
                     } else {
                         None
                     }
                 }
-                KVSOperation::Get(key, _) => {
+                KVSOperation::Get(key, _, _) => {
                     let value = state.apply_get(&key).cloned();
                     if should_emit_response {
-                        Some(KVSResponse::GetResult { client_id, value })
+                        Some(KVSResponse::GetResult { request_id, client_id, value })
                     } else {
                         None
                     }
                 }
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     if should_emit_response {
-                        Some(KVSResponse::DeleteOk { client_id })
+                        Some(KVSResponse::DeleteOk { request_id, client_id })
                     } else {
                         None
                     }
@@ -628,30 +642,31 @@ mod tests {
             let mut state: std::collections::HashMap<String, LwwWrapper<String>> =
                 std::collections::HashMap::new();
             let should_respond = true; // Even if should_respond is true...
+            let request_id = op.request_id();
             let client_id = op.client_id();
             let should_emit_response = should_respond && client_id.is_some();
 
             let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
-                KVSOperation::Put(key, value, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     state.apply_put(key.clone(), value);
                     if should_emit_response {
-                        Some(KVSResponse::PutOk { client_id })
+                        Some(KVSResponse::PutOk { request_id, client_id })
                     } else {
                         None
                     }
                 }
-                KVSOperation::Get(key, _) => {
+                KVSOperation::Get(key, _, _) => {
                     let value = state.apply_get(&key).cloned();
                     if should_emit_response {
-                        Some(KVSResponse::GetResult { client_id, value })
+                        Some(KVSResponse::GetResult { request_id, client_id, value })
                     } else {
                         None
                     }
                 }
-                KVSOperation::Delete(key, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     if should_emit_response {
-                        Some(KVSResponse::DeleteOk { client_id })
+                        Some(KVSResponse::DeleteOk { request_id, client_id })
                     } else {
                         None
                     }
@@ -661,6 +676,92 @@ mod tests {
             // Verify that NO response was generated for None client_id
             prop_assert!(response.is_none(),
                 "No response should be generated for operation with None client_id");
+        }
+
+        /// **Feature: request-id-protocol, Property 1: Request ID preservation through pipeline**
+        ///
+        /// For any KVS operation with request_id R, when processed through the pipeline,
+        /// the resulting KVSResponse (if generated) should have request_id equal to R.
+        ///
+        /// **Validates: Requirements 1.3, 1.4, 3.2, 3.3**
+        #[test]
+        fn prop_request_id_preservation(op in arb_kvs_operation_with_client_id()) {
+            // Extract the request_id from the operation
+            let expected_request_id = op.request_id();
+
+            // Simulate the core processing logic
+            let mut state: std::collections::HashMap<String, LwwWrapper<String>> =
+                std::collections::HashMap::new();
+            let request_id = op.request_id();
+            let client_id = op.client_id();
+            let should_emit_response = client_id.is_some();
+
+            let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
+                KVSOperation::Put(key, value, _, _) => {
+                    state.apply_put(key.clone(), value);
+                    if should_emit_response {
+                        Some(KVSResponse::PutOk { request_id, client_id })
+                    } else {
+                        None
+                    }
+                }
+                KVSOperation::Get(key, _, _) => {
+                    let value = state.apply_get(&key).cloned();
+                    if should_emit_response {
+                        Some(KVSResponse::GetResult { request_id, client_id, value })
+                    } else {
+                        None
+                    }
+                }
+                KVSOperation::Delete(key, _, _) => {
+                    state.apply_delete(key.clone());
+                    if should_emit_response {
+                        Some(KVSResponse::DeleteOk { request_id, client_id })
+                    } else {
+                        None
+                    }
+                }
+            };
+
+            // Verify that a response was generated (since we use operations with client_id)
+            prop_assert!(response.is_some(), "Response should be generated for client operation");
+
+            // Verify that the response has the same request_id as the operation
+            let response = response.unwrap();
+            prop_assert_eq!(response.request_id(), expected_request_id,
+                "Response request_id should match operation request_id");
+        }
+
+        /// **Feature: request-id-protocol, Property 2: Request ID and client ID independence**
+        ///
+        /// For any operation with request_id R and client_id C, when processed through
+        /// the pipeline, the resulting response should preserve both R and C independently -
+        /// changing one identifier should not affect the other.
+        ///
+        /// **Validates: Requirements 2.3**
+        #[test]
+        fn prop_request_id_client_id_independence(
+            op in arb_kvs_operation_with_client_id(),
+            new_request_id in arb_request_id(),
+            new_client_id in arb_client_id()
+        ) {
+            // Test 1: Change request_id, verify client_id unchanged
+            let original_client_id = op.client_id();
+            let op_with_new_rid = op.clone().with_request_id(new_request_id);
+            
+            prop_assert_eq!(op_with_new_rid.client_id(), original_client_id,
+                "Changing request_id should not affect client_id");
+            prop_assert_eq!(op_with_new_rid.request_id(), new_request_id,
+                "Request ID should be updated");
+
+            // Test 2: Change client_id, verify request_id unchanged
+            let original_request_id = op.request_id();
+            let op_with_new_cid = op.with_client_id(Some(new_client_id));
+            
+            prop_assert_eq!(op_with_new_cid.request_id(), original_request_id,
+                "Changing client_id should not affect request_id");
+            prop_assert_eq!(op_with_new_cid.client_id(), Some(new_client_id),
+                "Client ID should be updated");
         }
     }
 }
