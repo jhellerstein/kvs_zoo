@@ -169,9 +169,7 @@ where
             .into_keyed()
             .demux_bincode(cluster)
             .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-                nondet!(/** gossip messages unordered */),
-            )
+            .weakest_ordering()
             .assume_retries::<hydro_lang::live_collections::stream::AtLeastOnce>(
                 nondet!(/** gossip retries OK */),
             )
@@ -243,7 +241,7 @@ where
 
         gossip_sent
             .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** gossip messages unordered */))
+            .weakest_ordering()
             .assume_retries(nondet!(/** gossip retries OK */))
     }
 }

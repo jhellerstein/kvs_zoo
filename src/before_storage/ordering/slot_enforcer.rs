@@ -32,7 +32,7 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** slot-enforced */))
+            .weakest_ordering()
     }
 
     fn dispatch_from_cluster<'a, O>(

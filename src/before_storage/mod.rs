@@ -122,7 +122,7 @@ impl<K, V> Before<K, V> for () {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering(nondet!(/** network routing produces NoOrder */))
+            .weakest_ordering()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -166,7 +166,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.broadcast_bincode(target_cluster, nondet!(/** identity */)).assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** identity-ordered */))
+        operations.broadcast_bincode(target_cluster, nondet!(/** identity */)).weakest_ordering()
     }
 
     fn dispatch_from_cluster<'a, O>(

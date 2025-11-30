@@ -170,5 +170,5 @@ where
     next_slot_complete.complete_next_tick(next_slot_after_processing);
 
     // Return operations in slot order, converting back to NoOrder
-    processable_ops.all_ticks().assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** sequenced output */))
+    processable_ops.all_ticks().weakest_ordering()
 }

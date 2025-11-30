@@ -32,7 +32,7 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering(nondet!(/** network routing produces NoOrder */))
+            .weakest_ordering()
     }
 
     fn dispatch_from_cluster<'a, O>(

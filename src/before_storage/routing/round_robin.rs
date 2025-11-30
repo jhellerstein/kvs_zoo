@@ -32,7 +32,7 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering(nondet!(/** network routing produces NoOrder */))
+            .weakest_ordering()
     }
 
     fn dispatch_slotted_from_process<'a>(
@@ -51,7 +51,7 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering(nondet!(/** network routing produces NoOrder */))
+            .weakest_ordering()
     }
 
     fn dispatch_from_cluster<'a, O>(

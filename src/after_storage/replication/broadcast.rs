@@ -150,9 +150,7 @@ where
         let slotted_out = slotted_in
             .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
             .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-                nondet!(/** broadcast messages unordered */),
-            )
+            .weakest_ordering()
             .map(q!(|t| ReplicationUpdate::Slotted(t)));
 
         // interleave preserves input ordering type
@@ -201,7 +199,7 @@ where
         local_put_tuples
             .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** broadcast messages unordered */))
+            .weakest_ordering()
     }
 
     /// Periodic background broadcast replication
@@ -235,7 +233,7 @@ where
 
         periodic_broadcast
             .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** broadcast messages unordered */))
+            .weakest_ordering()
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }

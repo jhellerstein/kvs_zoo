@@ -110,7 +110,7 @@ where
             .map(q!(|(i, op)| (i as u32, op)))
             .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
             .map(q!(|(_i, op)| op))
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** paxos-ordered */))
+            .weakest_ordering()
     }
 
     fn dispatch_from_process_with_layers<'a, Name: 'static>(
