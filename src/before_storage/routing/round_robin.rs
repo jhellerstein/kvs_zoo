@@ -20,7 +20,7 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -32,13 +32,14 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
+            .assume_ordering(nondet!(/** network routing produces NoOrder */))
     }
 
     fn dispatch_slotted_from_process<'a>(
         &self,
         slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<(usize, KVSOperation<K, V>), Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<(usize, KVSOperation<K, V>), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -50,16 +51,17 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
-            .assume_ordering(nondet!(/** routed slotted to single member */))
+            .assume_ordering(nondet!(/** network routing produces NoOrder */))
     }
 
-    fn dispatch_from_cluster<'a>(
+    fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -71,7 +73,6 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()
-            .assume_ordering(nondet!(/** cluster hop routed */))
     }
 }
 

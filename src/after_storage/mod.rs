@@ -110,12 +110,15 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Implementers may override this to handle both update kinds in one place.
     /// Default dispatch adapters call `replicate_data` and `replicate_slotted_data`
     /// as appropriate and merge the results.
-    fn replicate_updates<'a>(
+    /// 
+    /// Note: Replication typically produces NoOrder streams due to network operations.
+    fn replicate_updates<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -145,12 +148,15 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Takes a stream of local data updates and returns a stream of data
     /// replicated by other nodes. The strategy determines how data is
     /// synchronized (gossip, broadcast, etc.).
-    fn replicate_data<'a>(
+    /// 
+    /// Note: Replication produces NoOrder streams due to network operations.
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -170,12 +176,14 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// are applied in the same order across all replicas.
     ///
     /// Default implementation adapts to the unified `replicate_updates` API.
-    fn replicate_slotted_data<'a>(
+    /// Note: Replication produces NoOrder streams due to network operations.
+    fn replicate_slotted_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -243,16 +251,17 @@ where
         false
     }
 
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // No replication - just return the local data stream unchanged
-        local_data
+        // No replication - convert to NoOrder for consistency
+        local_data.assume_ordering(nondet!(/** no replication passthrough */))
     }
 }
 
@@ -279,16 +288,17 @@ where
         false
     }
 
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // No replication - just return the local data stream unchanged
-        local_data
+        // No replication - convert to NoOrder for consistency
+        local_data.assume_ordering(nondet!(/** no replication passthrough */))
     }
 }
 
@@ -312,29 +322,33 @@ where
         A::is_active() || B::is_active()
     }
 
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let a_out = self.a.replicate_data(cluster, local_data.clone());
         let b_out = self.b.replicate_data(cluster, local_data);
-        a_out
-            .interleave(b_out)
-            .assume_ordering(nondet!(/** merged maintenance outputs */))
+        // Both return NoOrder, interleave preserves that
+        a_out.interleave(b_out)
     }
 
-    fn replicate_slotted_data<'a>(
+    fn replicate_slotted_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let a_out = self
             .a
             .replicate_slotted_data(cluster, local_slotted_data.clone());
         let b_out = self.b.replicate_slotted_data(cluster, local_slotted_data);
-        a_out
-            .interleave(b_out)
-            .assume_ordering(nondet!(/** merged maintenance outputs (slotted) */))
+        // Both return NoOrder, interleave preserves that
+        a_out.interleave(b_out)
     }
 }

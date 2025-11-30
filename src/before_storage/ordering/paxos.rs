@@ -100,7 +100,7 @@ where
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -109,8 +109,8 @@ where
             .enumerate()
             .map(q!(|(i, op)| (i as u32, op)))
             .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
-            .assume_ordering(nondet!(/** fallback ordered */))
             .map(q!(|(_i, op)| op))
+            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** paxos-ordered */))
     }
 
     fn dispatch_from_process_with_layers<'a, Name: 'static>(
@@ -118,7 +118,7 @@ where
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
@@ -139,21 +139,21 @@ where
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()
-            .assume_ordering(nondet!(/** paxos-ordered routed to KVS layer */))
     }
 
-    fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
+    fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // For inter-cluster hops within the same layer, assume ordering is preserved.
+        // For inter-cluster hops within the same layer, dispatch returns NoOrder
         self.dispatch_from_cluster(operations, source_cluster, target_cluster)
     }
 
@@ -169,13 +169,14 @@ where
         layers.insert_role::<Name, crate::before_storage::ordering::Acceptor>(acceptors);
     }
 
-    fn dispatch_from_cluster<'a>(
+    fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {

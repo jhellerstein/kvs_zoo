@@ -3,24 +3,24 @@
 //! These are used by examples and tests to plumb before/after layers to the core
 //! and connect external I/O, without relying on test-only server conveniences.
 
-use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::kvs_layer::ReplicationPlumb;
 
-type OperationStream<K, V, L> = Stream<crate::protocol::KVSOperation<K, V>, L, Unbounded>;
-type PutDeltaStream<K, V, L> = Stream<(K, V), L, Unbounded>;
+type OperationStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> = Stream<crate::protocol::KVSOperation<K, V>, L, Unbounded, O>;
+type PutDeltaStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> = Stream<(K, V), L, Unbounded, O>;
 
 // Traits are required in bounds; no direct uses here.
 
 /// Extract (key, value) deltas for each applied PUT while also returning
 /// the original operation sequence unchanged. Lightweight replacement for
 /// the former KVSCore::process_with_deltas helper.
-pub fn extract_put_deltas<'a, K, V, L>(
-    operations: OperationStream<K, V, L>,
-) -> (OperationStream<K, V, L>, PutDeltaStream<K, V, L>)
+pub fn extract_put_deltas<'a, K, V, L, O>(
+    operations: OperationStream<K, V, L, O>,
+) -> (OperationStream<K, V, L, O>, PutDeltaStream<K, V, L, O>)
 where
+    O: hydro_lang::live_collections::stream::Ordering,
     K: Clone
         + Serialize
         + for<'de> Deserialize<'de>
@@ -84,38 +84,43 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Fan out PUT deltas through any configured replication layers. Replicas generate
         // operations that enter the core without triggering client responses.
-        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+        // Deltas are unordered data, ensure NoOrder for replication
+        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.assume_ordering(nondet!(/** deltas are unordered */)));
 
         // Core processing for client-originating operations (storage-specific).
+        // scan requires TotalOrder input
         let crate::kvs_core::CoreOutput {
             responses: client_responses,
             data: client_data_events,
             meta: client_meta_stream,
-        } = $process_expr(client_ops);
+        } = $process_expr(client_ops.assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** scan requires total order */)));
 
         // Replicated operations flow through the same core path.
         // Replicated ops have client_id=None, so they won't generate responses.
+        // scan requires TotalOrder input
         let crate::kvs_core::CoreOutput {
             responses: replica_responses,
             data: replica_data_events,
             meta: replica_meta_stream,
-        } = $process_expr(replication_ops.assume_ordering::<TotalOrder>(nondet!(/** replicated op order */)));
+        } = $process_expr(replication_ops.assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** scan requires total order */)));
 
+        // Responses and data are already TotalOrder from scan, interleave preserves that
         let combined_responses = client_responses
-            .interleave(replica_responses)
-            .assume_ordering::<TotalOrder>(nondet!(/** combined client+replica responses */));
+            .interleave(replica_responses);
 
         let data_events = client_data_events
-            .interleave(replica_data_events)
-            .assume_ordering::<TotalOrder>(nondet!(/** combined data events */));
+            .interleave(replica_data_events);
+        
+        // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
-            .interleave(replica_meta_stream)
-            .assume_ordering::<TotalOrder>(nondet!(/** combined meta events */));
+            .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+            .interleave(
+                replica_meta_stream
+                    .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+            );
 
-        // Background plumbing (returns streams for potential chaining, sink locally for now)
-        let (bg_data, bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
-        bg_data.for_each(q!(|_data| ()));
-        bg_meta.for_each(q!(|_meta| ()));
+        // Background plumbing (returns streams for potential chaining)
+        let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
         // Send KVSResponse structs to proxy (they contain client_id)
         let proxy_responses = combined_responses.send_bincode($proxy);

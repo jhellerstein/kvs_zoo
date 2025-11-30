@@ -67,22 +67,28 @@ where
         false
     }
 
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
-        // No replication at leaf after-hook layer
-        local_data
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
+        // No replication at leaf - convert to NoOrder for consistency
+        local_data.assume_ordering(nondet!(/** leaf responder passthrough */))
     }
 
-    fn replicate_slotted_data<'a>(
+    fn replicate_slotted_data<'a, O>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Preserve slots; no additional replication
-        local_slotted_data
+        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
+        // Preserve slots; convert to NoOrder for consistency
+        local_slotted_data.assume_ordering(nondet!(/** leaf responder slotted passthrough */))
     }
 }
 

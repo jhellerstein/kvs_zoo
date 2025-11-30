@@ -136,11 +136,14 @@ where
         + Merge<V>
         + std::hash::Hash,
 {
-    fn replicate_updates<'a>(
+    fn replicate_updates<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let cluster_members =
             Self::get_cluster_members(cluster).assume_retries(nondet!(/** member list OK */));
 
@@ -174,11 +177,9 @@ where
             )
             .map(q!(|t| ReplicationUpdate::Slotted(t)));
 
+        // interleave preserves input ordering type
         unslotted_out
             .interleave(slotted_out)
-            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                nondet!(/** merged replication updates (total order for consumers) */),
-            )
             .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
                 nondet!(/** consumers expect exactly-once semantics */),
             )
@@ -218,11 +219,14 @@ where
         + std::hash::Hash,
 {
     /// Simplified gossip that immediately forwards PUT operations to all peers
-    pub fn handle_gossip_simple<'a>(
+    pub fn handle_gossip_simple<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let cluster_members = Self::get_cluster_members(cluster);
 
         // Immediate forwarding to all peers for reliable convergence

@@ -123,11 +123,14 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_updates<'a>(
+    fn replicate_updates<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
+        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let unslotted_in = updates.clone().filter_map(q!(|u| match u {
             ReplicationUpdate::Unslotted(t) => Some(t),
             _ => None,
@@ -152,11 +155,9 @@ where
             )
             .map(q!(|t| ReplicationUpdate::Slotted(t)));
 
+        // interleave preserves input ordering type
         unslotted_out
             .interleave(slotted_out)
-            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                nondet!(/** merged replication updates (total order for consumers) */),
-            )
             .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
                 nondet!(/** consumers expect exactly-once semantics */),
             )
@@ -189,11 +190,14 @@ where
         + Merge<V>,
 {
     /// Immediate synchronous broadcast replication
-    pub fn handle_replication_immediate<'a>(
+    pub fn handle_replication_immediate<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         local_put_tuples
             .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
@@ -201,11 +205,14 @@ where
     }
 
     /// Periodic background broadcast replication
-    pub fn handle_replication_periodic<'a>(
+    pub fn handle_replication_periodic<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let ticker = cluster.tick();
         let batch_timeout_ms = self.config.batch_timeout_ms;
 

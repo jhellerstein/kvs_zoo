@@ -68,6 +68,9 @@ pub struct CoreEmission<K, V> {
 }
 
 /// Output bundle produced by `KVSCore::process`.
+///
+/// Note: All output streams have `TotalOrder` because they are produced by `scan`,
+/// which maintains state and thus requires sequential processing.
 pub struct CoreOutput<K, V, L> {
     /// Sequential response stream for client-visible results.
     pub responses: Stream<KVSResponse<K, V>, L, Unbounded, TotalOrder>,
@@ -113,62 +116,13 @@ pub fn new_kvs_state<Store: Default>() -> KVSState<Store> {
 pub struct KVSCore;
 
 impl KVSCore {
-    /// Generic core processing over an arbitrary Store implementing KVSStorage.
+
+
+    /// Process operations using HashMap<K, V> storage.
     ///
-    /// Note: This generic version cannot be used directly in staged contexts due to
-    /// stageleft limitations. Use the monomorphic wrappers (`process_hashmap`,
-    /// `process_tombstone_fst`) for actual dataflow construction.
-    pub fn process<'a, K, V, L, Store>(
-        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<K, V, L>
-    where
-        K: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + std::hash::Hash
-            + std::fmt::Debug
-            + Send
-            + Sync
-            + 'static,
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-        Store: KVSStorage<K, V> + Clone + Send + Sync + 'static,
-    {
-        let combined = operations.scan(
-            q!(|| Store::default()),
-            q!(|state: &mut Store, operation: KVSOperation<K, V>| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
-        );
-
-        let responses = combined
-            .clone()
-            .filter_map(q!(|emission| emission.response));
-        let data = combined.clone().filter_map(q!(|emission| emission.data));
-        let meta = combined.filter_map(q!(|emission| emission.meta));
-
-        CoreOutput { responses, data, meta }
-    }
-
-    /// Monomorphic wrapper for HashMap<K, V> storage.
-    ///
-    /// This delegates to shared logic but uses concrete HashMap type to work around
-    /// stageleft's limitation with generic type parameters in q!() closures.
+    /// Requires TotalOrder input because `scan` only works on ordered streams.
     pub fn process_hashmap<'a, K, V, L>(
-        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
+        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>>,
     ) -> CoreOutput<K, V, L>
     where
         K: Clone
@@ -195,6 +149,7 @@ impl KVSCore {
             + 'static,
         L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
+        let operations = operations.into();
         let combined = operations.scan(
             q!(|| std::collections::HashMap::new()),
             q!(|state, operation| {
@@ -211,12 +166,11 @@ impl KVSCore {
         CoreOutput { responses, data, meta }
     }
 
-    /// Monomorphic wrapper for LocalHashMapFst<V> tombstone storage.
+    /// Process operations using LocalHashMapFst<V> tombstone storage.
     ///
-    /// This delegates to shared logic but uses concrete LocalHashMapFst type to work around
-    /// stageleft's limitation with generic type parameters in q!() closures.
+    /// Requires TotalOrder input because `scan` only works on ordered streams.
     pub fn process_tombstone_fst<'a, V, L>(
-        operations: Stream<KVSOperation<String, V>, L, Unbounded, TotalOrder>,
+        operations: impl Into<Stream<KVSOperation<String, V>, L, Unbounded, TotalOrder>>,
     ) -> CoreOutput<String, V, L>
     where
         V: Clone
@@ -235,6 +189,7 @@ impl KVSCore {
             + 'static,
         L: hydro_lang::location::Location<'a> + Clone + 'a,
     {
+        let operations = operations.into();
         let combined = operations.scan(
             q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()),
             q!(|state, operation| {

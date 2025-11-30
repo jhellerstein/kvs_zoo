@@ -1,18 +1,19 @@
-use hydro_lang::live_collections::stream::TotalOrder;
+use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::prelude::*;
 
 use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::protocol::KVSOperation;
 
-type ClusterStream<'a, T> = Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
-type ClusterKVSOpStream<'a, K, V> = Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+type ClusterStream<'a, T, O = NoOrder> = Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
+type ClusterKVSOpStream<'a, K, V, O = NoOrder> = Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
 
 /// Forward a delta stream to the parent cluster so cluster-scoped hooks can observe peer traffic.
-fn forward_to_cluster<'a, K, V>(
-    stream: ClusterStream<'a, (K, V)>,
+fn forward_to_cluster<'a, K, V, O>(
+    stream: Stream<(K, V), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
     target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-) -> ClusterStream<'a, (K, V)>
+) -> ClusterStream<'a, (K, V), NoOrder>
 where
+    O: hydro_lang::live_collections::stream::Ordering,
     K: Clone
         + serde::Serialize
         + for<'de> serde::Deserialize<'de>
@@ -32,10 +33,10 @@ where
         + Sync
         + 'static,
 {
+    // broadcast_bincode already introduces non-determinism, no need to re-assert ordering
     stream
         .broadcast_bincode(target_cluster, nondet!(/** forward puts to parent layer */))
         .values()
-        .assume_ordering::<TotalOrder>(nondet!(/** forwarded upstream */))
 }
 
 /// After-stage plumbing: traverse replication/responders chain from leaf upward.
@@ -170,10 +171,9 @@ impl<K, V> ReplicationPlumb<K, V> for () {
             + 'static,
     {
         let pass_up = deltas;
-        let empty = pass_up
+        let empty: ClusterKVSOpStream<'a, K, V> = pass_up
             .clone()
-            .filter_map(q!(|_kv| None))
-            .assume_ordering::<TotalOrder>(nondet!(/** no replication (unit) */));
+            .filter_map(q!(|_kv| None));
         (pass_up, empty)
     }
 }
@@ -259,6 +259,7 @@ where
         let pass_up_for_parent = if needs_cluster_scope {
             forward_to_cluster(pass_up_from_child.clone(), my_cluster)
         } else {
+            // Already NoOrder from child
             pass_up_from_child.clone()
         };
 
@@ -266,25 +267,24 @@ where
             let replication_input = if needs_cluster_scope {
                 pass_up_for_parent.clone()
             } else {
+                // Already NoOrder from child
                 pass_up_from_child
             };
 
+            // replicate_data returns NoOrder, route and combine
             let replicated = self
                 .after
                 .replicate_data(my_cluster, replication_input)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)))
-                .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at layer */));
+                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
 
             let routed = self
                 .child
-                .plumb_from_cluster(layers, my_cluster, replicated)
-                .assume_ordering::<TotalOrder>(nondet!(/** routed replicated ops to leaf */));
+                .plumb_from_cluster(layers, my_cluster, replicated);
 
-            combined_ops = combined_ops
-                .interleave(routed)
-                .assume_ordering::<TotalOrder>(nondet!(/** combined replication ops */));
+            combined_ops = combined_ops.interleave(routed);
         }
 
+        // Both streams are NoOrder from network operations
         (pass_up_for_parent, combined_ops)
     }
 }
@@ -342,18 +342,16 @@ where
         let my_cluster = layers.get::<Name>();
         if should_skip_replication::<A, K, V>() {
             let pass_up = deltas;
-            let empty = pass_up
+            let empty: ClusterKVSOpStream<'a, K, V> = pass_up
                 .clone()
-                .filter_map(q!(|_kv| None))
-                .assume_ordering::<TotalOrder>(nondet!(/** no replication at node */));
+                .filter_map(q!(|_kv| None));
             (pass_up, empty)
         } else {
             let pass_up = deltas.clone();
             let replicated = self
                 .after
                 .replicate_data(my_cluster, deltas)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)))
-                .assume_ordering::<TotalOrder>(nondet!(/** replicated updates at node */));
+                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
             (pass_up, replicated)
         }
     }

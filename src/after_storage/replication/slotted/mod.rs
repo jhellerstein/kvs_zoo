@@ -68,11 +68,14 @@ where
         self.inner.replicate_data(cluster, local_data)
     }
 
-    fn replicate_slotted_data<'a>(
+    fn replicate_slotted_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         // Use LogBasedDelivery over the inner strategy to enforce ordering
         let log_based = LogBasedDelivery::new(self.inner.clone());
         log_based.replicate_slotted_data(cluster, local_slotted_data)
@@ -90,24 +93,26 @@ where
     R: ReplicationStrategy<V>,
 {
     /// Unordered replication delegates to inner strategy
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_data: Stream<(String, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(String, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         self.inner.replicate_data(cluster, local_data)
     }
 
     /// Slotted replication with gap-filling sequencing
-    fn replicate_slotted_data<'a>(
+    fn replicate_slotted_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded>
+        local_slotted_data: Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(usize, String, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // Step 1: Use inner strategy to disseminate slotted operations
