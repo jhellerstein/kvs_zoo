@@ -11,6 +11,7 @@ pub mod local_map;
 use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
+use stageleft::IntoQuotedMut;
 
 use self::events::{DataEvent, MetaEvent};
 use crate::protocol::{KVSOperation, KVSResponse};
@@ -86,41 +87,17 @@ pub struct CoreOutput<K, V, L> {
 /// collections of nodes that form a KVS deployment.
 pub struct KVSNode {}
 
-/// Wrapper for KVS storage state to avoid generic leakage in q!() closures.
-/// This provides a monomorphic type that Stageleft can properly stage.
-#[derive(Clone, Debug)]
-pub struct KVSState<Store> {
-    pub inner: Store,
-}
-
-impl<Store: Default> Default for KVSState<Store> {
-    fn default() -> Self {
-        Self {
-            inner: Store::default(),
-        }
-    }
-}
-
-impl<Store> KVSState<Store> {
-    pub fn new(store: Store) -> Self {
-        Self { inner: store }
-    }
-}
-
-/// Helper function for creating KVS state in q!() macros.
-pub fn new_kvs_state<Store: Default>() -> KVSState<Store> {
-    KVSState::default()
-}
-
 /// Core KVS that processes operations in order
 pub struct KVSCore;
 
 impl KVSCore {
-    /// Process operations using HashMap<K, V> storage.
+    /// Process operations using any storage backend that implements KVSStorage.
     ///
     /// Requires TotalOrder input because `scan` only works on ordered streams.
-    pub fn process_hashmap<'a, K, V, L>(
+    /// This provides linearizable semantics with sequential state updates.
+    pub fn process<'a, K, V, L, Store, I, F>(
         operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>>,
+        init_storage: I,
     ) -> CoreOutput<K, V, L>
     where
         K: Clone
@@ -146,139 +123,82 @@ impl KVSCore {
             + Sync
             + 'static,
         L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let operations = operations.into();
-        let combined = operations.scan(
-            q!(|| std::collections::HashMap::new()),
-            q!(|state, operation| { Some(KVSCore::process_operation(state, operation)) }),
-        );
-
-        let responses = combined
-            .clone()
-            .filter_map(q!(|emission| emission.response));
-        let data = combined.clone().filter_map(q!(|emission| emission.data));
-        let meta = combined.filter_map(q!(|emission| emission.meta));
-
-        CoreOutput {
-            responses,
-            data,
-            meta,
-        }
-    }
-
-    /// Process operations using LocalHashMapFst<V> tombstone storage.
-    ///
-    /// Requires TotalOrder input because `scan` only works on ordered streams.
-    pub fn process_tombstone_fst<'a, V, L>(
-        operations: impl Into<Stream<KVSOperation<String, V>, L, Unbounded, TotalOrder>>,
-    ) -> CoreOutput<String, V, L>
-    where
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + lattices::LatticeFrom<V>
-            + lattices::IsBot
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let operations = operations.into();
-        let combined = operations.scan(
-            q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()),
-            q!(|state, operation| { Some(KVSCore::process_operation(state, operation)) }),
-        );
-
-        let responses = combined
-            .clone()
-            .filter_map(q!(|emission| emission.response));
-        let data = combined.clone().filter_map(q!(|emission| emission.data));
-        let meta = combined.filter_map(q!(|emission| emission.meta));
-
-        CoreOutput {
-            responses,
-            data,
-            meta,
-        }
-    }
-
-    /// Shared processing logic for KVS operations.
-    ///
-    /// This extracts the common operation handling used by both process_hashmap
-    /// and process_tombstone_fst, avoiding code duplication while staying compatible
-    /// with stageleft's constraints.
-    pub fn process_operation<K, V, Store>(
-        state: &mut Store,
-        operation: KVSOperation<K, V>,
-    ) -> CoreEmission<K, V>
-    where
-        K: Clone,
-        V: Clone + PartialEq + Eq + std::fmt::Debug + std::fmt::Display,
         Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L>,
+        F: Fn() -> Store + 'a,
     {
-        let request_id = operation.request_id();
-        let client_id = operation.client_id();
-        let should_emit_response = client_id.is_some();
+        let operations = operations.into();
+        let combined = operations.scan(init_storage, q!(|state, operation| {
+            let request_id = operation.request_id();
+            let client_id = operation.client_id();
+            let should_emit_response = client_id.is_some();
 
-        let (response, data, meta) = match operation {
-            KVSOperation::Put(key, value, _, _) => {
-                let value_for_event = value.clone();
-                state.apply_put(key.clone(), value);
+            let (response, data, meta) = match operation {
+                KVSOperation::Put(key, value, _, _) => {
+                    let value_for_event = value.clone();
+                    state.apply_put(key.clone(), value);
 
-                let response = if should_emit_response {
-                    Some(KVSResponse::PutOk {
-                        request_id,
-                        client_id,
-                    })
-                } else {
-                    None
-                };
-                let data = Some(DataEvent::Put {
-                    key: key.clone(),
-                    value: value_for_event,
-                });
-                (response, data, None)
-            }
-            KVSOperation::Get(key, _, _) => {
-                let value = state.apply_get(&key).cloned();
-                let response = if should_emit_response {
-                    Some(KVSResponse::GetResult {
-                        request_id,
-                        client_id,
-                        value: value.clone(),
-                    })
-                } else {
-                    None
-                };
-                let data = Some(DataEvent::Get {
-                    key: key.clone(),
-                    value,
-                });
-                (response, data, None)
-            }
-            KVSOperation::Delete(key, _, _) => {
-                state.apply_delete(key.clone());
-                let response = if should_emit_response {
-                    Some(KVSResponse::DeleteOk {
-                        request_id,
-                        client_id,
-                    })
-                } else {
-                    None
-                };
-                let data = Some(DataEvent::Delete { key: key.clone() });
-                let meta = Some(MetaEvent::Tomb { key: key.clone() });
-                (response, data, meta)
-            }
-        };
-        CoreEmission {
-            response,
+                    let response = if should_emit_response {
+                        Some(KVSResponse::PutOk {
+                            request_id,
+                            client_id,
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Put {
+                        key: key.clone(),
+                        value: value_for_event,
+                    });
+                    (response, data, None)
+                }
+                KVSOperation::Get(key, _, _) => {
+                    let value = state.apply_get(&key).cloned();
+                    let response = if should_emit_response {
+                        Some(KVSResponse::GetResult {
+                            request_id,
+                            client_id,
+                            value: value.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Get {
+                        key: key.clone(),
+                        value,
+                    });
+                    (response, data, None)
+                }
+                KVSOperation::Delete(key, _, _) => {
+                    state.apply_delete(key.clone());
+                    let response = if should_emit_response {
+                        Some(KVSResponse::DeleteOk {
+                            request_id,
+                            client_id,
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Delete { key: key.clone() });
+                    let meta = Some(MetaEvent::Tomb { key: key.clone() });
+                    (response, data, meta)
+                }
+            };
+            Some(CoreEmission {
+                response,
+                data,
+                meta,
+            })
+        }));
+
+        let responses = combined
+            .clone()
+            .filter_map(q!(|emission| emission.response));
+        let data = combined.clone().filter_map(q!(|emission| emission.data));
+        let meta = combined.filter_map(q!(|emission| emission.meta));
+
+        CoreOutput {
+            responses,
             data,
             meta,
         }

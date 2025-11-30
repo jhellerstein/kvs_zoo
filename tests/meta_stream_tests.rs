@@ -24,7 +24,7 @@ async fn delete_emits_tomb_meta_event() {
                 .assume_ordering(nondet!(/** deterministic demo ops */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
+                KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
             data.for_each(q!(|_data| ()));
             meta
         },
@@ -162,7 +162,7 @@ async fn tomb_index_background_emits_summary() {
                 .assume_ordering(nondet!(/** single delete */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
+                KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
             data.for_each(q!(|_data| ()));
             meta.send_bincode(process)
                 .entries()

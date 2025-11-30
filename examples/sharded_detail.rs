@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_hashmap::<_, _, _>(ordered_ops);
+    } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
     data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
     meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
 

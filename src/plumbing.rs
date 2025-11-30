@@ -202,7 +202,7 @@ where
         client_external,
         flow,
         kvs,
-        crate::kvs_core::KVSCore::process_hashmap::<KeyType, V, _>
+        |ops| crate::kvs_core::KVSCore::process::<KeyType, V, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()))
     )
 }
 
@@ -254,7 +254,7 @@ where
         client_external,
         flow,
         kvs,
-        crate::kvs_core::KVSCore::process_tombstone_fst::<V, _>
+        |ops| crate::kvs_core::KVSCore::process::<String, V, _, _, _, _>(ops, q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()))
     )
 }
 

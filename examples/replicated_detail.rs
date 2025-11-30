@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_hashmap::<_, _, _>(all_ops);
+    } = KVSCore::process::<_, _, _, _, _, _>(all_ops, q!(|| std::collections::HashMap::new()));
     data.for_each(q!(|event| println!("[after] data {:?}", event)));
     meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
 
