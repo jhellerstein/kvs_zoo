@@ -485,7 +485,10 @@ fn test_replication_without_client_responses() {
             ),
         ),
         // Client operation: should generate response
-        (true, KVSOperation::Get("key1".to_string(), 3, Some(client_id))),
+        (
+            true,
+            KVSOperation::Get("key1".to_string(), 3, Some(client_id)),
+        ),
         // Replicated operation: should NOT generate response
         (false, KVSOperation::Get("key1".to_string(), 4, None)),
         // Client operation: should generate response

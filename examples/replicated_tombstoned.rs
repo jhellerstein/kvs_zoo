@@ -50,7 +50,10 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ReplicatedTombstoneKVS type with tombstone storage
     let (layers, port) = kvs_zoo::plumbing::plumb_kvs_dataflow_with_tombstones(
-        &proxy, &client_external, &flow, kvs_spec
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
     );
 
     let built = flow.finalize();
@@ -79,14 +82,14 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
 
     // Run demo operations showing tombstone behavior
     let ops = tombstone_demo_ops();
-    
+
     for (i, (op, description)) in ops.into_iter().enumerate() {
         println!("Step {}: {}", i + 1, description);
         input.send(op).await?;
         if let Some(resp) = out.next().await {
             println!("   → {}", resp);
         }
-        
+
         // Pause after operations to allow gossip propagation
         if i == 0 || i == 2 || i == 4 {
             tokio::time::sleep(std::time::Duration::from_millis(350)).await;
@@ -100,7 +103,10 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Generate operations that demonstrate tombstone permanence
-fn tombstone_demo_ops() -> Vec<(kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>, &'static str)> {
+fn tombstone_demo_ops() -> Vec<(
+    kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>,
+    &'static str,
+)> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
@@ -108,10 +114,7 @@ fn tombstone_demo_ops() -> Vec<(kvs_zoo::protocol::KVSOperation<String, LwwWrapp
             Op::Put("x".to_string(), LwwWrapper::new("1".into()), 1, None),
             "PUT x = \"1\"",
         ),
-        (
-            Op::Get("x".to_string(), 2, None),
-            "GET x (expect \"1\")",
-        ),
+        (Op::Get("x".to_string(), 2, None), "GET x (expect \"1\")"),
         (
             Op::Delete("x".to_string(), 3, None),
             "DELETE x (tombstone created)",
@@ -130,4 +133,3 @@ fn tombstone_demo_ops() -> Vec<(kvs_zoo::protocol::KVSOperation<String, LwwWrapp
         ),
     ]
 }
-

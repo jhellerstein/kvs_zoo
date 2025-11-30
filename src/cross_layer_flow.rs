@@ -82,43 +82,49 @@ where
         responses: local_responses,
         data: local_data,
         meta: local_meta,
-    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(leaf_ops.clone().assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)));
+    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(
+        leaf_ops
+            .clone()
+            .assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)),
+    );
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops);
 
     // 4) after_storage (parent): replicate applied PUT deltas
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
 
     // 5) before_storage (leaf): route replicated PUTs, apply without responses
-    let replicated_ops = replicated_puts
-        .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
-    let leaf_replicated_ops = leaf_before
-        .dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster);
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
+    let leaf_replicated_ops =
+        leaf_before.dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster);
     // scan requires TotalOrder input
     let crate::kvs_core::CoreOutput {
         responses: replicate_responses,
         data: replicate_data,
         meta: replicate_meta,
-    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(leaf_replicated_ops.assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)));
+    } = crate::kvs_core::KVSCore::process_hashmap::<K, V, _>(
+        leaf_replicated_ops
+            .assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)),
+    );
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     // Both streams are TotalOrder from scan, interleave preserves that
-    let combined_responses = local_responses
-        .interleave(replicate_responses);
+    let combined_responses = local_responses.interleave(replicate_responses);
 
     // Convert KVSResponse to String for compatibility with existing code
     let responses = combined_responses.map(q!(|response| response.to_string()));
 
     // Both data streams are TotalOrder from scan, interleave preserves that
-    let data = local_data
-        .interleave(replicate_data);
+    let data = local_data.interleave(replicate_data);
 
     // Wrap meta events in lattice singletons for monotonic composition
-    let meta = local_meta
-        .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        .interleave(
-            replicate_meta
-                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        );
+    let meta =
+        local_meta
+            .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([
+                ev
+            ])))
+            .interleave(replicate_meta.map(q!(|ev| {
+                lattices::set_union::SetUnionHashSet::new_from([ev])
+            })));
 
     CrossLayerFlowResult {
         responses,

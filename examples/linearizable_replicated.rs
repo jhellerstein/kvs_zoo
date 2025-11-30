@@ -60,9 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Define the nested KVS architecture with synchronous broadcast for snappy local demos
     // (Paxos → RR → Sequenced<Broadcast(synchronous)> → Slot/Responder)
-    let inner_after = Sequenced::new(BroadcastReplication::<String, LwwWrapper<String>>::with_config(
-        BroadcastReplicationConfig::synchronous(),
-    ));
+    let inner_after = Sequenced::new(
+        BroadcastReplication::<String, LwwWrapper<String>>::with_config(
+            BroadcastReplicationConfig::synchronous(),
+        ),
+    );
     let inner_leaf = kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
         SlotOrderEnforcer::new(),
         Responder::new(),
@@ -84,8 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Plumb full dataflow with external I/O using the standard helper (down/up only)
-    let (layers, bidi_port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+    let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;

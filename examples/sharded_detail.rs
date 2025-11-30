@@ -150,7 +150,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<String, LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _, _, _) | KVSOperation::Get(key, _, _) | KVSOperation::Delete(key, _, _) => {
+        KVSOperation::Put(key, _, _, _)
+        | KVSOperation::Get(key, _, _)
+        | KVSOperation::Delete(key, _, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

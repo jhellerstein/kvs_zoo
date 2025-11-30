@@ -99,10 +99,7 @@ where
 ///
 /// Lookup a key in the LocalMap, respecting tombstones.
 /// Returns None if the key is tombstoned, even if it exists in the map.
-pub fn get_live<'a, K, V, T>(
-    map: &'a LocalMap<K, V, HashMap<K, V>, T>,
-    key: &K,
-) -> Option<&'a V>
+pub fn get_live<'a, K, V, T>(map: &'a LocalMap<K, V, HashMap<K, V>, T>, key: &K) -> Option<&'a V>
 where
     K: Eq + std::hash::Hash,
     T: lattices::tombstone::TombstoneSet<K>,
@@ -234,13 +231,23 @@ mod tests {
     fn test_get_live_respects_tombstones() {
         // Create a map with a value
         let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
-        state.merge(put_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string(), LwwWrapper::new("1".to_string())));
+        state.merge(put_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string(), LwwWrapper::new("1".to_string())));
 
         // Verify we can get the value
         assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
 
         // Tombstone the key
-        state.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
+        state.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
 
         // Verify get_live returns None even though the key might still be in the map
         assert!(get_live(&state, &"x".to_string()).is_none());
@@ -252,15 +259,30 @@ mod tests {
         let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
 
         // PUT x=1
-        state.merge(put_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string(), LwwWrapper::new("1".to_string())));
+        state.merge(put_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string(), LwwWrapper::new("1".to_string())));
         assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
 
         // DELETE x
-        state.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
+        state.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
         assert!(get_live(&state, &"x".to_string()).is_none());
 
         // PUT x=2 (attempt resurrection)
-        state.merge(put_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string(), LwwWrapper::new("2".to_string())));
+        state.merge(put_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string(), LwwWrapper::new("2".to_string())));
 
         // Verify the key is STILL tombstoned (no resurrection)
         assert!(
@@ -275,12 +297,32 @@ mod tests {
         let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
 
         // PUT x=1
-        state.merge(put_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string(), LwwWrapper::new("1".to_string())));
+        state.merge(put_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string(), LwwWrapper::new("1".to_string())));
 
         // DELETE x multiple times
-        state.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
-        state.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
-        state.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
+        state.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
+        state.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
+        state.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
 
         // Verify the key is tombstoned
         assert!(get_live(&state, &"x".to_string()).is_none());
@@ -297,10 +339,20 @@ mod tests {
         let mut state2: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
 
         // State1: PUT x=1
-        state1.merge(put_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string(), LwwWrapper::new("1".to_string())));
+        state1.merge(put_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string(), LwwWrapper::new("1".to_string())));
 
         // State2: DELETE x
-        state2.merge(delete_delta::<String, LwwWrapper<String>, HashMap<String, LwwWrapper<String>>, FstTombstoneSet<String>>("x".to_string()));
+        state2.merge(delete_delta::<
+            String,
+            LwwWrapper<String>,
+            HashMap<String, LwwWrapper<String>>,
+            FstTombstoneSet<String>,
+        >("x".to_string()));
 
         // Merge state2 into state1 (tombstone should win)
         state1.merge(state2);

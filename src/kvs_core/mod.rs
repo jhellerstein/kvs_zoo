@@ -19,7 +19,7 @@ use crate::protocol::{KVSOperation, KVSResponse};
 ///
 /// This trait abstracts over different storage implementations, allowing KVSCore
 /// to work with both standard HashMap storage and tombstone-based storage.
-/// 
+///
 /// Standard HashMap implementation is below; tombstone-based storage is in local_map.rs.
 pub trait KVSStorage<K, V>: Default {
     /// Apply a Put operation: insert or merge the value at the given key.
@@ -116,8 +116,6 @@ pub fn new_kvs_state<Store: Default>() -> KVSState<Store> {
 pub struct KVSCore;
 
 impl KVSCore {
-
-
     /// Process operations using HashMap<K, V> storage.
     ///
     /// Requires TotalOrder input because `scan` only works on ordered streams.
@@ -152,9 +150,7 @@ impl KVSCore {
         let operations = operations.into();
         let combined = operations.scan(
             q!(|| std::collections::HashMap::new()),
-            q!(|state, operation| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
+            q!(|state, operation| { Some(KVSCore::process_operation(state, operation)) }),
         );
 
         let responses = combined
@@ -163,7 +159,11 @@ impl KVSCore {
         let data = combined.clone().filter_map(q!(|emission| emission.data));
         let meta = combined.filter_map(q!(|emission| emission.meta));
 
-        CoreOutput { responses, data, meta }
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
     }
 
     /// Process operations using LocalHashMapFst<V> tombstone storage.
@@ -192,9 +192,7 @@ impl KVSCore {
         let operations = operations.into();
         let combined = operations.scan(
             q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()),
-            q!(|state, operation| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
+            q!(|state, operation| { Some(KVSCore::process_operation(state, operation)) }),
         );
 
         let responses = combined
@@ -203,7 +201,11 @@ impl KVSCore {
         let data = combined.clone().filter_map(q!(|emission| emission.data));
         let meta = combined.filter_map(q!(|emission| emission.meta));
 
-        CoreOutput { responses, data, meta }
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
     }
 
     /// Shared processing logic for KVS operations.
@@ -230,7 +232,10 @@ impl KVSCore {
                 state.apply_put(key.clone(), value);
 
                 let response = if should_emit_response {
-                    Some(KVSResponse::PutOk { request_id, client_id })
+                    Some(KVSResponse::PutOk {
+                        request_id,
+                        client_id,
+                    })
                 } else {
                     None
                 };
@@ -260,7 +265,10 @@ impl KVSCore {
             KVSOperation::Delete(key, _, _) => {
                 state.apply_delete(key.clone());
                 let response = if should_emit_response {
-                    Some(KVSResponse::DeleteOk { request_id, client_id })
+                    Some(KVSResponse::DeleteOk {
+                        request_id,
+                        client_id,
+                    })
                 } else {
                     None
                 };
@@ -290,9 +298,19 @@ mod tests {
         // in the exact order they appear, ensuring linearizability
 
         let operations: Vec<KVSOperation<String, LwwWrapper<String>>> = vec![
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("1".to_string()), 1, Some(1)),
+            KVSOperation::Put(
+                "x".to_string(),
+                LwwWrapper::new("1".to_string()),
+                1,
+                Some(1),
+            ),
             KVSOperation::Get("x".to_string(), 2, Some(1)),
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("2".to_string()), 3, Some(1)),
+            KVSOperation::Put(
+                "x".to_string(),
+                LwwWrapper::new("2".to_string()),
+                3,
+                Some(1),
+            ),
             KVSOperation::Get("x".to_string(), 4, Some(1)),
         ];
 
@@ -498,9 +516,20 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy, arb_request_id(), arb_client_id())
-                .prop_map(|(k, v, rid, cid)| KVSOperation::Put(k, LwwWrapper::new(v), rid, Some(cid))),
-            (key_strategy, arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, Some(cid))),
+            (
+                key_strategy,
+                value_strategy,
+                arb_request_id(),
+                arb_client_id()
+            )
+                .prop_map(|(k, v, rid, cid)| KVSOperation::Put(
+                    k,
+                    LwwWrapper::new(v),
+                    rid,
+                    Some(cid)
+                )),
+            (key_strategy, arb_request_id(), arb_client_id())
+                .prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, Some(cid))),
             (key_strategy, arb_request_id(), arb_client_id())
                 .prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, Some(cid))),
         ]
@@ -512,14 +541,11 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy, arb_request_id()).prop_map(|(k, v, rid)| KVSOperation::Put(
-                k,
-                LwwWrapper::new(v),
-                rid,
-                None
-            )),
+            (key_strategy, value_strategy, arb_request_id())
+                .prop_map(|(k, v, rid)| KVSOperation::Put(k, LwwWrapper::new(v), rid, None)),
             (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Get(k, rid, None)),
-            (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Delete(k, rid, None)),
+            (key_strategy, arb_request_id())
+                .prop_map(|(k, rid)| KVSOperation::Delete(k, rid, None)),
         ]
     }
 
@@ -703,7 +729,7 @@ mod tests {
             // Test 1: Change request_id, verify client_id unchanged
             let original_client_id = op.client_id();
             let op_with_new_rid = op.clone().with_request_id(new_request_id);
-            
+
             prop_assert_eq!(op_with_new_rid.client_id(), original_client_id,
                 "Changing request_id should not affect client_id");
             prop_assert_eq!(op_with_new_rid.request_id(), new_request_id,
@@ -712,7 +738,7 @@ mod tests {
             // Test 2: Change client_id, verify request_id unchanged
             let original_request_id = op.request_id();
             let op_with_new_cid = op.with_client_id(Some(new_client_id));
-            
+
             prop_assert_eq!(op_with_new_cid.request_id(), original_request_id,
                 "Changing client_id should not affect request_id");
             prop_assert_eq!(op_with_new_cid.client_id(), Some(new_client_id),

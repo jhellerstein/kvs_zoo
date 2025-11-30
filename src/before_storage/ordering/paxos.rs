@@ -37,7 +37,16 @@ impl<K, V> PaxosDispatcher<K, V> {
         acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
-        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: PaxosPayload + Eq,
     {
         let (checkpoint_complete, checkpoint) = acceptors.forward_ref::<Optional<usize, _, _>>();
@@ -67,17 +76,12 @@ impl<K, V> PaxosDispatcher<K, V> {
 
         // Use type inference inside q! closure to avoid generic parameter annotation issues.
         // The macro struggles with explicit generic types like SequencedPayload<_>.
-        next_slot_cycle.complete_next_tick(
-            sequenced_ops
-                .clone()
-                .persist()
-                .fold(
-                    q!(|| 0),
-                    q!(|next_slot, sequenced| {
-                        *next_slot = sequenced.seq + 1;
-                    }),
-                ),
-        );
+        next_slot_cycle.complete_next_tick(sequenced_ops.clone().persist().fold(
+            q!(|| 0),
+            q!(|next_slot, sequenced| {
+                *next_slot = sequenced.seq + 1;
+            }),
+        ));
 
         sequenced_ops
             .filter_map(q!(|sequenced| sequenced.payload))
@@ -100,7 +104,12 @@ where
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -118,10 +127,32 @@ where
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
-        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
     {
         // Look up role-specific clusters for this layer (stored as KVSNode-tagged clusters).
         let proposers = layers.get_role::<Name, crate::before_storage::ordering::Proposer>();
@@ -147,7 +178,12 @@ where
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -174,19 +210,33 @@ where
         operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.assume_ordering(nondet!(/** passthrough cluster hop */))
+        operations.weakest_ordering()
     }
 }
 
 pub fn paxos_order<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,
@@ -199,7 +249,16 @@ pub fn paxos_order<
 
 pub fn paxos_order_to_proxy<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,
@@ -207,18 +266,32 @@ pub fn paxos_order_to_proxy<
     proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
     acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     proxy: &Process<'a, ()>,
-) -> Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded> {
+) -> Stream<
+    KVSOperation<K, V>,
+    Process<'a, ()>,
+    Unbounded,
+    hydro_lang::live_collections::stream::NoOrder,
+> {
     dispatcher
         .paxos_run(operations, proposers, acceptors)
         .send_bincode(proxy)
         .entries()
         .map(q!(|(_member_id, op)| op))
-        .assume_ordering(nondet!(/** paxos ordered at proxy */))
+        .weakest_ordering()
 }
 
 pub fn paxos_order_slotted<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,

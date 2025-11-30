@@ -48,9 +48,11 @@ pub struct Ballot {
 
 impl Ord for Ballot {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.num
-            .cmp(&other.num)
-            .then_with(|| self.proposer_id.get_raw_id().cmp(&other.proposer_id.get_raw_id()))
+        self.num.cmp(&other.num).then_with(|| {
+            self.proposer_id
+                .get_raw_id()
+                .cmp(&other.proposer_id.get_raw_id())
+        })
     }
 }
 impl PartialOrd for Ballot {
@@ -339,7 +341,8 @@ fn p_leader_heartbeat<'a>(
         proposers
             .source_interval_delayed(
                 q!(Duration::from_secs(
-                    (CLUSTER_SELF_ID.get_raw_id() * i_am_leader_check_timeout_delay_multiplier as u32)
+                    (CLUSTER_SELF_ID.get_raw_id()
+                        * i_am_leader_check_timeout_delay_multiplier as u32)
                         .into()
                 )),
                 q!(Duration::from_secs(i_am_leader_check_timeout)),

@@ -72,8 +72,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
 
     // Plumb full dataflow with external I/O using the standard helper
-    let (layers, bidi_port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+    let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;

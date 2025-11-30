@@ -59,8 +59,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Build a Hydro graph for the GeoKVS type, return layer handles and client I/O ports
-    let (layers, port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;

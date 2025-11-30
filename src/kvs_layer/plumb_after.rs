@@ -4,8 +4,10 @@ use hydro_lang::prelude::*;
 use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::protocol::KVSOperation;
 
-type ClusterStream<'a, T, O = NoOrder> = Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
-type ClusterKVSOpStream<'a, K, V, O = NoOrder> = Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
+type ClusterStream<'a, T, O = NoOrder> =
+    Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
+type ClusterKVSOpStream<'a, K, V, O = NoOrder> =
+    Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
 
 /// Forward a delta stream to the parent cluster so cluster-scoped hooks can observe peer traffic.
 fn forward_to_cluster<'a, K, V, O>(
@@ -14,12 +16,7 @@ fn forward_to_cluster<'a, K, V, O>(
 ) -> ClusterStream<'a, (K, V), NoOrder>
 where
     O: hydro_lang::live_collections::stream::Ordering,
-    K: Clone
-        + serde::Serialize
-        + for<'de> serde::Deserialize<'de>
-        + Send
-        + Sync
-        + 'static,
+    K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     V: Clone
         + serde::Serialize
         + for<'de> serde::Deserialize<'de>
@@ -116,17 +113,9 @@ pub trait ReplicationPlumb<K, V> {
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         deltas: ClusterStream<'a, (K, V)>,
-    ) -> (
-        ClusterStream<'a, (K, V)>,
-        ClusterKVSOpStream<'a, K, V>,
-    )
+    ) -> (ClusterStream<'a, (K, V)>, ClusterKVSOpStream<'a, K, V>)
     where
-        K: Clone
-            + serde::Serialize
-            + for<'de> serde::Deserialize<'de>
-            + Send
-            + Sync
-            + 'static,
+        K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -146,17 +135,9 @@ impl<K, V> ReplicationPlumb<K, V> for () {
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
         deltas: ClusterStream<'a, (K, V)>,
-    ) -> (
-        ClusterStream<'a, (K, V)>,
-        ClusterKVSOpStream<'a, K, V>,
-    )
+    ) -> (ClusterStream<'a, (K, V)>, ClusterKVSOpStream<'a, K, V>)
     where
-        K: Clone
-            + serde::Serialize
-            + for<'de> serde::Deserialize<'de>
-            + Send
-            + Sync
-            + 'static,
+        K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -171,9 +152,7 @@ impl<K, V> ReplicationPlumb<K, V> for () {
             + 'static,
     {
         let pass_up = deltas;
-        let empty: ClusterKVSOpStream<'a, K, V> = pass_up
-            .clone()
-            .filter_map(q!(|_kv| None));
+        let empty: ClusterKVSOpStream<'a, K, V> = pass_up.clone().filter_map(q!(|_kv| None));
         (pass_up, empty)
     }
 }
@@ -232,10 +211,7 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         deltas: ClusterStream<'a, (K, V)>,
-    ) -> (
-        ClusterStream<'a, (K, V)>,
-        ClusterKVSOpStream<'a, K, V>,
-    )
+    ) -> (ClusterStream<'a, (K, V)>, ClusterKVSOpStream<'a, K, V>)
     where
         V: Clone
             + serde::Serialize
@@ -321,10 +297,7 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         deltas: ClusterStream<'a, (K, V)>,
-    ) -> (
-        ClusterStream<'a, (K, V)>,
-        ClusterKVSOpStream<'a, K, V>,
-    )
+    ) -> (ClusterStream<'a, (K, V)>, ClusterKVSOpStream<'a, K, V>)
     where
         V: Clone
             + serde::Serialize
@@ -342,9 +315,7 @@ where
         let my_cluster = layers.get::<Name>();
         if should_skip_replication::<A, K, V>() {
             let pass_up = deltas;
-            let empty: ClusterKVSOpStream<'a, K, V> = pass_up
-                .clone()
-                .filter_map(q!(|_kv| None));
+            let empty: ClusterKVSOpStream<'a, K, V> = pass_up.clone().filter_map(q!(|_kv| None));
             (pass_up, empty)
         } else {
             let pass_up = deltas.clone();

@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-
 /// DataEvent captures the observable outcome of an operation.
 /// (Future: add Scan variants.)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

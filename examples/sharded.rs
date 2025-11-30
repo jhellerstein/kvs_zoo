@@ -40,8 +40,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     kvs_spec.before = ShardedRouter::new(3); // 3 shards. this is the default but here to demonstrate how to override defaults.
 
     // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
-    let (layers, port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
@@ -92,7 +96,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<String, LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _, _, _) | KVSOperation::Get(key, _, _) | KVSOperation::Delete(key, _, _) => {
+        KVSOperation::Put(key, _, _, _)
+        | KVSOperation::Get(key, _, _)
+        | KVSOperation::Delete(key, _, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

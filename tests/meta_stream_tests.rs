@@ -23,7 +23,8 @@ async fn delete_emits_tomb_meta_event() {
                 ]))
                 .assume_ordering(nondet!(/** deterministic demo ops */));
 
-            let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } = KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
+            let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
+                KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
             data.for_each(q!(|_data| ()));
             meta
         },
@@ -61,18 +62,12 @@ async fn background_plumb_routes_meta_events() {
     hydro_lang::test_util::multi_location_test(
         move |flow, process| {
             let mut spec =
-                KVSCluster::<TestLayer, (), (), (), ()>::new_with_background(
-                    (),
-                    (),
-                    (),
-                    (),
-                );
+                KVSCluster::<TestLayer, (), (), (), ()>::new_with_background((), (), (), ());
 
             let mut layers = KVSClusters::new();
-            let cluster_entry =
-                <KVSCluster<TestLayer, (), (), (), ()> as KVSSpec<
-                    LwwWrapper<String>,
-                >>::create_clusters(&spec, flow, &mut layers);
+            let cluster_entry = <KVSCluster<TestLayer, (), (), (), ()> as KVSSpec<
+                LwwWrapper<String>,
+            >>::create_clusters(&spec, flow, &mut layers);
 
             let data_stream = cluster_entry
                 .source_iter(q!(
@@ -85,11 +80,15 @@ async fn background_plumb_routes_meta_events() {
                 .source_iter(q!(vec!["alpha".to_string()]))
                 .map(q!(|key: String| vec![kvs_zoo::MetaEvent::Tomb { key }]))
                 .flatten_unordered()
-                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])));
+                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([
+                    ev
+                ])));
 
             let (bg_data, bg_meta) = spec.plumb_background(&layers, data_stream, meta_stream);
             bg_data
-                .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** test */))
+                .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+                    nondet!(/** test */),
+                )
                 .for_each(q!(|_data| ()));
 
             bg_meta
@@ -115,7 +114,9 @@ async fn background_plumb_routes_meta_events() {
                                 MetaEvent::TombSummary {
                                     total_tombs,
                                     ref last_tomb_key,
-                                } if total_tombs == 1 && last_tomb_key.as_deref() == Some("alpha") => {
+                                } if total_tombs == 1
+                                    && last_tomb_key.as_deref() == Some("alpha") =>
+                                {
                                     summary_observed = true;
                                 }
                                 MetaEvent::CompactionDigest { .. } => {
@@ -160,7 +161,8 @@ async fn tomb_index_background_emits_summary() {
                 ),]))
                 .assume_ordering(nondet!(/** single delete */));
 
-            let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } = KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
+            let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
+                KVSCore::process_hashmap::<String, LwwWrapper<String>, _>(ops);
             data.for_each(q!(|_data| ()));
             meta.send_bincode(process)
                 .entries()

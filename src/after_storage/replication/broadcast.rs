@@ -127,7 +127,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        ReplicationUpdate<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -192,7 +197,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -207,7 +217,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -283,10 +298,9 @@ mod tests {
     fn test_broadcast_vs_gossip_replication_strategies() {
         fn _accepts_replication_strategy<K, V>(_strategy: impl ReplicationStrategy<K, V>) {}
 
-        _accepts_replication_strategy::<String, crate::values::CausalString>(BroadcastReplication::<
-            String,
-            crate::values::CausalString,
-        >::new());
+        _accepts_replication_strategy::<String, crate::values::CausalString>(
+            BroadcastReplication::<String, crate::values::CausalString>::new(),
+        );
         _accepts_replication_strategy::<String, crate::values::CausalString>(
             crate::after_storage::replication::SimpleGossip::<String, crate::values::CausalString>::default(
             ),

@@ -16,8 +16,6 @@ pub type BackgroundDataStream<'a, K, V> =
 pub type BackgroundMetaStream<'a, K> =
     Stream<MetaLattice<K>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
 
-
-
 /// Trait implemented by background stages that wish to consume data/meta events.
 ///
 /// Background stages can:

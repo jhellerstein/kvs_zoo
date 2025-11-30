@@ -140,7 +140,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        ReplicationUpdate<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -221,7 +226,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {

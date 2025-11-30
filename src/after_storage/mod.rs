@@ -110,13 +110,18 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Implementers may override this to handle both update kinds in one place.
     /// Default dispatch adapters call `replicate_data` and `replicate_slotted_data`
     /// as appropriate and merge the results.
-    /// 
+    ///
     /// Note: Replication typically produces NoOrder streams due to network operations.
     fn replicate_updates<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        ReplicationUpdate<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -138,9 +143,7 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
             .replicate_slotted_data(cluster, slotted_in)
             .map(q!(|t| ReplicationUpdate::Slotted(t)));
 
-        unslotted_out
-            .interleave(slotted_out)
-            .assume_ordering(nondet!(/** merged replication updates */))
+        unslotted_out.interleave(slotted_out).weakest_ordering()
     }
 
     /// Replicate data across the cluster (unordered)
@@ -148,13 +151,18 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Takes a stream of local data updates and returns a stream of data
     /// replicated by other nodes. The strategy determines how data is
     /// synchronized (gossip, broadcast, etc.).
-    /// 
+    ///
     /// Note: Replication produces NoOrder streams due to network operations.
     fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -181,7 +189,12 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -255,13 +268,18 @@ where
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // No replication - convert to NoOrder for consistency
-        local_data.assume_ordering(nondet!(/** no replication passthrough */))
+        // No replication - just relax ordering to match trait signature
+        local_data.weakest_ordering()
     }
 }
 
@@ -292,13 +310,18 @@ where
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // No replication - convert to NoOrder for consistency
-        local_data.assume_ordering(nondet!(/** no replication passthrough */))
+        // No replication - just relax ordering to match trait signature
+        local_data.weakest_ordering()
     }
 }
 
@@ -326,7 +349,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -340,7 +368,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {

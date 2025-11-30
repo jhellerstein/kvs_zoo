@@ -8,14 +8,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::kvs_layer::ReplicationPlumb;
 
-type OperationStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> = Stream<crate::protocol::KVSOperation<K, V>, L, Unbounded, O>;
-type PutDeltaStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> = Stream<(K, V), L, Unbounded, O>;
+type OperationStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> =
+    Stream<crate::protocol::KVSOperation<K, V>, L, Unbounded, O>;
+type PutDeltaStream<K, V, L, O = hydro_lang::live_collections::stream::TotalOrder> =
+    Stream<(K, V), L, Unbounded, O>;
 
 // Traits are required in bounds; no direct uses here.
 
 /// Extract (key, value) deltas for each applied PUT while also returning
 /// the original operation sequence unchanged. Lightweight replacement for
 /// the former KVSCore::process_with_deltas helper.
+#[allow(clippy::type_complexity)]
 pub fn extract_put_deltas<'a, K, V, L, O>(
     operations: OperationStream<K, V, L, O>,
 ) -> (OperationStream<K, V, L, O>, PutDeltaStream<K, V, L, O>)
@@ -61,7 +64,7 @@ where
 macro_rules! plumb_kvs_dataflow_impl {
     ($KeyType:ty, $V:ty, $proxy:expr, $client_external:expr, $flow:expr, $kvs:expr, $process_expr:expr) => {{
         let mut kvs = $kvs;
-        
+
         // Create all clusters for all layers
         let mut layers = crate::kvs_layer::KVSClusters::new();
         let _entry_cluster = kvs.create_clusters($flow, &mut layers);
@@ -75,7 +78,7 @@ macro_rules! plumb_kvs_dataflow_impl {
             .entries()
             .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
             .assume_ordering(nondet!(/** client op stream */));
-        
+
         // Downward pass via before_storage chain (KVSPlumb)
         let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
 
@@ -85,7 +88,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         // Fan out PUT deltas through any configured replication layers. Replicas generate
         // operations that enter the core without triggering client responses.
         // Deltas are unordered data, ensure NoOrder for replication
-        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.assume_ordering(nondet!(/** deltas are unordered */)));
+        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weakest_ordering());
 
         // Core processing for client-originating operations (storage-specific).
         // scan requires TotalOrder input
@@ -110,7 +113,7 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         let data_events = client_data_events
             .interleave(replica_data_events);
-        
+
         // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
@@ -157,7 +160,11 @@ pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
-    ExternalBincodeBidi<KVSOperation<KeyType, V>, String, hydro_lang::location::external_process::Many>,
+    ExternalBincodeBidi<
+        KVSOperation<KeyType, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
 )
 where
     KeyType: Clone
@@ -213,7 +220,11 @@ pub fn plumb_kvs_dataflow_with_tombstones<'a, V, K>(
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
-    ExternalBincodeBidi<KVSOperation<String, V>, String, hydro_lang::location::external_process::Many>,
+    ExternalBincodeBidi<
+        KVSOperation<String, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
 )
 where
     V: Clone

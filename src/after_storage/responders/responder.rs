@@ -14,7 +14,12 @@ pub trait LeafAfterHook {
         &self,
         leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>;
+    ) -> Stream<
+        String,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >;
 }
 
 /// Simple responder that only forwards responses for original (non-replica) ops.
@@ -32,7 +37,12 @@ impl LeafAfterHook for Responder {
         &self,
         _leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder> {
+    ) -> Stream<
+        String,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    > {
         tagged_responses
             .filter_map(q!(|(is_replica, resp)| if !is_replica {
                 Some(resp)
@@ -71,7 +81,12 @@ where
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -83,7 +98,12 @@ where
         &self,
         _cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {

@@ -49,7 +49,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -61,7 +66,12 @@ where
         &self,
         cluster: &Cluster<'a, KVSNode>,
         local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        (usize, K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
@@ -101,16 +111,24 @@ impl<R> AfterResponses for SequencedReplication<R> {
 fn sequence_slotted_operations<'a, K, V, O>(
     cluster: &Cluster<'a, KVSNode>,
     slotted_operations: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+) -> Stream<
+    (usize, K, V),
+    Cluster<'a, KVSNode>,
+    Unbounded,
+    hydro_lang::live_collections::stream::NoOrder,
+>
 where
     K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     O: hydro_lang::live_collections::stream::Ordering,
 {
     let tick = cluster.tick();
-    
+
     // Convert to TotalOrder for sequencing operations
-    let slotted_operations = slotted_operations.assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** sequencing */));
+    let slotted_operations = slotted_operations
+        .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+            nondet!(/** sequencing */),
+        );
 
     // Create cycles for buffering out-of-order operations
     let (buffered_ops_complete, buffered_ops) =

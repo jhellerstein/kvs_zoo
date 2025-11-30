@@ -20,7 +20,12 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
@@ -40,7 +45,12 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
         operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
