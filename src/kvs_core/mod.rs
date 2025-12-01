@@ -8,9 +8,10 @@
 pub mod events;
 pub mod local_map;
 
-use hydro_lang::live_collections::stream::TotalOrder;
+use hydro_lang::live_collections::stream::{NoOrder, Ordering, TotalOrder};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
+use stageleft::IntoQuotedMut;
 
 use self::events::{DataEvent, MetaEvent};
 use crate::protocol::{KVSOperation, KVSResponse};
@@ -19,7 +20,7 @@ use crate::protocol::{KVSOperation, KVSResponse};
 ///
 /// This trait abstracts over different storage implementations, allowing KVSCore
 /// to work with both standard HashMap storage and tombstone-based storage.
-/// 
+///
 /// Standard HashMap implementation is below; tombstone-based storage is in local_map.rs.
 pub trait KVSStorage<K, V>: Default {
     /// Apply a Put operation: insert or merge the value at the given key.
@@ -68,13 +69,18 @@ pub struct CoreEmission<K, V> {
 }
 
 /// Output bundle produced by `KVSCore::process`.
-pub struct CoreOutput<K, V, L> {
-    /// Sequential response stream for client-visible results.
-    pub responses: Stream<KVSResponse<K, V>, L, Unbounded, TotalOrder>,
+///
+/// Generic over ordering: TotalOrder for linearizable processing, NoOrder for monotonic.
+pub struct CoreOutput<K, V, L, O = TotalOrder>
+where
+    O: Ordering,
+{
+    /// Response stream for client-visible results.
+    pub responses: Stream<KVSResponse<K, V>, L, Unbounded, O>,
     /// Data event stream describing applied operations.
-    pub data: Stream<DataEvent<K, V>, L, Unbounded, TotalOrder>,
+    pub data: Stream<DataEvent<K, V>, L, Unbounded, O>,
     /// Metadata stream for maintenance/background pipelines.
-    pub meta: Stream<MetaEvent<K>, L, Unbounded, TotalOrder>,
+    pub meta: Stream<MetaEvent<K>, L, Unbounded, O>,
 }
 
 /// Represents an individual KVS node in the cluster
@@ -83,44 +89,18 @@ pub struct CoreOutput<K, V, L> {
 /// collections of nodes that form a KVS deployment.
 pub struct KVSNode {}
 
-/// Wrapper for KVS storage state to avoid generic leakage in q!() closures.
-/// This provides a monomorphic type that Stageleft can properly stage.
-#[derive(Clone, Debug)]
-pub struct KVSState<Store> {
-    pub inner: Store,
-}
-
-impl<Store: Default> Default for KVSState<Store> {
-    fn default() -> Self {
-        Self {
-            inner: Store::default(),
-        }
-    }
-}
-
-impl<Store> KVSState<Store> {
-    pub fn new(store: Store) -> Self {
-        Self { inner: store }
-    }
-}
-
-/// Helper function for creating KVS state in q!() macros.
-pub fn new_kvs_state<Store: Default>() -> KVSState<Store> {
-    KVSState::default()
-}
-
 /// Core KVS that processes operations in order
 pub struct KVSCore;
 
 impl KVSCore {
-    /// Generic core processing over an arbitrary Store implementing KVSStorage.
+    /// Process operations using monotonic semantics with coordination-free updates.
     ///
-    /// Note: This generic version cannot be used directly in staged contexts due to
-    /// stageleft limitations. Use the monomorphic wrappers (`process_hashmap`,
-    /// `process_tombstone_fst`) for actual dataflow construction.
-    pub fn process<'a, K, V, L, Store>(
-        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<K, V, L>
+    /// Accepts NoOrder input and uses lattice operations for CALM compliance.
+    /// Mutations (put/delete) flow through without coordination, gets batch into ticks.
+    pub fn process<'a, K, V, L, Store, I, F>(
+        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, NoOrder>>,
+        init_storage: I,
+    ) -> CoreOutput<K, V, L, NoOrder>
     where
         K: Clone
             + Serialize
@@ -132,93 +112,6 @@ impl KVSCore {
             + Send
             + Sync
             + 'static,
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-        Store: KVSStorage<K, V> + Clone + Send + Sync + 'static,
-    {
-        let combined = operations.scan(
-            q!(|| Store::default()),
-            q!(|state: &mut Store, operation: KVSOperation<K, V>| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
-        );
-
-        let responses = combined
-            .clone()
-            .filter_map(q!(|emission| emission.response));
-        let data = combined.clone().filter_map(q!(|emission| emission.data));
-        let meta = combined.filter_map(q!(|emission| emission.meta));
-
-        CoreOutput { responses, data, meta }
-    }
-
-    /// Monomorphic wrapper for HashMap<K, V> storage.
-    ///
-    /// This delegates to shared logic but uses concrete HashMap type to work around
-    /// stageleft's limitation with generic type parameters in q!() closures.
-    pub fn process_hashmap<'a, K, V, L>(
-        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<K, V, L>
-    where
-        K: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + std::hash::Hash
-            + std::fmt::Debug
-            + Send
-            + Sync
-            + 'static,
-        V: Clone
-            + Serialize
-            + for<'de> Deserialize<'de>
-            + PartialEq
-            + Eq
-            + Default
-            + std::fmt::Debug
-            + std::fmt::Display
-            + lattices::Merge<V>
-            + Send
-            + Sync
-            + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
-    {
-        let combined = operations.scan(
-            q!(|| std::collections::HashMap::new()),
-            q!(|state, operation| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
-        );
-
-        let responses = combined
-            .clone()
-            .filter_map(q!(|emission| emission.response));
-        let data = combined.clone().filter_map(q!(|emission| emission.data));
-        let meta = combined.filter_map(q!(|emission| emission.meta));
-
-        CoreOutput { responses, data, meta }
-    }
-
-    /// Monomorphic wrapper for LocalHashMapFst<V> tombstone storage.
-    ///
-    /// This delegates to shared logic but uses concrete LocalHashMapFst type to work around
-    /// stageleft's limitation with generic type parameters in q!() closures.
-    pub fn process_tombstone_fst<'a, V, L>(
-        operations: Stream<KVSOperation<String, V>, L, Unbounded, TotalOrder>,
-    ) -> CoreOutput<String, V, L>
-    where
         V: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -233,14 +126,112 @@ impl KVSCore {
             + Send
             + Sync
             + 'static,
-        L: hydro_lang::location::Location<'a> + Clone + 'a,
+        L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
+        Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L> + Clone,
+        F: Fn() -> Store + 'a,
     {
-        let combined = operations.scan(
-            q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()),
-            q!(|state, operation| {
-                Some(KVSCore::process_operation(state, operation))
-            }),
-        );
+        Self::process_no_order(operations, init_storage)
+    }
+
+    /// Process operations using linearizable semantics with sequential state updates.
+    ///
+    /// Requires TotalOrder input because `scan` only works on ordered streams.
+    /// This provides strong consistency but requires coordination.
+    pub fn process_ordered<'a, K, V, L, Store, I, F>(
+        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
+        init_storage: I,
+    ) -> CoreOutput<K, V, L, TotalOrder>
+    where
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + Clone + 'a,
+        Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L>,
+        F: Fn() -> Store + 'a,
+    {
+        let combined = operations.scan(init_storage, q!(|state, operation| {
+            let request_id = operation.request_id();
+            let client_id = operation.client_id();
+            let should_emit_response = client_id.is_some();
+
+            let (response, data, meta) = match operation {
+                KVSOperation::Put(key, value, _, _) => {
+                    let value_for_event = value.clone();
+                    state.apply_put(key.clone(), value);
+
+                    let response = if should_emit_response {
+                        Some(KVSResponse::PutOk {
+                            request_id,
+                            client_id,
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Put {
+                        key: key.clone(),
+                        value: value_for_event,
+                    });
+                    (response, data, None)
+                }
+                KVSOperation::Get(key, _, _) => {
+                    let value = state.apply_get(&key).cloned();
+                    let response = if should_emit_response {
+                        Some(KVSResponse::GetResult {
+                            request_id,
+                            client_id,
+                            value: value.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Get {
+                        key: key.clone(),
+                        value,
+                    });
+                    (response, data, None)
+                }
+                KVSOperation::Delete(key, _, _) => {
+                    state.apply_delete(key.clone());
+                    let response = if should_emit_response {
+                        Some(KVSResponse::DeleteOk {
+                            request_id,
+                            client_id,
+                        })
+                    } else {
+                        None
+                    };
+                    let data = Some(DataEvent::Delete { key: key.clone() });
+                    let meta = Some(MetaEvent::Tomb { key: key.clone() });
+                    (response, data, meta)
+                }
+            };
+            Some(CoreEmission {
+                response,
+                data,
+                meta,
+            })
+        }));
 
         let responses = combined
             .clone()
@@ -248,74 +239,152 @@ impl KVSCore {
         let data = combined.clone().filter_map(q!(|emission| emission.data));
         let meta = combined.filter_map(q!(|emission| emission.meta));
 
-        CoreOutput { responses, data, meta }
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
     }
 
-    /// Shared processing logic for KVS operations.
+    /// Process operations using monotonic semantics with coordination-free updates.
     ///
-    /// This extracts the common operation handling used by both process_hashmap
-    /// and process_tombstone_fst, avoiding code duplication while staying compatible
-    /// with stageleft's constraints.
-    pub fn process_operation<K, V, Store>(
-        state: &mut Store,
-        operation: KVSOperation<K, V>,
-    ) -> CoreEmission<K, V>
+    /// Accepts NoOrder input and uses lattice operations for CALM compliance.
+    /// 
+    /// Key insight: Mutations (put/delete) flow through without coordination,
+    /// but gets need to batch into a tick to snapshot storage state.
+    pub fn process_no_order<'a, K, V, L, Store, I, F>(
+        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, NoOrder>>,
+        _init_storage: I,
+    ) -> CoreOutput<K, V, L, NoOrder>
     where
-        K: Clone,
-        V: Clone + PartialEq + Eq + std::fmt::Debug + std::fmt::Display,
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + lattices::LatticeFrom<V>
+            + lattices::IsBot
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
         Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L> + Clone,
+        F: Fn() -> Store + 'a,
     {
-        let request_id = operation.request_id();
-        let client_id = operation.client_id();
-        let should_emit_response = client_id.is_some();
+        let operations = operations.into();
+        let tick = operations.location().tick();
 
-        let (response, data, meta) = match operation {
-            KVSOperation::Put(key, value, _, _) => {
-                let value_for_event = value.clone();
-                state.apply_put(key.clone(), value);
-
-                let response = if should_emit_response {
-                    Some(KVSResponse::PutOk { request_id, client_id })
-                } else {
-                    None
-                };
-                let data = Some(DataEvent::Put {
-                    key: key.clone(),
-                    value: value_for_event,
-                });
-                (response, data, None)
+        // Split operations by type
+        let puts = operations.clone().filter_map(q!(|op| match op {
+            KVSOperation::Put(key, value, request_id, client_id) => {
+                Some((key, value, request_id, client_id))
             }
-            KVSOperation::Get(key, _, _) => {
-                let value = state.apply_get(&key).cloned();
-                let response = if should_emit_response {
+            _ => None,
+        }));
+
+        let deletes = operations.clone().filter_map(q!(|op| match op {
+            KVSOperation::Delete(key, request_id, client_id) => Some((key, request_id, client_id)),
+            _ => None,
+        }));
+
+        let gets = operations.filter_map(q!(|op| match op {
+            KVSOperation::Get(key, request_id, client_id) => Some((key, request_id, client_id)),
+            _ => None,
+        }));
+
+        // Build storage state using keyed lattice operations
+        // fold_commutative_idempotent maintains persistent state across process lifetime
+        let put_updates = puts.clone().map(q!(|(key, value, _, _)| (key, value)));
+        
+        let storage = put_updates
+            .into_keyed()
+            .fold_commutative_idempotent(
+                q!(|| Default::default()),
+                q!(|old, new| {
+                    lattices::Merge::merge(old, new);
+                })
+            );
+
+        // Batch gets into ticks and snapshot storage at the same tick
+        let gets_batched = gets
+            .batch(&tick, nondet!(/** batch gets for snapshot */))
+            .map(q!(|(key, request_id, client_id)| (key, (request_id, client_id))))
+            .into_keyed();
+        let storage_snapshot = storage.snapshot(&tick, nondet!(/** snapshot storage for gets */));
+        
+        // Use get_many to lookup keys in the storage snapshot
+        let get_results = storage_snapshot.get_many(gets_batched);
+        
+        let get_responses = get_results
+            .values()
+            .filter_map(q!(|(value_opt, (request_id, client_id))| {
+                if client_id.is_some() {
                     Some(KVSResponse::GetResult {
                         request_id,
                         client_id,
-                        value: value.clone(),
+                        value: value_opt,
                     })
                 } else {
                     None
-                };
-                let data = Some(DataEvent::Get {
-                    key: key.clone(),
-                    value,
-                });
-                (response, data, None)
-            }
-            KVSOperation::Delete(key, _, _) => {
-                state.apply_delete(key.clone());
-                let response = if should_emit_response {
-                    Some(KVSResponse::DeleteOk { request_id, client_id })
+                }
+            }))
+            .all_ticks();
+
+        // Generate put/delete responses by teeing off (no batching needed)
+        let put_responses = puts
+            .clone()
+            .filter_map(q!(|(_, _, request_id, client_id)| {
+                if client_id.is_some() {
+                    Some(KVSResponse::PutOk {
+                        request_id,
+                        client_id,
+                    })
                 } else {
                     None
-                };
-                let data = Some(DataEvent::Delete { key: key.clone() });
-                let meta = Some(MetaEvent::Tomb { key: key.clone() });
-                (response, data, meta)
+                }
+            }));
+
+        let delete_responses = deletes.clone().filter_map(q!(|(_, request_id, client_id)| {
+            if client_id.is_some() {
+                Some(KVSResponse::DeleteOk {
+                    request_id,
+                    client_id,
+                })
+            } else {
+                None
             }
-        };
-        CoreEmission {
-            response,
+        }));
+
+        // Combine all responses
+        let responses = put_responses
+            .interleave(delete_responses)
+            .interleave(get_responses);
+
+        // Generate data events
+        let put_data = puts.map(q!(|(key, value, _, _)| DataEvent::Put { key, value }));
+        let delete_data = deletes.clone().map(q!(|(key, _, _)| DataEvent::Delete { key }));
+        let data = put_data.interleave(delete_data);
+
+        // Generate meta events (tombstones from deletes)
+        let meta = deletes.map(q!(|(key, _, _)| MetaEvent::Tomb { key }));
+
+        CoreOutput {
+            responses,
             data,
             meta,
         }
@@ -335,9 +404,19 @@ mod tests {
         // in the exact order they appear, ensuring linearizability
 
         let operations: Vec<KVSOperation<String, LwwWrapper<String>>> = vec![
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("1".to_string()), 1, Some(1)),
+            KVSOperation::Put(
+                "x".to_string(),
+                LwwWrapper::new("1".to_string()),
+                1,
+                Some(1),
+            ),
             KVSOperation::Get("x".to_string(), 2, Some(1)),
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("2".to_string()), 3, Some(1)),
+            KVSOperation::Put(
+                "x".to_string(),
+                LwwWrapper::new("2".to_string()),
+                3,
+                Some(1),
+            ),
             KVSOperation::Get("x".to_string(), 4, Some(1)),
         ];
 
@@ -543,9 +622,20 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy, arb_request_id(), arb_client_id())
-                .prop_map(|(k, v, rid, cid)| KVSOperation::Put(k, LwwWrapper::new(v), rid, Some(cid))),
-            (key_strategy, arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, Some(cid))),
+            (
+                key_strategy,
+                value_strategy,
+                arb_request_id(),
+                arb_client_id()
+            )
+                .prop_map(|(k, v, rid, cid)| KVSOperation::Put(
+                    k,
+                    LwwWrapper::new(v),
+                    rid,
+                    Some(cid)
+                )),
+            (key_strategy, arb_request_id(), arb_client_id())
+                .prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, Some(cid))),
             (key_strategy, arb_request_id(), arb_client_id())
                 .prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, Some(cid))),
         ]
@@ -557,14 +647,11 @@ mod tests {
         let value_strategy = "[a-z0-9]{1,20}";
 
         prop_oneof![
-            (key_strategy, value_strategy, arb_request_id()).prop_map(|(k, v, rid)| KVSOperation::Put(
-                k,
-                LwwWrapper::new(v),
-                rid,
-                None
-            )),
+            (key_strategy, value_strategy, arb_request_id())
+                .prop_map(|(k, v, rid)| KVSOperation::Put(k, LwwWrapper::new(v), rid, None)),
             (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Get(k, rid, None)),
-            (key_strategy, arb_request_id()).prop_map(|(k, rid)| KVSOperation::Delete(k, rid, None)),
+            (key_strategy, arb_request_id())
+                .prop_map(|(k, rid)| KVSOperation::Delete(k, rid, None)),
         ]
     }
 
@@ -748,7 +835,7 @@ mod tests {
             // Test 1: Change request_id, verify client_id unchanged
             let original_client_id = op.client_id();
             let op_with_new_rid = op.clone().with_request_id(new_request_id);
-            
+
             prop_assert_eq!(op_with_new_rid.client_id(), original_client_id,
                 "Changing request_id should not affect client_id");
             prop_assert_eq!(op_with_new_rid.request_id(), new_request_id,
@@ -757,7 +844,7 @@ mod tests {
             // Test 2: Change client_id, verify request_id unchanged
             let original_request_id = op.request_id();
             let op_with_new_cid = op.with_client_id(Some(new_client_id));
-            
+
             prop_assert_eq!(op_with_new_cid.request_id(), original_request_id,
                 "Changing client_id should not affect request_id");
             prop_assert_eq!(op_with_new_cid.client_id(), Some(new_client_id),

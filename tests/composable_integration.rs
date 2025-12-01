@@ -87,18 +87,21 @@ async fn test_local_kvs_service() {
         Some("GET = NOT FOUND".to_string()),
     ];
 
+    // Send operations one at a time and wait for each response
+    // This ensures proper ordering even with NoOrder processing
     for (i, op) in operations.into_iter().enumerate() {
         client_in.send(op).await.unwrap();
 
-        if let Some(expected) = &expected_responses[i] {
-            let response = timeout(Duration::from_millis(1000), client_out.next())
-                .await
-                .expect("Timeout waiting for response")
-                .expect("No response received");
+        // Wait for response before sending next operation
+        let response = timeout(Duration::from_millis(1000), client_out.next())
+            .await
+            .expect("Timeout waiting for response")
+            .expect("No response received");
 
+        if let Some(expected) = &expected_responses[i] {
             assert_eq!(response, *expected, "Response mismatch for operation {}", i);
-            println!("✅ Operation {}: {}", i, response);
         }
+        println!("✅ Operation {}: {}", i, response);
     }
 
     println!("✅ Local KVS test passed!");
@@ -259,67 +262,49 @@ async fn test_sharded_kvs_service() {
         KVSOperation::Get("nonexistent".to_string(), 5, None),
     ];
 
+    // Send operations one at a time and wait for each response
+    // This ensures proper ordering even with NoOrder processing
     for (i, op) in operations.into_iter().enumerate() {
         println!("📤 Sending operation {}: {:?}", i, op);
 
-        match client_in.send(op).await {
-            Ok(_) => {
-                println!("✅ Operation {} sent successfully", i);
+        client_in.send(op).await.unwrap();
 
-                // All operations now return responses
-                match timeout(Duration::from_millis(2000), client_out.next()).await {
-                    Ok(Some(response)) => {
-                        println!("✅ Operation {}: {}", i, response);
+        // Wait for response before sending next operation
+        let response = timeout(Duration::from_millis(2000), client_out.next())
+            .await
+            .unwrap_or_else(|_| panic!("Timeout waiting for response to operation {}", i))
+            .expect("No response received");
 
-                        // Validate expected responses
-                        match i {
-                            0 => assert!(
-                                response.contains("PUT OK"),
-                                "Expected PUT OK response, got: {}",
-                                response
-                            ),
-                            1 => assert!(
-                                response.contains("PUT OK"),
-                                "Expected PUT OK response, got: {}",
-                                response
-                            ),
-                            2 => assert!(
-                                response.contains("value_0"),
-                                "Expected value_0, got: {}",
-                                response
-                            ),
-                            3 => assert!(
-                                response.contains("value_1"),
-                                "Expected value_1, got: {}",
-                                response
-                            ),
-                            4 => assert!(
-                                response.contains("NOT FOUND"),
-                                "Expected NOT FOUND, got: {}",
-                                response
-                            ),
-                            _ => {}
-                        }
-                    }
-                    Ok(None) => {
-                        println!("⚠️  Operation {}: No response (connection closed)", i)
-                    }
-                    Err(_) => {
-                        println!(
-                            "⚠️  Operation {}: Timeout - this might indicate a sharding issue",
-                            i
-                        );
-                        // Don't fail the test on timeout for now, just log it
-                    }
-                }
+        println!("✅ Operation {}: {}", i, response);
 
-                // Wait between all operations to ensure proper sequencing
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
-            Err(e) => {
-                println!("⚠️  Operation {}: Send failed ({}), continuing test", i, e);
-                break;
-            }
+        // Validate expected responses
+        match i {
+            0 => assert!(
+                response.contains("PUT OK"),
+                "Expected PUT OK response, got: {}",
+                response
+            ),
+            1 => assert!(
+                response.contains("PUT OK"),
+                "Expected PUT OK response, got: {}",
+                response
+            ),
+            2 => assert!(
+                response.contains("value_0"),
+                "Expected value_0, got: {}",
+                response
+            ),
+            3 => assert!(
+                response.contains("value_1"),
+                "Expected value_1, got: {}",
+                response
+            ),
+            4 => assert!(
+                response.contains("NOT FOUND"),
+                "Expected NOT FOUND, got: {}",
+                response
+            ),
+            _ => {}
         }
     }
 

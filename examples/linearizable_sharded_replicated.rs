@@ -3,9 +3,7 @@
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::{
-    BroadcastReplication, SequencedReplication as Sequenced,
-};
+use kvs_zoo::after_storage::replication::BroadcastReplication;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
@@ -41,7 +39,7 @@ type LinearizableShardedReplicatedKVS = KVSCluster<
         KVSCluster<
             Replica,
             RoundRobinRouter,
-            Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
+            BroadcastReplication<String, LwwWrapper<String>>,
             KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
         >,
     >,
@@ -71,9 +69,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define the nested KVS architecture via defaults (Paxos → Sharded → RR → Sequenced<Broadcast> → Slot/Responder)
     let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
 
-    // Plumb full dataflow with external I/O using the standard helper
-    let (layers, bidi_port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs_spec);
+    // Plumb full dataflow with external I/O
+    // Plumbing detects linearizability via the RequiresLinearizable trait:
+    // - PaxosDispatcher implements RequiresLinearizable (establishes total order)
+    // - SlotOrderEnforcer implements RequiresLinearizable (enforces sequential execution)
+    // - KVSCluster propagates the requirement through nested layers
+    // When detected, plumbing preserves TotalOrder through to storage instead of downgrading to NoOrder
+    let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+        &proxy,
+        &client_external,
+        &flow,
+        kvs_spec,
+    );
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;

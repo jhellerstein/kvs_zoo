@@ -14,7 +14,12 @@ pub trait LeafAfterHook {
         &self,
         leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>;
+    ) -> Stream<
+        String,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >;
 }
 
 /// Simple responder that only forwards responses for original (non-replica) ops.
@@ -32,14 +37,19 @@ impl LeafAfterHook for Responder {
         &self,
         _leaf_cluster: &Cluster<'a, KVSNode>,
         tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+    ) -> Stream<
+        String,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    > {
         tagged_responses
             .filter_map(q!(|(is_replica, resp)| if !is_replica {
                 Some(resp)
             } else {
                 None
             }))
-            .assume_ordering(nondet!(/** local responses only for originals */))
+            .weakest_ordering()
     }
 }
 
@@ -67,22 +77,21 @@ where
         false
     }
 
-    fn replicate_data<'a>(
+    fn replicate_data<'a, O>(
         &self,
         _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
-        // No replication at leaf after-hook layer
-        local_data
-    }
-
-    fn replicate_slotted_data<'a>(
-        &self,
-        _cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded> {
-        // Preserve slots; no additional replication
-        local_slotted_data
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
+        // No replication at leaf - just relax ordering to match trait signature
+        local_data.weakest_ordering()
     }
 }
 

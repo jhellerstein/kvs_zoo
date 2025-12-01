@@ -1,6 +1,6 @@
 //! Single-node router (Before stage)
 
-use crate::before_storage::Before;
+use crate::before_storage::{Before, RequiresLinearizable};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
@@ -15,13 +15,22 @@ impl SingleNodeRouter {
     }
 }
 
+// Routing layers don't require linearizable processing
+impl RequiresLinearizable for SingleNodeRouter {}
+
 impl<K, V> Before<K, V> for SingleNodeRouter {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -32,15 +41,22 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
             )))
             .into_keyed()
             .demux_bincode(target_cluster)
+            .weakest_ordering()
     }
 
-    fn dispatch_from_cluster<'a>(
+    fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -52,6 +68,5 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()
-            .assume_ordering(nondet!(/** cluster hop routed */))
     }
 }

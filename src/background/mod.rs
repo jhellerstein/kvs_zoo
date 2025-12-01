@@ -1,13 +1,20 @@
 use hydro_lang::prelude::*;
+use lattices::set_union::SetUnionHashSet;
 
 use crate::kvs_core::events::{DataEvent, MetaEvent};
 
+/// Lattice wrapper for metadata events using set-union semantics
+///
+/// Wraps MetaEvent in a SetUnion lattice so metadata can be composed
+/// monotonically across the distributed system.
+pub type MetaLattice<K> = SetUnionHashSet<MetaEvent<K>>;
+
+use hydro_lang::live_collections::stream::NoOrder;
+
 pub type BackgroundDataStream<'a, K, V> =
-    Stream<DataEvent<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
+    Stream<DataEvent<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
 pub type BackgroundMetaStream<'a, K> =
-    Stream<MetaEvent<K>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>;
-
-
+    Stream<MetaLattice<K>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
 
 /// Trait implemented by background stages that wish to consume data/meta events.
 ///

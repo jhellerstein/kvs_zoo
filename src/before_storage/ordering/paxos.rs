@@ -4,7 +4,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-use crate::before_storage::Before;
+use crate::before_storage::{Before, RequiresLinearizable};
 pub use crate::before_storage::ordering::paxos_core::PaxosConfig;
 use crate::before_storage::ordering::paxos_core::{PaxosPayload, paxos_core};
 use crate::before_storage::ordering::sequence_payloads::sequence_payloads;
@@ -30,22 +30,32 @@ impl<K, V> PaxosDispatcher<K, V> {
         }
     }
 
-    pub fn paxos_run<'a>(
+    pub fn paxos_run<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
         acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
-        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        O: hydro_lang::live_collections::stream::Ordering,
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
         V: PaxosPayload + Eq,
     {
         let (checkpoint_complete, checkpoint) = acceptors.forward_ref::<Optional<usize, _, _>>();
         let checkpoint_opt: Optional<usize, _, _> = acceptors.singleton(q!(0)).into();
         checkpoint_complete.complete(checkpoint_opt);
 
-        let ops_at_proposers =
-            operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
+        let ops_at_proposers = operations
+            .broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
 
         let (_ballot_stream, ordered_slots) = paxos_core(
             proposers,
@@ -67,17 +77,12 @@ impl<K, V> PaxosDispatcher<K, V> {
 
         // Use type inference inside q! closure to avoid generic parameter annotation issues.
         // The macro struggles with explicit generic types like SequencedPayload<_>.
-        next_slot_cycle.complete_next_tick(
-            sequenced_ops
-                .clone()
-                .persist()
-                .fold(
-                    q!(|| 0),
-                    q!(|next_slot, sequenced| {
-                        *next_slot = sequenced.seq + 1;
-                    }),
-                ),
-        );
+        next_slot_cycle.complete_next_tick(sequenced_ops.clone().persist().fold(
+            q!(|| 0),
+            q!(|next_slot, sequenced| {
+                *next_slot = sequenced.seq + 1;
+            }),
+        ));
 
         sequenced_ops
             .filter_map(q!(|sequenced| sequenced.payload))
@@ -91,37 +96,71 @@ impl<K, V> Default for PaxosDispatcher<K, V> {
     }
 }
 
+// Paxos establishes total order and requires linearizable processing
+impl<K, V> RequiresLinearizable for PaxosDispatcher<K, V> {
+    fn requires_linearizable() -> bool {
+        true
+    }
+}
+
 impl<K, V> Before<K, V> for PaxosDispatcher<K, V>
 where
     K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: PaxosPayload + Eq,
 {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
-        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        _operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+        _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations
-            .enumerate()
-            .map(q!(|(i, op)| (i as u32, op)))
-            .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
-            .assume_ordering(nondet!(/** fallback ordered */))
-            .map(q!(|(_i, op)| op))
+        panic!(
+            "PaxosDispatcher::dispatch_from_process should never be called. \
+             Use dispatch_from_process_with_layers to access proposer/acceptor clusters."
+        )
     }
 
-    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+    fn dispatch_from_process_with_layers<'a, Name: 'static, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
-        K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
+        O: hydro_lang::live_collections::stream::Ordering,
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
     {
         // Look up role-specific clusters for this layer (stored as KVSNode-tagged clusters).
         let proposers = layers.get_role::<Name, crate::before_storage::ordering::Proposer>();
@@ -139,21 +178,26 @@ where
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()
-            .assume_ordering(nondet!(/** paxos-ordered routed to KVS layer */))
     }
 
-    fn dispatch_from_cluster_with_layers<'a, Name: 'static>(
+    fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
         source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // For inter-cluster hops within the same layer, assume ordering is preserved.
+        // For inter-cluster hops, network operations produce NoOrder
         self.dispatch_from_cluster(operations, source_cluster, target_cluster)
     }
 
@@ -169,23 +213,38 @@ where
         layers.insert_role::<Name, crate::before_storage::ordering::Acceptor>(acceptors);
     }
 
-    fn dispatch_from_cluster<'a>(
+    fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+    ) -> Stream<
+        KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.assume_ordering(nondet!(/** passthrough cluster hop */))
+        operations.weakest_ordering()
     }
 }
 
 pub fn paxos_order<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,
@@ -198,7 +257,16 @@ pub fn paxos_order<
 
 pub fn paxos_order_to_proxy<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,
@@ -206,18 +274,32 @@ pub fn paxos_order_to_proxy<
     proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
     acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     proxy: &Process<'a, ()>,
-) -> Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded> {
+) -> Stream<
+    KVSOperation<K, V>,
+    Process<'a, ()>,
+    Unbounded,
+    hydro_lang::live_collections::stream::NoOrder,
+> {
     dispatcher
         .paxos_run(operations, proposers, acceptors)
         .send_bincode(proxy)
         .entries()
         .map(q!(|(_member_id, op)| op))
-        .assume_ordering(nondet!(/** paxos ordered at proxy */))
+        .weakest_ordering()
 }
 
 pub fn paxos_order_slotted<
     'a,
-    K: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+    K: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
     V: PaxosPayload + Eq + Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 >(
     dispatcher: &PaxosDispatcher<K, V>,
@@ -229,4 +311,27 @@ pub fn paxos_order_slotted<
         .paxos_run(operations, proposers, acceptors)
         .enumerate()
         .map(q!(|(idx, op)| (idx, op)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::KVSOperation;
+
+    #[test]
+    #[should_panic(expected = "dispatch_from_process should never be called")]
+    fn test_paxos_dispatch_from_process_panics() {
+        let dispatcher = PaxosDispatcher::<String, String>::new();
+        let flow = hydro_lang::compile::builder::FlowBuilder::new();
+        let process = flow.process::<()>();
+        let cluster = flow.cluster::<crate::kvs_core::KVSNode>();
+
+        // Create a dummy operation stream
+        let ops = process.source_iter(q!(vec![
+            KVSOperation::Get("key".to_string(), 1, None)
+        ]));
+
+        // This should panic because PaxosDispatcher requires dispatch_from_process_with_layers
+        let _result = dispatcher.dispatch_from_process(ops, &cluster);
+    }
 }

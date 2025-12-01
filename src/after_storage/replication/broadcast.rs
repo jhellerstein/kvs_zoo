@@ -1,11 +1,6 @@
-//! Broadcast Replication Strategy (after-storage, unified)
-//!
-//! Implements the unified `replicate_updates` API, splitting unslotted and
-//! slotted updates internally to avoid code duplication.
+//! Broadcast Replication Strategy (after-storage)
 
-use crate::after_storage::{
-    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
-};
+use crate::after_storage::{AfterResponses, ClusterCommunication, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -123,43 +118,24 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_updates<'a>(
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
-        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
-            ReplicationUpdate::Unslotted(t) => Some(t),
-            _ => None,
-        }));
-        let slotted_in = updates.filter_map(q!(|u| match u {
-            ReplicationUpdate::Slotted(t) => Some(t),
-            _ => None,
-        }));
-
-        let unslotted_out_raw = if self.config.enable_batching {
-            self.handle_replication_periodic(cluster, unslotted_in)
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
+        if self.config.enable_batching {
+            self.handle_replication_periodic(cluster, local_data)
         } else {
-            self.handle_replication_immediate(cluster, unslotted_in)
-        };
-        let unslotted_out = unslotted_out_raw.map(q!(|t| ReplicationUpdate::Unslotted(t)));
-
-        let slotted_out = slotted_in
-            .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
-            .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-                nondet!(/** broadcast messages unordered */),
-            )
-            .map(q!(|t| ReplicationUpdate::Slotted(t)));
-
-        unslotted_out
-            .interleave(slotted_out)
-            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                nondet!(/** merged replication updates (total order for consumers) */),
-            )
-            .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
-                nondet!(/** consumers expect exactly-once semantics */),
-            )
+            self.handle_replication_immediate(cluster, local_data)
+        }
     }
 }
 
@@ -189,23 +165,39 @@ where
         + Merge<V>,
 {
     /// Immediate synchronous broadcast replication
-    pub fn handle_replication_immediate<'a>(
+    pub fn handle_replication_immediate<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         local_put_tuples
             .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
             .values()
-            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            .weakest_ordering()
     }
 
     /// Periodic background broadcast replication
-    pub fn handle_replication_periodic<'a>(
+    pub fn handle_replication_periodic<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let ticker = cluster.tick();
         let batch_timeout_ms = self.config.batch_timeout_ms;
 
@@ -228,7 +220,7 @@ where
 
         periodic_broadcast
             .values()
-            .assume_ordering(nondet!(/** broadcast messages unordered */))
+            .weakest_ordering()
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }
@@ -278,10 +270,9 @@ mod tests {
     fn test_broadcast_vs_gossip_replication_strategies() {
         fn _accepts_replication_strategy<K, V>(_strategy: impl ReplicationStrategy<K, V>) {}
 
-        _accepts_replication_strategy::<String, crate::values::CausalString>(BroadcastReplication::<
-            String,
-            crate::values::CausalString,
-        >::new());
+        _accepts_replication_strategy::<String, crate::values::CausalString>(
+            BroadcastReplication::<String, crate::values::CausalString>::new(),
+        );
         _accepts_replication_strategy::<String, crate::values::CausalString>(
             crate::after_storage::replication::SimpleGossip::<String, crate::values::CausalString>::default(
             ),

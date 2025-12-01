@@ -87,9 +87,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_hashmap::<_, _, _>(ordered_ops);
-    data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
-    meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
+    } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
+    let _data_keep_alive = data.inspect(q!(|_| ())); // Sharded demo ignores data events for now
+    let _meta_keep_alive = meta.inspect(q!(|_| ())); // Sharded demo ignores metadata for now
 
     // Send responses back to proxy and complete the client request
     let proxy_responses = responses.send_bincode(&proxy);
@@ -150,7 +150,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn shard_info(op: &KVSOperation<String, LwwWrapper<String>>, shards: u64) -> Option<String> {
     match op {
-        KVSOperation::Put(key, _, _, _) | KVSOperation::Get(key, _, _) | KVSOperation::Delete(key, _, _) => {
+        KVSOperation::Put(key, _, _, _)
+        | KVSOperation::Get(key, _, _)
+        | KVSOperation::Delete(key, _, _) => {
             let shard_id = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(
                 key,
                 shards as usize,

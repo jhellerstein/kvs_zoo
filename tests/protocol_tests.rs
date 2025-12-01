@@ -25,7 +25,9 @@ fn test_operation_pattern_matching() {
             assert_eq!(request_id, 1);
             assert_eq!(client_id, Some(1));
         }
-        KVSOperation::Get(_, _, _) | KVSOperation::Delete(_, _, _) => panic!("Expected PUT operation"),
+        KVSOperation::Get(_, _, _) | KVSOperation::Delete(_, _, _) => {
+            panic!("Expected PUT operation")
+        }
     }
 
     let get_op: KVSOperation<String, String> = KVSOperation::Get("key1".to_string(), 2, Some(2));
@@ -35,7 +37,9 @@ fn test_operation_pattern_matching() {
             assert_eq!(request_id, 2);
             assert_eq!(client_id, Some(2));
         }
-        KVSOperation::Put(_, _, _, _) | KVSOperation::Delete(_, _, _) => panic!("Expected GET operation"),
+        KVSOperation::Put(_, _, _, _) | KVSOperation::Delete(_, _, _) => {
+            panic!("Expected GET operation")
+        }
     }
 
     let del_op: KVSOperation<String, String> = KVSOperation::Delete("key1".to_string(), 3, None);
@@ -45,15 +49,26 @@ fn test_operation_pattern_matching() {
             assert_eq!(request_id, 3);
             assert_eq!(client_id, None);
         }
-        KVSOperation::Put(_, _, _, _) | KVSOperation::Get(_, _, _) => panic!("Expected DELETE operation"),
+        KVSOperation::Put(_, _, _, _) | KVSOperation::Get(_, _, _) => {
+            panic!("Expected DELETE operation")
+        }
     }
 }
 
 #[test]
 fn test_response_creation() {
     // Test PutOk response
-    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 1, client_id: Some(1) };
-    assert_eq!(put_response, KVSResponse::PutOk { request_id: 1, client_id: Some(1) });
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk {
+        request_id: 1,
+        client_id: Some(1),
+    };
+    assert_eq!(
+        put_response,
+        KVSResponse::PutOk {
+            request_id: 1,
+            client_id: Some(1)
+        }
+    );
 
     // Test GetResult responses
     let get_found: KVSResponse<String, String> = KVSResponse::GetResult {
@@ -103,7 +118,9 @@ fn test_response_pattern_matching() {
             assert_eq!(client_id, Some(1));
         }
         KVSResponse::GetResult { value: None, .. } => panic!("Expected found value"),
-        KVSResponse::PutOk { .. } | KVSResponse::DeleteOk { .. } | KVSResponse::_Phantom(_) => panic!("Expected GET response"),
+        KVSResponse::PutOk { .. } | KVSResponse::DeleteOk { .. } | KVSResponse::_Phantom(_) => {
+            panic!("Expected GET response")
+        }
     }
 
     let not_found_response: KVSResponse<String, String> = KVSResponse::GetResult {
@@ -121,7 +138,9 @@ fn test_response_pattern_matching() {
             assert_eq!(client_id, Some(2));
         }
         KVSResponse::GetResult { value: Some(_), .. } => panic!("Expected not found"),
-        KVSResponse::PutOk { .. } | KVSResponse::DeleteOk { .. } | KVSResponse::_Phantom(_) => panic!("Expected GET response"),
+        KVSResponse::PutOk { .. } | KVSResponse::DeleteOk { .. } | KVSResponse::_Phantom(_) => {
+            panic!("Expected GET response")
+        }
     }
 }
 
@@ -198,7 +217,8 @@ fn test_operation_key_extraction() {
     let get_op: KVSOperation<String, String> = KVSOperation::Get("get_key".to_string(), 2, None);
     assert_eq!(get_op.key(), "get_key");
 
-    let del_op: KVSOperation<String, String> = KVSOperation::Delete("del_key".to_string(), 3, Some(2));
+    let del_op: KVSOperation<String, String> =
+        KVSOperation::Delete("del_key".to_string(), 3, Some(2));
     assert_eq!(del_op.key(), "del_key");
 }
 
@@ -210,7 +230,10 @@ fn test_response_client_id_extraction() {
     };
     assert_eq!(put_response.client_id(), Some(10));
 
-    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 2, client_id: None };
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk {
+        request_id: 2,
+        client_id: None,
+    };
     assert_eq!(del_response.client_id(), None);
 
     let get_response: KVSResponse<String, String> = KVSResponse::GetResult {
@@ -223,22 +246,38 @@ fn test_response_client_id_extraction() {
 
 #[test]
 fn test_response_request_id_extraction() {
-    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 10, client_id: Some(1) };
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk {
+        request_id: 10,
+        client_id: Some(1),
+    };
     assert_eq!(put_response.request_id(), 10);
 
-    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 20, client_id: None };
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk {
+        request_id: 20,
+        client_id: None,
+    };
     assert_eq!(del_response.request_id(), 20);
 
-    let get_response: KVSResponse<String, String> = KVSResponse::GetResult { request_id: 30, client_id: Some(2), value: None };
+    let get_response: KVSResponse<String, String> = KVSResponse::GetResult {
+        request_id: 30,
+        client_id: Some(2),
+        value: None,
+    };
     assert_eq!(get_response.request_id(), 30);
 }
 
 #[test]
 fn test_response_display_formatting() {
-    let put_response: KVSResponse<String, String> = KVSResponse::PutOk { request_id: 1, client_id: Some(1) };
+    let put_response: KVSResponse<String, String> = KVSResponse::PutOk {
+        request_id: 1,
+        client_id: Some(1),
+    };
     assert_eq!(format!("{}", put_response), "PUT OK");
 
-    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk { request_id: 2, client_id: Some(2) };
+    let del_response: KVSResponse<String, String> = KVSResponse::DeleteOk {
+        request_id: 2,
+        client_id: Some(2),
+    };
     assert_eq!(format!("{}", del_response), "DELETE OK");
 
     let get_found: KVSResponse<String, String> = KVSResponse::GetResult {
@@ -281,22 +320,37 @@ fn arb_client_id() -> impl Strategy<Value = Option<u64>> {
 /// Generator for KVS operations with random request IDs and client IDs
 fn arb_kvs_operation() -> impl Strategy<Value = KVSOperation<String, String>> {
     prop_oneof![
-        (any::<String>(), any::<String>(), arb_request_id(), arb_client_id())
+        (
+            any::<String>(),
+            any::<String>(),
+            arb_request_id(),
+            arb_client_id()
+        )
             .prop_map(|(k, v, rid, cid)| KVSOperation::Put(k, v, rid, cid)),
-        (any::<String>(), arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, cid)),
-        (any::<String>(), arb_request_id(), arb_client_id()).prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, cid)),
+        (any::<String>(), arb_request_id(), arb_client_id())
+            .prop_map(|(k, rid, cid)| KVSOperation::Get(k, rid, cid)),
+        (any::<String>(), arb_request_id(), arb_client_id())
+            .prop_map(|(k, rid, cid)| KVSOperation::Delete(k, rid, cid)),
     ]
 }
 
 /// Generator for KVS responses with random request IDs and client IDs
 fn arb_kvs_response() -> impl Strategy<Value = KVSResponse<String, String>> {
     prop_oneof![
-        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::PutOk { request_id: rid, client_id: cid }),
-        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::DeleteOk { request_id: rid, client_id: cid }),
-        (arb_request_id(), arb_client_id(), any::<Option<String>>()).prop_map(|(rid, cid, val)| KVSResponse::GetResult {
+        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::PutOk {
             request_id: rid,
-            client_id: cid,
-            value: val
+            client_id: cid
+        }),
+        (arb_request_id(), arb_client_id()).prop_map(|(rid, cid)| KVSResponse::DeleteOk {
+            request_id: rid,
+            client_id: cid
+        }),
+        (arb_request_id(), arb_client_id(), any::<Option<String>>()).prop_map(|(rid, cid, val)| {
+            KVSResponse::GetResult {
+                request_id: rid,
+                client_id: cid,
+                value: val,
+            }
         }),
     ]
 }

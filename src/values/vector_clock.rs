@@ -133,6 +133,12 @@ impl Merge<VCWrapper> for VCWrapper {
     }
 }
 
+impl lattices::IsBot for VCWrapper {
+    fn is_bot(&self) -> bool {
+        self.inner.is_bot()
+    }
+}
+
 impl From<MapUnionBTreeMap<String, Max<usize>>> for VCWrapper {
     fn from(inner: MapUnionBTreeMap<String, Max<usize>>) -> Self {
         Self { inner }

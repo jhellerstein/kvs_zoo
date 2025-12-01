@@ -48,9 +48,11 @@ pub struct Ballot {
 
 impl Ord for Ballot {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.num
-            .cmp(&other.num)
-            .then_with(|| self.proposer_id.get_raw_id().cmp(&other.proposer_id.get_raw_id()))
+        self.num.cmp(&other.num).then_with(|| {
+            self.proposer_id
+                .get_raw_id()
+                .cmp(&other.proposer_id.get_raw_id())
+        })
     }
 }
 impl PartialOrd for Ballot {
@@ -74,13 +76,13 @@ pub struct P2a<P> {
 }
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
-pub fn paxos_core<'a, P: PaxosPayload>(
+pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::Ordering>(
     proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
     acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     a_checkpoint: Optional<usize, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
     c_to_proposers: impl FnOnce(
         Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
     config: PaxosConfig,
     _nondet_leader: NonDet,
     _nondet_commit: NonDet,
@@ -339,7 +341,8 @@ fn p_leader_heartbeat<'a>(
         proposers
             .source_interval_delayed(
                 q!(Duration::from_secs(
-                    (CLUSTER_SELF_ID.get_raw_id() * i_am_leader_check_timeout_delay_multiplier as u32)
+                    (CLUSTER_SELF_ID.get_raw_id()
+                        * i_am_leader_check_timeout_delay_multiplier as u32)
                         .into()
                 )),
                 q!(Duration::from_secs(i_am_leader_check_timeout)),
@@ -552,12 +555,12 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
     clippy::too_many_arguments,
     reason = "internal paxos code // TODO"
 )]
-fn sequence_payload<'a, P: PaxosPayload>(
+fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::Ordering>(
     proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
     acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
     acceptor_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
-    c_to_proposers: Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    c_to_proposers: Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
     a_checkpoint: Optional<usize, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
 
     p_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
@@ -643,16 +646,21 @@ fn sequence_payload<'a, P: PaxosPayload>(
     )
 }
 
-pub fn index_payloads<'a, L: Location<'a>, P: PaxosPayload>(
+pub fn index_payloads<'a, L: Location<'a>, P: PaxosPayload, O: hydro_lang::live_collections::stream::Ordering>(
     proposer_tick: &Tick<L>,
     p_max_slot: Optional<usize, Tick<L>, Bounded>,
-    c_to_proposers: Stream<P, Tick<L>, Bounded>,
+    c_to_proposers: Stream<P, Tick<L>, Bounded, O>,
 ) -> Stream<(usize, P), Tick<L>, Bounded> {
     let (p_next_slot_complete_cycle, p_next_slot) =
         proposer_tick.cycle_with_initial::<Singleton<usize, _, _>>(proposer_tick.singleton(q!(0)));
     let p_next_slot_after_reconciling_p1bs = p_max_slot.map(q!(|max_slot| max_slot + 1));
     let base_slot = p_next_slot_after_reconciling_p1bs.unwrap_or(p_next_slot);
     let p_indexed_payloads = c_to_proposers
+        .assume_ordering(nondet!(
+            /** Assign arbitrary but deterministic slot numbers via enumerate.
+             * The specific order doesn't matter - Paxos consensus will ensure
+             * all replicas agree on the same slot→payload mapping. */
+        ))
         .enumerate()
         .cross_singleton(base_slot.clone())
         .map(q!(|((index, payload), base_slot)| (

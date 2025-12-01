@@ -86,11 +86,26 @@ fn test_ordering_violation_detection() {
     // It should demonstrate why sequential processing is necessary
 
     let operations = vec![
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("first".to_string()), 1, None),
+        KVSOperation::Put(
+            "x".to_string(),
+            LwwWrapper::new("first".to_string()),
+            1,
+            None,
+        ),
         KVSOperation::Get("x".to_string(), 2, None),
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("second".to_string()), 3, None),
+        KVSOperation::Put(
+            "x".to_string(),
+            LwwWrapper::new("second".to_string()),
+            3,
+            None,
+        ),
         KVSOperation::Get("x".to_string(), 4, None),
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("third".to_string()), 5, None),
+        KVSOperation::Put(
+            "x".to_string(),
+            LwwWrapper::new("third".to_string()),
+            5,
+            None,
+        ),
         KVSOperation::Get("x".to_string(), 6, None),
     ];
 

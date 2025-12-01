@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-
 /// DataEvent captures the observable outcome of an operation.
 /// (Future: add Scan variants.)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,14 +13,14 @@ pub enum DataEvent<K, V> {
 }
 
 /// Wire format for background digests.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MetaDigestFormat {
     /// JSON serialization of `TombIndexStats`; stable, human-readable.
     TombIndexJsonV1,
 }
 
 /// MetaEvent carries maintenance/system metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MetaEvent<K> {
     Tomb {
         key: K,

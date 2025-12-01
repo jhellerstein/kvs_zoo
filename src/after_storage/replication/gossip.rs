@@ -1,11 +1,6 @@
-//! Simple Gossip Replication Strategy (after-storage, unified)
-//!
-//! Implements the unified `replicate_updates` API, splitting unslotted and slotted
-//! updates internally to avoid code duplication.
+//! Simple Gossip Replication Strategy (after-storage)
 
-use crate::after_storage::{
-    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
-};
+use crate::after_storage::{AfterResponses, ClusterCommunication, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
 use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::location::MemberId;
@@ -136,52 +131,20 @@ where
         + Merge<V>
         + std::hash::Hash,
 {
-    fn replicate_updates<'a>(
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded> {
-        let cluster_members =
-            Self::get_cluster_members(cluster).assume_retries(nondet!(/** member list OK */));
-
-        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
-            ReplicationUpdate::Unslotted(t) => Some(t),
-            _ => None,
-        }));
-        let slotted_in = updates.filter_map(q!(|u| match u {
-            ReplicationUpdate::Slotted(t) => Some(t),
-            _ => None,
-        }));
-
-        // Unslotted: reuse simple immediate gossip
-        let unslotted_out = self
-            .handle_gossip_simple(cluster, unslotted_in)
-            .map(q!(|t| ReplicationUpdate::Unslotted(t)));
-
-        // Slotted: forward preserving slot to all peers
-        let slotted_out = slotted_in
-            .clone()
-            .cross_product(cluster_members)
-            .map(q!(|(tuple, member_id)| (member_id, tuple)))
-            .into_keyed()
-            .demux_bincode(cluster)
-            .values()
-            .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
-                nondet!(/** gossip messages unordered */),
-            )
-            .assume_retries::<hydro_lang::live_collections::stream::AtLeastOnce>(
-                nondet!(/** gossip retries OK */),
-            )
-            .map(q!(|t| ReplicationUpdate::Slotted(t)));
-
-        unslotted_out
-            .interleave(slotted_out)
-            .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
-                nondet!(/** merged replication updates (total order for consumers) */),
-            )
-            .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
-                nondet!(/** consumers expect exactly-once semantics */),
-            )
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
+        self.handle_gossip_simple(cluster, local_data)
     }
 }
 
@@ -218,11 +181,19 @@ where
         + std::hash::Hash,
 {
     /// Simplified gossip that immediately forwards PUT operations to all peers
-    pub fn handle_gossip_simple<'a>(
+    pub fn handle_gossip_simple<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded> {
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<
+        (K, V),
+        Cluster<'a, KVSNode>,
+        Unbounded,
+        hydro_lang::live_collections::stream::NoOrder,
+    >
+    where
+        O: hydro_lang::live_collections::stream::Ordering,
+    {
         let cluster_members = Self::get_cluster_members(cluster);
 
         // Immediate forwarding to all peers for reliable convergence
@@ -239,7 +210,7 @@ where
 
         gossip_sent
             .values()
-            .assume_ordering(nondet!(/** gossip messages unordered */))
+            .weakest_ordering()
             .assume_retries(nondet!(/** gossip retries OK */))
     }
 }
