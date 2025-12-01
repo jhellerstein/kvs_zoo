@@ -307,52 +307,37 @@ impl KVSCore {
             _ => None,
         }));
 
-        // Build storage state using lattice operations
-        // Convert mutations to MapUnion lattice updates
-        let put_lattice_updates = puts.clone().map(q!(|(key, value, _, _)| {
-            let mut map = std::collections::HashMap::new();
-            map.insert(key, value);
-            lattices::map_union::MapUnionHashMap::new(map)
-        }));
-
-        // For deletes in monotonic mode, we create tombstone entries
-        // by inserting a default value (which will be treated as a tombstone)
-        let delete_lattice_updates = deletes.clone().map(q!(|(_key, _, _)| {
-            // Create an empty map - deletes don't actually insert values in monotonic mode
-            // They should be handled by a separate tombstone mechanism
-            let map = std::collections::HashMap::new();
-            lattices::map_union::MapUnionHashMap::new(map)
-        }));
-
-        // Merge all lattice updates using reduce_commutative_idempotent
-        // Batch into ticks to create snapshots for gets
-        let mutations_batched = put_lattice_updates
-            .interleave(delete_lattice_updates)
-            .batch(&tick, nondet!(/** batch mutations for snapshot */));
-
-        let storage_snapshot = mutations_batched
+        // Build storage state using keyed lattice operations
+        // fold_commutative_idempotent maintains persistent state across process lifetime
+        let put_updates = puts.clone().map(q!(|(key, value, _, _)| (key, value)));
+        
+        let storage = put_updates
+            .into_keyed()
             .fold_commutative_idempotent(
-                q!(|| lattices::map_union::MapUnionHashMap::new(std::collections::HashMap::new())),
-                q!(|acc, update| {
-                    lattices::Merge::merge(acc, update);
-                }),
+                q!(|| Default::default()),
+                q!(|old, new| {
+                    lattices::Merge::merge(old, new);
+                })
             );
 
-        // Handle gets by batching them and cross-joining with storage snapshot
-        let gets_batched = gets.batch(&tick, nondet!(/** batch gets for snapshot */));
+        // Batch gets into ticks and snapshot storage at the same tick
+        let gets_batched = gets
+            .batch(&tick, nondet!(/** batch gets for snapshot */))
+            .map(q!(|(key, request_id, client_id)| (key, (request_id, client_id))))
+            .into_keyed();
+        let storage_snapshot = storage.snapshot(&tick, nondet!(/** snapshot storage for gets */));
         
-        let get_responses = gets_batched
-            .cross_singleton(storage_snapshot)
-            .map(q!(|((key, request_id, client_id), storage)| {
-                let value = storage.as_reveal_ref().get(&key).cloned();
-                (request_id, client_id, value)
-            }))
-            .filter_map(q!(|(request_id, client_id, value)| {
+        // Use get_many to lookup keys in the storage snapshot
+        let get_results = storage_snapshot.get_many(gets_batched);
+        
+        let get_responses = get_results
+            .values()
+            .filter_map(q!(|(value_opt, (request_id, client_id))| {
                 if client_id.is_some() {
                     Some(KVSResponse::GetResult {
                         request_id,
                         client_id,
-                        value,
+                        value: value_opt,
                     })
                 } else {
                     None

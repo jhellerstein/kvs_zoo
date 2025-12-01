@@ -84,8 +84,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data,
         meta,
     } = KVSCore::process::<_, _, _, _, _, _>(all_ops, q!(|| std::collections::HashMap::new()));
-    data.for_each(q!(|event| println!("[after] data {:?}", event)));
-    meta.for_each(q!(|event| println!("[after] meta {:?}", event)));
+    let _data_keep_alive = data.inspect(q!(|event| println!("[after] data {:?}", event)));
+    let _meta_keep_alive = meta.inspect(q!(|event| println!("[after] meta {:?}", event)));
 
     let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses

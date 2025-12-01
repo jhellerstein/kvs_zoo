@@ -64,12 +64,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use futures::{SinkExt, StreamExt};
     use kvs_zoo::protocol::KVSOperation as Op;
+    
     let ops = vec![
         Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
         Op::Get("alpha".into(), 2, None),
         Op::Put("alpha".into(), LwwWrapper::new("two".into()), 3, None),
         Op::Get("alpha".into(), 4, None),
     ];
+    
     for op in ops {
         input.send(op).await?;
         if let Some(resp) = out.next().await {

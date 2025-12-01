@@ -1,3 +1,4 @@
+use hydro_lang::live_collections::stream::NoOrder;
 use hydro_lang::prelude::*;
 
 use crate::before_storage::Before;
@@ -212,7 +213,7 @@ where
             my_cluster,
             layers,
         );
-        self.child.plumb_from_cluster(layers, my_cluster, routed)
+        self.child.plumb_from_cluster::<NoOrder>(layers, my_cluster, routed)
     }
 }
 
@@ -281,7 +282,7 @@ where
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        self.before.dispatch_from_cluster_with_layers::<Name, _>(
+        self.before.dispatch_from_cluster_with_layers::<Name, O>(
             operations,
             source_cluster,
             source_cluster,

@@ -90,11 +90,11 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Core processing for client-originating operations (storage-specific).
         // Preserve ordering if the KVS architecture requires linearizability,
-        // otherwise allow coordination-free processing.
+        // otherwise downgrade to NoOrder for coordination-free processing.
         let client_ops_to_process = if kvs.requires_linearizable() {
             client_ops  // Preserve TotalOrder from ordering layers (e.g., Paxos)
         } else {
-            client_ops  // Already NoOrder for coordination-free processing
+            client_ops.weakest_ordering()  // Downgrade to NoOrder for process()
         };
         let crate::kvs_core::CoreOutput {
             responses: client_responses,

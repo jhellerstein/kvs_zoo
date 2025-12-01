@@ -88,8 +88,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data,
         meta,
     } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
-    data.for_each(q!(|_data| ())); // Sharded demo ignores data events for now
-    meta.for_each(q!(|_meta| ())); // Sharded demo ignores metadata for now
+    let _data_keep_alive = data.inspect(q!(|_| ())); // Sharded demo ignores data events for now
+    let _meta_keep_alive = meta.inspect(q!(|_| ())); // Sharded demo ignores metadata for now
 
     // Send responses back to proxy and complete the client request
     let proxy_responses = responses.send_bincode(&proxy);

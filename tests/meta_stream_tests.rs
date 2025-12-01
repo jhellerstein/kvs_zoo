@@ -21,11 +21,11 @@ async fn delete_emits_tomb_meta_event() {
                     ),
                     kvs_zoo::protocol::KVSOperation::Delete("alpha".to_string(), 2, Some(1)),
                 ]))
-                .assume_ordering(nondet!(/** deterministic demo ops */));
+                .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** deterministic demo ops */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
                 KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
-            data.for_each(q!(|_data| ()));
+            let _data_keep_alive = data.inspect(q!(|_| ()));
             meta
         },
         |mut stream| async move {
@@ -159,11 +159,11 @@ async fn tomb_index_background_emits_summary() {
                 >::Delete(
                     "alpha".to_string(), 1, Some(1),
                 ),]))
-                .assume_ordering(nondet!(/** single delete */));
+                .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** single delete */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
                 KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
-            data.for_each(q!(|_data| ()));
+            let _data_keep_alive = data.inspect(q!(|_| ()));
             meta.send_bincode(process)
                 .entries()
                 .map(q!(|(_member, event)| event))
