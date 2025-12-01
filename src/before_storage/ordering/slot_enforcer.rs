@@ -8,16 +8,23 @@ impl SlotOrderEnforcer {
     }
 }
 
-use crate::before_storage::Before;
+use crate::before_storage::{Before, RequiresLinearizable};
+
+// SlotOrderEnforcer requires linearizable processing
+impl RequiresLinearizable for SlotOrderEnforcer {
+    fn requires_linearizable() -> bool {
+        true
+    }
+}
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 impl<K, V> Before<K, V> for SlotOrderEnforcer {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -26,6 +33,7 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {

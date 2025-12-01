@@ -8,7 +8,7 @@
 pub mod events;
 pub mod local_map;
 
-use hydro_lang::live_collections::stream::TotalOrder;
+use hydro_lang::live_collections::stream::{NoOrder, Ordering, TotalOrder};
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use stageleft::IntoQuotedMut;
@@ -70,15 +70,17 @@ pub struct CoreEmission<K, V> {
 
 /// Output bundle produced by `KVSCore::process`.
 ///
-/// Note: All output streams have `TotalOrder` because they are produced by `scan`,
-/// which maintains state and thus requires sequential processing.
-pub struct CoreOutput<K, V, L> {
-    /// Sequential response stream for client-visible results.
-    pub responses: Stream<KVSResponse<K, V>, L, Unbounded, TotalOrder>,
+/// Generic over ordering: TotalOrder for linearizable processing, NoOrder for monotonic.
+pub struct CoreOutput<K, V, L, O = TotalOrder>
+where
+    O: Ordering,
+{
+    /// Response stream for client-visible results.
+    pub responses: Stream<KVSResponse<K, V>, L, Unbounded, O>,
     /// Data event stream describing applied operations.
-    pub data: Stream<DataEvent<K, V>, L, Unbounded, TotalOrder>,
+    pub data: Stream<DataEvent<K, V>, L, Unbounded, O>,
     /// Metadata stream for maintenance/background pipelines.
-    pub meta: Stream<MetaEvent<K>, L, Unbounded, TotalOrder>,
+    pub meta: Stream<MetaEvent<K>, L, Unbounded, O>,
 }
 
 /// Represents an individual KVS node in the cluster
@@ -91,14 +93,55 @@ pub struct KVSNode {}
 pub struct KVSCore;
 
 impl KVSCore {
-    /// Process operations using any storage backend that implements KVSStorage.
+    /// Process operations using monotonic semantics with coordination-free updates.
+    ///
+    /// Accepts NoOrder input and uses lattice operations for CALM compliance.
+    /// Mutations (put/delete) flow through without coordination, gets batch into ticks.
+    pub fn process<'a, K, V, L, Store, I, F>(
+        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, NoOrder>>,
+        init_storage: I,
+    ) -> CoreOutput<K, V, L, NoOrder>
+    where
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + lattices::LatticeFrom<V>
+            + lattices::IsBot
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
+        Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L> + Clone,
+        F: Fn() -> Store + 'a,
+    {
+        Self::process_no_order(operations, init_storage)
+    }
+
+    /// Process operations using linearizable semantics with sequential state updates.
     ///
     /// Requires TotalOrder input because `scan` only works on ordered streams.
-    /// This provides linearizable semantics with sequential state updates.
-    pub fn process<'a, K, V, L, Store, I, F>(
+    /// This provides strong consistency but requires coordination.
+    pub fn process_ordered<'a, K, V, L, Store, I, F>(
         operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>>,
         init_storage: I,
-    ) -> CoreOutput<K, V, L>
+    ) -> CoreOutput<K, V, L, TotalOrder>
     where
         K: Clone
             + Serialize
@@ -196,6 +239,165 @@ impl KVSCore {
             .filter_map(q!(|emission| emission.response));
         let data = combined.clone().filter_map(q!(|emission| emission.data));
         let meta = combined.filter_map(q!(|emission| emission.meta));
+
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
+    }
+
+    /// Process operations using monotonic semantics with coordination-free updates.
+    ///
+    /// Accepts NoOrder input and uses lattice operations for CALM compliance.
+    /// 
+    /// Key insight: Mutations (put/delete) flow through without coordination,
+    /// but gets need to batch into a tick to snapshot storage state.
+    pub fn process_no_order<'a, K, V, L, Store, I, F>(
+        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, NoOrder>>,
+        _init_storage: I,
+    ) -> CoreOutput<K, V, L, NoOrder>
+    where
+        K: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + Serialize
+            + for<'de> Deserialize<'de>
+            + PartialEq
+            + Eq
+            + Default
+            + std::fmt::Debug
+            + std::fmt::Display
+            + lattices::Merge<V>
+            + lattices::LatticeFrom<V>
+            + lattices::IsBot
+            + Send
+            + Sync
+            + 'static,
+        L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
+        Store: KVSStorage<K, V>,
+        I: IntoQuotedMut<'a, F, L> + Clone,
+        F: Fn() -> Store + 'a,
+    {
+        let operations = operations.into();
+        let tick = operations.location().tick();
+
+        // Split operations by type
+        let puts = operations.clone().filter_map(q!(|op| match op {
+            KVSOperation::Put(key, value, request_id, client_id) => {
+                Some((key, value, request_id, client_id))
+            }
+            _ => None,
+        }));
+
+        let deletes = operations.clone().filter_map(q!(|op| match op {
+            KVSOperation::Delete(key, request_id, client_id) => Some((key, request_id, client_id)),
+            _ => None,
+        }));
+
+        let gets = operations.filter_map(q!(|op| match op {
+            KVSOperation::Get(key, request_id, client_id) => Some((key, request_id, client_id)),
+            _ => None,
+        }));
+
+        // Build storage state using lattice operations
+        // Convert mutations to MapUnion lattice updates
+        let put_lattice_updates = puts.clone().map(q!(|(key, value, _, _)| {
+            let mut map = std::collections::HashMap::new();
+            map.insert(key, value);
+            lattices::map_union::MapUnionHashMap::new(map)
+        }));
+
+        // For deletes in monotonic mode, we create tombstone entries
+        // by inserting a default value (which will be treated as a tombstone)
+        let delete_lattice_updates = deletes.clone().map(q!(|(key, _, _)| {
+            // Create an empty map - deletes don't actually insert values in monotonic mode
+            // They should be handled by a separate tombstone mechanism
+            let map = std::collections::HashMap::new();
+            lattices::map_union::MapUnionHashMap::new(map)
+        }));
+
+        // Merge all lattice updates using reduce_commutative_idempotent
+        // Batch into ticks to create snapshots for gets
+        let mutations_batched = put_lattice_updates
+            .interleave(delete_lattice_updates)
+            .batch(&tick, nondet!(/** batch mutations for snapshot */));
+
+        let storage_snapshot = mutations_batched
+            .fold_commutative_idempotent(
+                q!(|| lattices::map_union::MapUnionHashMap::new(std::collections::HashMap::new())),
+                q!(|acc, update| {
+                    lattices::Merge::merge(acc, update);
+                }),
+            );
+
+        // Handle gets by batching them and cross-joining with storage snapshot
+        let gets_batched = gets.batch(&tick, nondet!(/** batch gets for snapshot */));
+        
+        let get_responses = gets_batched
+            .cross_singleton(storage_snapshot)
+            .map(q!(|((key, request_id, client_id), storage)| {
+                let value = storage.as_reveal_ref().get(&key).cloned();
+                (request_id, client_id, value)
+            }))
+            .filter_map(q!(|(request_id, client_id, value)| {
+                if client_id.is_some() {
+                    Some(KVSResponse::GetResult {
+                        request_id,
+                        client_id,
+                        value,
+                    })
+                } else {
+                    None
+                }
+            }))
+            .all_ticks();
+
+        // Generate put/delete responses by teeing off (no batching needed)
+        let put_responses = puts
+            .clone()
+            .filter_map(q!(|(_, _, request_id, client_id)| {
+                if client_id.is_some() {
+                    Some(KVSResponse::PutOk {
+                        request_id,
+                        client_id,
+                    })
+                } else {
+                    None
+                }
+            }));
+
+        let delete_responses = deletes.clone().filter_map(q!(|(_, request_id, client_id)| {
+            if client_id.is_some() {
+                Some(KVSResponse::DeleteOk {
+                    request_id,
+                    client_id,
+                })
+            } else {
+                None
+            }
+        }));
+
+        // Combine all responses
+        let responses = put_responses
+            .interleave(delete_responses)
+            .interleave(get_responses);
+
+        // Generate data events
+        let put_data = puts.map(q!(|(key, value, _, _)| DataEvent::Put { key, value }));
+        let delete_data = deletes.clone().map(q!(|(key, _, _)| DataEvent::Delete { key }));
+        let data = put_data.interleave(delete_data);
+
+        // Generate meta events (tombstones from deletes)
+        let meta = deletes.map(q!(|(key, _, _)| MetaEvent::Tomb { key }));
 
         CoreOutput {
             responses,

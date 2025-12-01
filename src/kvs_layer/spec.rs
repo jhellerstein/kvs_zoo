@@ -13,6 +13,12 @@ pub trait KVSSpec<V> {
     ) -> Cluster<'a, crate::kvs_core::KVSNode>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
+    
+    /// Returns true if this KVS configuration requires linearizable processing.
+    /// Default implementation returns false (coordination-free processing).
+    fn requires_linearizable(&self) -> bool {
+        false
+    }
 }
 
 // Base case: terminal `()`
@@ -52,6 +58,11 @@ where
         self.before.register_role_clusters::<Name>(flow, layers);
         let _child_entry = self.child.create_clusters(flow, layers);
         my_cluster
+    }
+    
+    fn requires_linearizable(&self) -> bool {
+        // Check if this layer's Before component or any child requires linearizable processing
+        B::requires_linearizable() || self.child.requires_linearizable()
     }
 }
 

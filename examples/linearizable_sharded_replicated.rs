@@ -71,7 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Define the nested KVS architecture via defaults (Paxos → Sharded → RR → Sequenced<Broadcast> → Slot/Responder)
     let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
 
-    // Plumb full dataflow with external I/O using the standard helper
+    // Plumb full dataflow with external I/O
+    // Note: Linearizable examples currently use default unordered plumbing
+    // TODO: Add explicit linearizable plumbing when trait-based dispatch is implemented
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
         &proxy,
         &client_external,

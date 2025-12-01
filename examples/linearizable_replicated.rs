@@ -85,7 +85,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         inner,
     );
 
-    // Plumb full dataflow with external I/O using the standard helper (down/up only)
+    // Plumb full dataflow with external I/O
+    // Note: Linearizable examples currently use default unordered plumbing
+    // TODO: Add explicit linearizable plumbing when trait-based dispatch is implemented
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
         &proxy,
         &client_external,

@@ -76,8 +76,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         // Build initial operation stream from external input
         let initial_ops = operations_stream
             .entries()
-            .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))))
-            .assume_ordering(nondet!(/** client op stream */));
+            .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))));
 
         // Downward pass via before_storage chain (KVSPlumb)
         let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
@@ -91,21 +90,21 @@ macro_rules! plumb_kvs_dataflow_impl {
         let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weakest_ordering());
 
         // Core processing for client-originating operations (storage-specific).
-        // scan requires TotalOrder input
+        // Use weakest_ordering to allow coordination-free processing
         let crate::kvs_core::CoreOutput {
             responses: client_responses,
             data: client_data_events,
             meta: client_meta_stream,
-        } = $process_expr(client_ops.assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** scan requires total order */)));
+        } = $process_expr(client_ops.weakest_ordering());
 
         // Replicated operations flow through the same core path.
         // Replicated ops have client_id=None, so they won't generate responses.
-        // scan requires TotalOrder input
+        // Use weakest_ordering to allow coordination-free processing
         let crate::kvs_core::CoreOutput {
             responses: replica_responses,
             data: replica_data_events,
             meta: replica_meta_stream,
-        } = $process_expr(replication_ops.assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(nondet!(/** scan requires total order */)));
+        } = $process_expr(replication_ops.weakest_ordering());
 
         // Responses and data are already TotalOrder from scan, interleave preserves that
         let combined_responses = client_responses
@@ -153,6 +152,7 @@ macro_rules! plumb_kvs_dataflow_impl {
 /// deployment APIs (`.with_cluster(layers.get::<Name>(), ...)`).
 ///
 /// This version uses standard HashMap storage (keys can be deleted and re-added).
+/// Automatically selects ordered or unordered processing based on KVS configuration.
 pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
@@ -186,6 +186,8 @@ where
         + std::fmt::Debug
         + std::fmt::Display
         + lattices::Merge<V>
+        + lattices::LatticeFrom<V>
+        + lattices::IsBot
         + Send
         + Sync
         + 'static,
@@ -195,6 +197,7 @@ where
         + ReplicationPlumb<KeyType, V>
         + crate::background::BackgroundPlumb<KeyType, V>,
 {
+    // Default to unordered processing
     plumb_kvs_dataflow_impl!(
         KeyType,
         V,
@@ -202,15 +205,17 @@ where
         client_external,
         flow,
         kvs,
-        |ops| crate::kvs_core::KVSCore::process::<KeyType, V, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()))
+        |ops| crate::kvs_core::KVSCore::process::<KeyType, V, _, _, _, _>(ops, q!(|| std::collections::HashMap::<KeyType, V>::new()))
     )
 }
+
+
 
 /// Standalone plumbing function with tombstone-based storage.
 ///
 /// This variant uses `LocalHashMapFst<V>` for permanent tombstone deletion
 /// instead of standard HashMap. Once a key is deleted, it cannot be resurrected
-/// by subsequent PUT operations.
+/// by subsequent PUT operations. Defaults to unordered processing.
 ///
 /// Note: Currently restricted to String keys due to FST requirements.
 pub fn plumb_kvs_dataflow_with_tombstones<'a, V, K>(

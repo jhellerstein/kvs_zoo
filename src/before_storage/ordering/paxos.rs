@@ -4,7 +4,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-use crate::before_storage::Before;
+use crate::before_storage::{Before, RequiresLinearizable};
 pub use crate::before_storage::ordering::paxos_core::PaxosConfig;
 use crate::before_storage::ordering::paxos_core::{PaxosPayload, paxos_core};
 use crate::before_storage::ordering::sequence_payloads::sequence_payloads;
@@ -30,13 +30,14 @@ impl<K, V> PaxosDispatcher<K, V> {
         }
     }
 
-    pub fn paxos_run<'a>(
+    pub fn paxos_run<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
         acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -54,7 +55,9 @@ impl<K, V> PaxosDispatcher<K, V> {
         checkpoint_complete.complete(checkpoint_opt);
 
         let ops_at_proposers =
-            operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
+            operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */))
+                .weakest_ordering()
+                .assume_ordering(nondet!(/** paxos will establish total order */));
 
         let (_ballot_stream, ordered_slots) = paxos_core(
             proposers,
@@ -95,14 +98,21 @@ impl<K, V> Default for PaxosDispatcher<K, V> {
     }
 }
 
+// Paxos establishes total order and requires linearizable processing
+impl<K, V> RequiresLinearizable for PaxosDispatcher<K, V> {
+    fn requires_linearizable() -> bool {
+        true
+    }
+}
+
 impl<K, V> Before<K, V> for PaxosDispatcher<K, V>
 where
     K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: PaxosPayload + Eq,
 {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -111,21 +121,20 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
+        // Fallback: broadcast all operations without paxos ordering
         operations
-            .enumerate()
-            .map(q!(|(i, op)| (i as u32, op)))
             .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
-            .map(q!(|(_i, op)| op))
             .weakest_ordering()
     }
 
-    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+    fn dispatch_from_process_with_layers<'a, Name: 'static, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -134,6 +143,7 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -189,7 +199,7 @@ where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // For inter-cluster hops within the same layer, dispatch returns NoOrder
+        // For inter-cluster hops, network operations produce NoOrder
         self.dispatch_from_cluster(operations, source_cluster, target_cluster)
     }
 

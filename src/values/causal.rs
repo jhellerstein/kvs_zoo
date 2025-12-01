@@ -161,6 +161,15 @@ where
     }
 }
 
+impl<T> lattices::IsBot for CausalWrapper<T>
+where
+    T: Clone + Hash + Eq + std::fmt::Debug,
+{
+    fn is_bot(&self) -> bool {
+        self.inner.is_bot()
+    }
+}
+
 impl<T> Default for CausalWrapper<T>
 where
     T: Clone + Hash + Eq + std::fmt::Debug,

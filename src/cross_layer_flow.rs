@@ -7,7 +7,6 @@
 //! 4) after_storage (parent): replicate applied PUT deltas across the cluster
 //! 5) before_storage (leaf): route replicated PUTs to the target leaf and apply without responses
 
-use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +57,8 @@ where
         + std::fmt::Debug
         + std::fmt::Display
         + lattices::Merge<V>
+        + lattices::LatticeFrom<V>
+        + lattices::IsBot
         + Send
         + Sync
         + 'static,
@@ -77,15 +78,13 @@ where
         leaf_before.dispatch_from_cluster(parent_routed_ops, parent_cluster, parent_cluster);
 
     // 3) processing: client responses via minimal core + applied PUT deltas via helper
-    // scan requires TotalOrder input
+    // Use coordination-free processing
     let crate::kvs_core::CoreOutput {
         responses: local_responses,
         data: local_data,
         meta: local_meta,
     } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
-        leaf_ops
-            .clone()
-            .assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)),
+        leaf_ops.clone().weakest_ordering(),
         q!(|| std::collections::HashMap::new()),
     );
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops);
@@ -97,14 +96,13 @@ where
     let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
     let leaf_replicated_ops =
         leaf_before.dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster);
-    // scan requires TotalOrder input
+    // Use coordination-free processing for replicated operations
     let crate::kvs_core::CoreOutput {
         responses: replicate_responses,
         data: replicate_data,
         meta: replicate_meta,
     } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
-        leaf_replicated_ops
-            .assume_ordering::<TotalOrder>(nondet!(/** scan requires total order */)),
+        leaf_replicated_ops.weakest_ordering(),
         q!(|| std::collections::HashMap::new()),
     );
 

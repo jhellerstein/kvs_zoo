@@ -4,10 +4,10 @@ use crate::before_storage::Before;
 
 /// Trait to plumb routing across layers using per-layer Before components (routing/ordering).
 pub trait KVSPlumb<K, V> {
-    fn plumb_from_process<'a>(
+    fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
@@ -15,6 +15,7 @@ pub trait KVSPlumb<K, V> {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -75,10 +76,10 @@ pub trait KVSPlumb<K, V> {
 }
 
 impl<K, V> KVSPlumb<K, V> for () {
-    fn plumb_from_process<'a>(
+    fn plumb_from_process<'a, O>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        _operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        _operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
@@ -86,6 +87,7 @@ impl<K, V> KVSPlumb<K, V> for () {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
@@ -113,7 +115,7 @@ impl<K, V> KVSPlumb<K, V> for () {
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.assume_ordering(nondet!(/** unit layer passthrough */))
+        operations.weakest_ordering()
     }
 }
 
@@ -126,10 +128,10 @@ where
     B: Before<K, V> + Clone,
     Child: KVSPlumb<K, V>,
 {
-    fn plumb_from_process<'a>(
+    fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
@@ -137,6 +139,7 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + serde::Serialize
             + for<'de> serde::Deserialize<'de>
@@ -160,7 +163,7 @@ where
         let my_cluster = layers.get::<Name>();
         let routed = self
             .before
-            .dispatch_from_process_with_layers::<Name>(layers, operations, my_cluster);
+            .dispatch_from_process_with_layers::<Name, _>(layers, operations, my_cluster);
         self.child.plumb_from_cluster(layers, my_cluster, routed)
     }
 
@@ -237,10 +240,10 @@ where
         + 'static,
     B: Before<K, V> + Clone,
 {
-    fn plumb_from_process<'a>(
+    fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
@@ -248,12 +251,13 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
         let my_cluster = layers.get::<Name>();
         self.before
-            .dispatch_from_process_with_layers::<Name>(layers, operations, my_cluster)
+            .dispatch_from_process_with_layers::<Name, _>(layers, operations, my_cluster)
     }
 
     fn plumb_from_cluster<'a, O>(

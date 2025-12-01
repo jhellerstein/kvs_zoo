@@ -56,6 +56,8 @@ where
         + std::fmt::Debug
         + std::fmt::Display
         + lattices::Merge<V>
+        + lattices::LatticeFrom<V>
+        + lattices::IsBot
         + Send
         + Sync
         + std::hash::Hash

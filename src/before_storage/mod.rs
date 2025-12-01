@@ -10,14 +10,31 @@ pub mod ordering;
 pub mod routing;
 
 /* ------------------------------------------------------------------------- */
+/* Linearizability marker trait                                               */
+/* ------------------------------------------------------------------------- */
+
+/// Marker trait indicating that a Before-storage layer requires linearizable processing.
+///
+/// Implement this trait for ordering layers (like SlotOrderEnforcer) that establish
+/// a total order and require sequential processing to maintain linearizability.
+/// Routing layers and other non-ordering layers should NOT implement this trait.
+pub trait RequiresLinearizable {
+    /// Returns true if this layer requires linearizable processing.
+    /// Default implementation returns false (coordination-free processing).
+    fn requires_linearizable() -> bool {
+        false
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 /* Before-storage core (formerly `dispatch`)                                  */
 /* ------------------------------------------------------------------------- */
 
 /// Before-stage component for routing operations from proxy to cluster.
-pub trait Before<K, V> {
-    fn dispatch_from_process<'a>(
+pub trait Before<K, V>: RequiresLinearizable {
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -26,6 +43,7 @@ pub trait Before<K, V> {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -48,10 +66,10 @@ pub trait Before<K, V> {
 
     /// Hook for dispatchers that need to inspect sibling layers before routing.
     /// Most implementations ignore the additional cluster handles and fall back to `dispatch_from_process`.
-    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+    fn dispatch_from_process_with_layers<'a, Name: 'static, O>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -60,6 +78,7 @@ pub trait Before<K, V> {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -84,9 +103,9 @@ pub trait Before<K, V> {
     }
 
     #[allow(clippy::type_complexity)]
-    fn dispatch_slotted_from_process<'a>(
+    fn dispatch_slotted_from_process<'a, O>(
         &self,
-        slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded>,
+        slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         (usize, KVSOperation<K, V>),
@@ -95,6 +114,7 @@ pub trait Before<K, V> {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -181,11 +201,14 @@ pub trait Before<K, V> {
 
 // (Trait renamed to `Before`; legacy alias removed.)
 
+// Unit type doesn't require linearizable processing
+impl RequiresLinearizable for () {}
+
 /// Unit (No‑Op) Before-stage for leaf nodes
 impl<K, V> Before<K, V> for () {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -194,6 +217,7 @@ impl<K, V> Before<K, V> for () {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -243,10 +267,13 @@ impl IdentityDispatch {
     }
 }
 
+// IdentityDispatch doesn't require linearizable processing
+impl RequiresLinearizable for IdentityDispatch {}
+
 impl<K, V> Before<K, V> for IdentityDispatch {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -255,6 +282,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
@@ -305,14 +333,25 @@ impl<A: Default, B: Default> Default for Pipeline<A, B> {
     }
 }
 
+// Pipeline requires linearizable if either component requires it
+impl<A, B> RequiresLinearizable for Pipeline<A, B>
+where
+    A: RequiresLinearizable,
+    B: RequiresLinearizable,
+{
+    fn requires_linearizable() -> bool {
+        A::requires_linearizable() || B::requires_linearizable()
+    }
+}
+
 impl<A, B, K, V> Before<K, V> for Pipeline<A, B>
 where
     A: Before<K, V>,
     B: Before<K, V>,
 {
-    fn dispatch_from_process<'a>(
+    fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -321,6 +360,7 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -369,10 +409,10 @@ where
             .dispatch_from_cluster(mid, target_cluster, target_cluster)
     }
 
-    fn dispatch_from_process_with_layers<'a, Name: 'static>(
+    fn dispatch_from_process_with_layers<'a, Name: 'static, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
+        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
@@ -381,6 +421,7 @@ where
         hydro_lang::live_collections::stream::NoOrder,
     >
     where
+        O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
             + Serialize
             + for<'de> Deserialize<'de>
@@ -401,7 +442,7 @@ where
             + Sync
             + 'static,
     {
-        let first_out = self.first.dispatch_from_process_with_layers::<Name>(
+        let first_out = self.first.dispatch_from_process_with_layers::<Name, _>(
             layers,
             operations,
             target_cluster,
