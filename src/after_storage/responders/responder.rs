@@ -93,23 +93,6 @@ where
         // No replication at leaf - just relax ordering to match trait signature
         local_data.weakest_ordering()
     }
-
-    fn replicate_slotted_data<'a, O>(
-        &self,
-        _cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<
-        (usize, K, V),
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
-    >
-    where
-        O: hydro_lang::live_collections::stream::Ordering,
-    {
-        // No replication at leaf - just relax ordering to match trait signature
-        local_slotted_data.weakest_ordering()
-    }
 }
 
 impl ClusterCommunication for Responder {

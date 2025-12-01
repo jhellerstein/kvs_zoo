@@ -54,10 +54,8 @@ impl<K, V> PaxosDispatcher<K, V> {
         let checkpoint_opt: Optional<usize, _, _> = acceptors.singleton(q!(0)).into();
         checkpoint_complete.complete(checkpoint_opt);
 
-        let ops_at_proposers =
-            operations.broadcast_bincode(proposers, nondet!(/** broadcast to proposers */))
-                .weakest_ordering()
-                .assume_ordering(nondet!(/** paxos will establish total order */));
+        let ops_at_proposers = operations
+            .broadcast_bincode(proposers, nondet!(/** broadcast to proposers */));
 
         let (_ballot_stream, ordered_slots) = paxos_core(
             proposers,
@@ -112,8 +110,8 @@ where
 {
     fn dispatch_from_process<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        _operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+        _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
@@ -125,10 +123,10 @@ where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        // Fallback: broadcast all operations without paxos ordering
-        operations
-            .broadcast_bincode(target_cluster, nondet!(/** paxos-fallback */))
-            .weakest_ordering()
+        panic!(
+            "PaxosDispatcher::dispatch_from_process should never be called. \
+             Use dispatch_from_process_with_layers to access proposer/acceptor clusters."
+        )
     }
 
     fn dispatch_from_process_with_layers<'a, Name: 'static, O>(
@@ -313,4 +311,27 @@ pub fn paxos_order_slotted<
         .paxos_run(operations, proposers, acceptors)
         .enumerate()
         .map(q!(|(idx, op)| (idx, op)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::KVSOperation;
+
+    #[test]
+    #[should_panic(expected = "dispatch_from_process should never be called")]
+    fn test_paxos_dispatch_from_process_panics() {
+        let dispatcher = PaxosDispatcher::<String, String>::new();
+        let flow = hydro_lang::compile::builder::FlowBuilder::new();
+        let process = flow.process::<()>();
+        let cluster = flow.cluster::<crate::kvs_core::KVSNode>();
+
+        // Create a dummy operation stream
+        let ops = process.source_iter(q!(vec![
+            KVSOperation::Get("key".to_string(), 1, None)
+        ]));
+
+        // This should panic because PaxosDispatcher requires dispatch_from_process_with_layers
+        let _result = dispatcher.dispatch_from_process(ops, &cluster);
+    }
 }

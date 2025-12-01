@@ -206,7 +206,7 @@ where
             + 'static,
     {
         let my_cluster = layers.get::<Name>();
-        let routed = self.before.dispatch_from_cluster_with_layers::<Name, _>(
+        let routed = self.before.dispatch_from_cluster_with_layers::<Name, O>(
             operations,
             source_cluster,
             my_cluster,

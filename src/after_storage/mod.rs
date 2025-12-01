@@ -83,16 +83,6 @@ where
 /// background maintenance.
 pub type ZeroAfter = ();
 
-/// Unified replication update type
-///
-/// Replication strategies can accept and emit both unslotted (unordered)
-/// and slotted (slot-ordered) updates through a single API via this enum.
-#[derive(Clone, Debug)]
-pub enum ReplicationUpdate<K, V> {
-    Unslotted((K, V)),
-    Slotted((usize, K, V)),
-}
-
 /// Core trait for replication strategies
 ///
 /// Replication strategies handle background data synchronization between nodes,
@@ -105,48 +95,7 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
         true
     }
 
-    /// Unified replication entry: replicate updates (slotted or unslotted)
-    ///
-    /// Implementers may override this to handle both update kinds in one place.
-    /// Default dispatch adapters call `replicate_data` and `replicate_slotted_data`
-    /// as appropriate and merge the results.
-    ///
-    /// Note: Replication typically produces NoOrder streams due to network operations.
-    fn replicate_updates<'a, O>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<
-        ReplicationUpdate<K, V>,
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
-    >
-    where
-        O: hydro_lang::live_collections::stream::Ordering,
-        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    {
-        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
-            ReplicationUpdate::Unslotted(t) => Some(t),
-            _ => None,
-        }));
-        let slotted_in = updates.filter_map(q!(|u| match u {
-            ReplicationUpdate::Slotted(t) => Some(t),
-            _ => None,
-        }));
-
-        let unslotted_out = self
-            .replicate_data(cluster, unslotted_in)
-            .map(q!(|t| ReplicationUpdate::Unslotted(t)));
-        let slotted_out = self
-            .replicate_slotted_data(cluster, slotted_in)
-            .map(q!(|t| ReplicationUpdate::Slotted(t)));
-
-        unslotted_out.interleave(slotted_out).weakest_ordering()
-    }
-
-    /// Replicate data across the cluster (unordered)
+    /// Replicate data across the cluster
     ///
     /// Takes a stream of local data updates and returns a stream of data
     /// replicated by other nodes. The strategy determines how data is
@@ -166,47 +115,7 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    {
-        let updates = local_data.map(q!(|t| ReplicationUpdate::Unslotted(t)));
-        self.replicate_updates(cluster, updates)
-            .filter_map(q!(|u| match u {
-                ReplicationUpdate::Unslotted(t) => Some(t),
-                _ => None,
-            }))
-    }
-
-    /// Replicate slotted data across the cluster (ordered by slot)
-    ///
-    /// Takes a stream of slot-indexed data updates and returns a stream of
-    /// replicated data received from other nodes, maintaining slot ordering.
-    /// This is used by consensus protocols like Paxos to ensure operations
-    /// are applied in the same order across all replicas.
-    ///
-    /// Default implementation adapts to the unified `replicate_updates` API.
-    /// Note: Replication produces NoOrder streams due to network operations.
-    fn replicate_slotted_data<'a, O>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<
-        (usize, K, V),
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
-    >
-    where
-        O: hydro_lang::live_collections::stream::Ordering,
-        K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    {
-        let updates = local_slotted_data.map(q!(|(s, k, v)| ReplicationUpdate::Slotted((s, k, v))));
-        self.replicate_updates(cluster, updates)
-            .filter_map(q!(|u| match u {
-                ReplicationUpdate::Slotted(t) => Some(t),
-                _ => None,
-            }))
-    }
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 }
 
 /// Upward pass (After storage) maintenance hook for responses
@@ -360,27 +269,6 @@ where
     {
         let a_out = self.a.replicate_data(cluster, local_data.clone());
         let b_out = self.b.replicate_data(cluster, local_data);
-        // Both return NoOrder, interleave preserves that
-        a_out.interleave(b_out)
-    }
-
-    fn replicate_slotted_data<'a, O>(
-        &self,
-        cluster: &Cluster<'a, KVSNode>,
-        local_slotted_data: Stream<(usize, K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<
-        (usize, K, V),
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
-    >
-    where
-        O: hydro_lang::live_collections::stream::Ordering,
-    {
-        let a_out = self
-            .a
-            .replicate_slotted_data(cluster, local_slotted_data.clone());
-        let b_out = self.b.replicate_slotted_data(cluster, local_slotted_data);
         // Both return NoOrder, interleave preserves that
         a_out.interleave(b_out)
     }

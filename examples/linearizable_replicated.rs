@@ -1,11 +1,9 @@
-//! Linearizable Replicated KVS (Paxos → RR → Sequenced<Broadcast> → SlotEnforce)
+//! Linearizable Replicated KVS (Paxos → RR → Broadcast → SlotEnforce)
 
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::{
-    BroadcastReplication, BroadcastReplicationConfig, SequencedReplication as Sequenced,
-};
+use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::Pipeline;
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
@@ -25,7 +23,7 @@ struct ReplicaLeaf;
 
 // Nested composition:
 // - Outer layer: Pipeline(Paxos ordering → simple router) with no after_storage at that layer
-// - Inner layer: RoundRobin → Sequenced<Broadcast> → SlotEnforcer + Responder
+// - Inner layer: RoundRobin → Broadcast → SlotEnforcer + Responder
 // Values: LwwWrapper<String> to deliver linearizable semantics at the API.
 type LinearizableReplicatedKVS = KVSCluster<
     OrderedCluster,
@@ -34,7 +32,7 @@ type LinearizableReplicatedKVS = KVSCluster<
     KVSCluster<
         SequenceReplicated,
         RoundRobinRouter,
-        Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
+        BroadcastReplication<String, LwwWrapper<String>>,
         KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >,
 >;
@@ -48,7 +46,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    println!("🚀 Linearizable Replicated KVS Demo (Paxos → Sequenced<Broadcast> → SlotEnforce)");
+    println!("🚀 Linearizable Replicated KVS Demo (Paxos → Broadcast → SlotEnforce)");
 
     // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
@@ -59,11 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Define the nested KVS architecture with synchronous broadcast for snappy local demos
-    // (Paxos → RR → Sequenced<Broadcast(synchronous)> → Slot/Responder)
-    let inner_after = Sequenced::new(
-        BroadcastReplication::<String, LwwWrapper<String>>::with_config(
-            BroadcastReplicationConfig::synchronous(),
-        ),
+    // (Paxos → RR → Broadcast(synchronous) → Slot/Responder)
+    // SlotOrderEnforcer handles ordering; replication is coordination-free
+    let inner_after = BroadcastReplication::<String, LwwWrapper<String>>::with_config(
+        BroadcastReplicationConfig::synchronous(),
     );
     let inner_leaf = kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
         SlotOrderEnforcer::new(),
@@ -72,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let inner = kvs_zoo::kvs_layer::KVSCluster::<
         SequenceReplicated,
         RoundRobinRouter,
-        Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
+        BroadcastReplication<String, LwwWrapper<String>>,
         kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >::new(RoundRobinRouter::new(), inner_after, inner_leaf);
 
@@ -86,8 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Plumb full dataflow with external I/O
-    // Note: Linearizable examples currently use default unordered plumbing
-    // TODO: Add explicit linearizable plumbing when trait-based dispatch is implemented
+    // Plumbing detects linearizability via the RequiresLinearizable trait:
+    // - PaxosDispatcher implements RequiresLinearizable (establishes total order)
+    // - SlotOrderEnforcer implements RequiresLinearizable (enforces sequential execution)
+    // - Pipeline propagates the requirement if either component needs it
+    // When detected, plumbing preserves TotalOrder through to storage instead of downgrading to NoOrder
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
         &proxy,
         &client_external,

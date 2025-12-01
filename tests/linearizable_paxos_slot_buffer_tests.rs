@@ -2,9 +2,7 @@
 
 use futures::{SinkExt, StreamExt};
 // use hydro_lang::prelude::*;
-use kvs_zoo::after_storage::replication::{
-    BroadcastReplication, SequencedReplication as Sequenced,
-};
+use kvs_zoo::after_storage::replication::BroadcastReplication;
 use kvs_zoo::before_storage::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
@@ -19,7 +17,7 @@ struct ReplicaLeaf;
 type LinearizableKVS = KVSCluster<
     OrderedCluster,
     PaxosDispatcher<String, LwwWrapper<String>>,
-    Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
+    BroadcastReplication<String, LwwWrapper<String>>,
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
@@ -32,7 +30,7 @@ fn get_waits_for_prior_put_slot() {
 
     let kvs = LinearizableKVS::new(
         PaxosDispatcher::new(),
-        Sequenced::new(BroadcastReplication::<String, LwwWrapper<String>>::new()),
+        BroadcastReplication::<String, LwwWrapper<String>>::new(),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 

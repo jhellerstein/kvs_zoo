@@ -3,9 +3,7 @@
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::{
-    BroadcastReplication, SequencedReplication as Sequenced,
-};
+use kvs_zoo::after_storage::replication::BroadcastReplication;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
@@ -41,7 +39,7 @@ type LinearizableShardedReplicatedKVS = KVSCluster<
         KVSCluster<
             Replica,
             RoundRobinRouter,
-            Sequenced<BroadcastReplication<String, LwwWrapper<String>>>,
+            BroadcastReplication<String, LwwWrapper<String>>,
             KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
         >,
     >,
@@ -72,8 +70,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
 
     // Plumb full dataflow with external I/O
-    // Note: Linearizable examples currently use default unordered plumbing
-    // TODO: Add explicit linearizable plumbing when trait-based dispatch is implemented
+    // Plumbing detects linearizability via the RequiresLinearizable trait:
+    // - PaxosDispatcher implements RequiresLinearizable (establishes total order)
+    // - SlotOrderEnforcer implements RequiresLinearizable (enforces sequential execution)
+    // - KVSCluster propagates the requirement through nested layers
+    // When detected, plumbing preserves TotalOrder through to storage instead of downgrading to NoOrder
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
         &proxy,
         &client_external,

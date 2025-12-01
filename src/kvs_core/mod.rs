@@ -139,7 +139,7 @@ impl KVSCore {
     /// Requires TotalOrder input because `scan` only works on ordered streams.
     /// This provides strong consistency but requires coordination.
     pub fn process_ordered<'a, K, V, L, Store, I, F>(
-        operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>>,
+        operations: Stream<KVSOperation<K, V>, L, Unbounded, TotalOrder>,
         init_storage: I,
     ) -> CoreOutput<K, V, L, TotalOrder>
     where
@@ -170,7 +170,6 @@ impl KVSCore {
         I: IntoQuotedMut<'a, F, L>,
         F: Fn() -> Store + 'a,
     {
-        let operations = operations.into();
         let combined = operations.scan(init_storage, q!(|state, operation| {
             let request_id = operation.request_id();
             let client_id = operation.client_id();
@@ -318,7 +317,7 @@ impl KVSCore {
 
         // For deletes in monotonic mode, we create tombstone entries
         // by inserting a default value (which will be treated as a tombstone)
-        let delete_lattice_updates = deletes.clone().map(q!(|(key, _, _)| {
+        let delete_lattice_updates = deletes.clone().map(q!(|(_key, _, _)| {
             // Create an empty map - deletes don't actually insert values in monotonic mode
             // They should be handled by a separate tombstone mechanism
             let map = std::collections::HashMap::new();

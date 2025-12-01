@@ -37,9 +37,8 @@ Stages branch by cloning Hydro streams, which could potentially be optimized in 
 
 - **Composable layers**:
   - Before storage (routing/ordering): `SingleNodeRouter`, `RoundRobinRouter`, `ShardedRouter`, `PaxosDispatcher`, and `Pipeline<...>` to compose them
-  - After storage (replication/responders): `NoReplication`, `SimpleGossip`, `BroadcastReplication`, and `SequencedReplication<R>` wrapper for slot-ordered delivery
+  - After storage (replication/responders): `NoReplication`, `SimpleGossip`, `BroadcastReplication`
 - **Single entrypoint**: `layer_flow` (for focused wiring) and `plumb_kvs_dataflow` (for end-to-end server wiring with external I/O)
-- **Unified replication API**: all strategies implement `replicate_updates` over `ReplicationUpdate<V>` so the same code handles slotted (sequenced) and unslotted updates
 - **Value Types**: `LwwWrapper<T>` (last-writer-wins), `CausalWrapper<T>` (causal with vector clocks)
 
 ### Example Architectures
@@ -99,8 +98,8 @@ Combines sharding and replication for both scalability and fault tolerance.
 
 Imposes a total order with Paxos while keeping background replication pluggable.
 
-- **Routing/Ordering**: `PaxosDispatcher` (consensus before execution)
-- **Replication**: `SequencedReplication<BroadcastReplication>` (gap-filling, slot-ordered delivery)
+- **Routing/Ordering**: `PaxosDispatcher` (consensus before execution) + `SlotOrderEnforcer` (sequential execution)
+- **Replication**: `BroadcastReplication` (eager replication of lattice deltas)
 - **Nodes**: 3 Paxos proposers + 3 Paxos acceptors + 3 KVS replicas = 9 total
 - **Concepts**: Consensus, linearizability, slot-preserving replication
 - **Features**:
@@ -137,8 +136,6 @@ For focused scenarios (e.g., tests), `layer_flow` plumbs a single cluster with s
 - **`NoReplication`**: No background synchronization
 - **`SimpleGossip<V>`**: Demers-style rumor-mongering with probabilistic tombstoning
 - **`BroadcastReplication<V>`**: Eager broadcast of all updates
-- **`SequencedReplication<R>`**: Slot-ordered delivery wrapper over another replication strategy (gap-filling based on sequence/slot)
-- Unified over `ReplicationUpdate<V>` via `replicate_updates`
 
 Notes:
 - Replication strategies implement a unified `replicate_updates` API over `ReplicationUpdate<V>` so they can handle both slotted and unslotted updates without duplication.

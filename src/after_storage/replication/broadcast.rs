@@ -1,11 +1,6 @@
-//! Broadcast Replication Strategy (after-storage, unified)
-//!
-//! Implements the unified `replicate_updates` API, splitting unslotted and
-//! slotted updates internally to avoid code duplication.
+//! Broadcast Replication Strategy (after-storage)
 
-use crate::after_storage::{
-    AfterResponses, ClusterCommunication, ReplicationStrategy, ReplicationUpdate,
-};
+use crate::after_storage::{AfterResponses, ClusterCommunication, ReplicationStrategy};
 use crate::kvs_core::KVSNode;
 use hydro_lang::prelude::*;
 use lattices::Merge;
@@ -123,12 +118,12 @@ where
         + Default
         + Merge<V>,
 {
-    fn replicate_updates<'a, O>(
+    fn replicate_data<'a, O>(
         &self,
         cluster: &Cluster<'a, KVSNode>,
-        updates: Stream<ReplicationUpdate<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
-        ReplicationUpdate<K, V>,
+        (K, V),
         Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
@@ -136,34 +131,11 @@ where
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
-        let unslotted_in = updates.clone().filter_map(q!(|u| match u {
-            ReplicationUpdate::Unslotted(t) => Some(t),
-            _ => None,
-        }));
-        let slotted_in = updates.filter_map(q!(|u| match u {
-            ReplicationUpdate::Slotted(t) => Some(t),
-            _ => None,
-        }));
-
-        let unslotted_out_raw = if self.config.enable_batching {
-            self.handle_replication_periodic(cluster, unslotted_in)
+        if self.config.enable_batching {
+            self.handle_replication_periodic(cluster, local_data)
         } else {
-            self.handle_replication_immediate(cluster, unslotted_in)
-        };
-        let unslotted_out = unslotted_out_raw.map(q!(|t| ReplicationUpdate::Unslotted(t)));
-
-        let slotted_out = slotted_in
-            .broadcast_bincode(cluster, nondet!(/** broadcast slotted ops to all nodes */))
-            .values()
-            .weakest_ordering()
-            .map(q!(|t| ReplicationUpdate::Slotted(t)));
-
-        // interleave preserves input ordering type
-        unslotted_out
-            .interleave(slotted_out)
-            .assume_retries::<hydro_lang::live_collections::stream::ExactlyOnce>(
-                nondet!(/** consumers expect exactly-once semantics */),
-            )
+            self.handle_replication_immediate(cluster, local_data)
+        }
     }
 }
 

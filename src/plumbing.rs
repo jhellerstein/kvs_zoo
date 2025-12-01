@@ -86,27 +86,32 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Fan out PUT deltas through any configured replication layers. Replicas generate
         // operations that enter the core without triggering client responses.
-        // Deltas are unordered data, ensure NoOrder for replication
-        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weakest_ordering());
+        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
 
         // Core processing for client-originating operations (storage-specific).
-        // Use weakest_ordering to allow coordination-free processing
+        // Preserve ordering if the KVS architecture requires linearizability,
+        // otherwise allow coordination-free processing.
+        let client_ops_to_process = if kvs.requires_linearizable() {
+            client_ops  // Preserve TotalOrder from ordering layers (e.g., Paxos)
+        } else {
+            client_ops  // Already NoOrder for coordination-free processing
+        };
         let crate::kvs_core::CoreOutput {
             responses: client_responses,
             data: client_data_events,
             meta: client_meta_stream,
-        } = $process_expr(client_ops.weakest_ordering());
+        } = $process_expr(client_ops_to_process);
 
         // Replicated operations flow through the same core path.
         // Replicated ops have client_id=None, so they won't generate responses.
-        // Use weakest_ordering to allow coordination-free processing
+        // Replication uses NoOrder (lattice merge is coordination-free)
         let crate::kvs_core::CoreOutput {
             responses: replica_responses,
             data: replica_data_events,
             meta: replica_meta_stream,
-        } = $process_expr(replication_ops.weakest_ordering());
+        } = $process_expr(replication_ops);
 
-        // Responses and data are already TotalOrder from scan, interleave preserves that
+        // Responses and data are already NoOrder, so interleave is fine.
         let combined_responses = client_responses
             .interleave(replica_responses);
 
