@@ -14,7 +14,7 @@ async fn delete_emits_tomb_meta_event() {
                 .source_iter(q!(vec![
                     kvs_zoo::protocol::KVSOperation::Put(
                         "alpha".to_string(),
-                        kvs_zoo::values::"one".to_string(),
+                        "one".to_string(),
                         1,
                         Some(1),
                     ),
@@ -23,7 +23,7 @@ async fn delete_emits_tomb_meta_event() {
                 .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** deterministic demo ops */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process::<String, String, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
+                KVSCore::process_overwrite::<String, String, _>(ops);
             let _data_keep_alive = data.inspect(q!(|_| ()));
             meta
         },
@@ -70,7 +70,7 @@ async fn background_plumb_routes_meta_events() {
 
             let data_stream = cluster_entry
                 .source_iter(q!(
-                    Vec::<(String, kvs_zoo::values::String,)>::new()
+                    Vec::<(String, String,)>::new()
                 ))
                 .map(q!(|(key, value)| kvs_zoo::DataEvent::Put { key, value }))
                 .assume_ordering(nondet!(/** no foreground data */));
@@ -83,7 +83,9 @@ async fn background_plumb_routes_meta_events() {
                     ev
                 ])));
 
-            let (bg_data, bg_meta) = spec.plumb_background(&layers, data_stream, meta_stream);
+            let (bg_data, bg_meta) = spec.plumb_background(&layers,
+                data_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
+                meta_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>());
             bg_data
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
                     nondet!(/** test */),
@@ -154,14 +156,14 @@ async fn tomb_index_background_emits_summary() {
             let ops = cluster
                 .source_iter(q!(vec![kvs_zoo::protocol::KVSOperation::<
                     String,
-                    kvs_zoo::values::String,
+                    String,
                 >::Delete(
                     "alpha".to_string(), 1, Some(1),
                 ),]))
                 .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** single delete */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process::<String, String, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
+                KVSCore::process_overwrite::<String, String, _>(ops);
             let _data_keep_alive = data.inspect(q!(|_| ()));
             meta.send_bincode(process)
                 .entries()

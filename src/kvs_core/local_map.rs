@@ -211,7 +211,7 @@ mod tests {
         // Verify the delta has the key in the map and no tombstones
         let (map, tombstones) = delta.as_reveal_ref();
         assert_eq!(map.len(), 1);
-        assert_eq!(map.get("x").unwrap().get(), "1");
+        assert_eq!(map.get("x").unwrap().single_value().unwrap(), "1");
         assert_eq!(tombstones.len(), 0);
     }
 
@@ -239,7 +239,7 @@ mod tests {
         >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
 
         // Verify we can get the value
-        assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
+        assert_eq!(get_live(&state, &"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // Tombstone the key
         state.merge(delete_delta::<
@@ -265,7 +265,7 @@ mod tests {
             HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
-        assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
+        assert_eq!(get_live(&state, &"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // DELETE x
         state.merge(delete_delta::<
@@ -373,11 +373,11 @@ mod tests {
 
         // Test apply_put
         store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()));
-        assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "1");
+        assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // Test apply_put with merge
         store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string()));
-        assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "2");
+        assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "2");
 
         // Test apply_delete
         store.apply_delete("x".to_string());
@@ -397,11 +397,11 @@ mod tests {
     //
     //     // Test apply_put
     //     store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()));
-    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "1");
+    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "1");
     //
     //     // Test apply_put with merge
     //     store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string()));
-    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "2");
+    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "2");
     //
     //     // Test apply_delete (creates tombstone)
     //     store.apply_delete("x".to_string());

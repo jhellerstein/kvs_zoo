@@ -37,7 +37,7 @@ async fn test_local_kvs_service() {
     let localhost = deployment.Localhost();
 
     // Create Hydro flow
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -45,7 +45,7 @@ async fn test_local_kvs_service() {
     struct Root;
     let spec = KVSCluster::<Root, SingleNodeRouter, (), ()>::new(SingleNodeRouter::new(), (), ());
     let (layers, client_port) =
-        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &flow, spec);
+        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &mut flow, spec);
     // Deploy
     let nodes = flow
         .with_process(&proxy, localhost.clone())
@@ -119,7 +119,7 @@ async fn test_replicated_kvs_service() {
     let localhost = deployment.Localhost();
 
     // Create Hydro flow
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -127,7 +127,7 @@ async fn test_replicated_kvs_service() {
     struct Root;
     let spec = KVSCluster::<Root, RoundRobinRouter, (), ()>::new(RoundRobinRouter::new(), (), ());
     let (layers, client_port) =
-        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &flow, spec);
+        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &mut flow, spec);
     // Deploy with 3 replicas
     let nodes = flow
         .with_process(&proxy, localhost.clone())
@@ -205,7 +205,7 @@ async fn test_sharded_kvs_service() {
     let localhost = deployment.Localhost();
 
     // Create Hydro flow
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -218,7 +218,7 @@ async fn test_sharded_kvs_service() {
         (),
     );
     let (layers, client_port) =
-        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &flow, spec);
+        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &mut flow, spec);
     // Deploy with multiple shards
     let mut flow_builder = flow
         .with_process(&proxy, localhost.clone())
@@ -324,7 +324,7 @@ async fn test_sharded_replicated_kvs_service() {
     let localhost = deployment.Localhost();
 
     // Create Hydro flow
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -337,7 +337,7 @@ async fn test_sharded_replicated_kvs_service() {
         (),
     );
     let (layers, client_port) =
-        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &flow, spec);
+        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &mut flow, spec);
     // Deploy with multiple shards (each shard has 3 replicas)
     let mut flow_builder = flow
         .with_process(&proxy, localhost.clone())

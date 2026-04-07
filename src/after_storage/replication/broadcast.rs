@@ -179,9 +179,9 @@ where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         local_put_tuples
-            .broadcast_bincode(cluster, nondet!(/** immediate broadcast to all nodes */))
+            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values()
-            .weakest_ordering()
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     /// Periodic background broadcast replication
@@ -216,11 +216,11 @@ where
                 q!(std::time::Duration::from_millis(batch_timeout_ms)),
                 nondet!(/** periodic broadcast interval */),
             )
-            .broadcast_bincode(cluster, nondet!(/** periodic broadcast to all nodes */));
+            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */));
 
         periodic_broadcast
             .values()
-            .weakest_ordering()
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
             .assume_retries(nondet!(/** duplicates from sampling are acceptable */))
     }
 }

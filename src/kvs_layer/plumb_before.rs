@@ -116,7 +116,7 @@ impl<K, V> KVSPlumb<K, V> for () {
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.weakest_ordering()
+        operations.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 

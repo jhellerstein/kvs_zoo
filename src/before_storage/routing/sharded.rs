@@ -74,8 +74,8 @@ where
                 (hydro_lang::location::MemberId::from_raw_id(shard_id), op)
             }))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -102,7 +102,7 @@ where
                 (hydro_lang::location::MemberId::from_raw_id(shard_id), op)
             }))
             .into_keyed()
-            .demux_bincode(target_cluster)
+            .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }

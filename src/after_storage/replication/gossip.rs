@@ -315,9 +315,9 @@ where
             }))
             .map(q!(|((key, value), peer)| (peer, (key, value))))
             .into_keyed()
-            .demux_bincode(cluster)
+            .demux(cluster, TCP.fail_stop().bincode())
             .values()
-            .weakest_ordering()
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 

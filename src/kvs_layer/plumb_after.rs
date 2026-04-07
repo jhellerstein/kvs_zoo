@@ -31,7 +31,7 @@ where
 {
     // broadcast_bincode already introduces non-determinism, no need to re-assert ordering
     stream
-        .broadcast_bincode(target_cluster, nondet!(/** forward puts to parent layer */))
+        .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values()
 }
 
@@ -251,7 +251,7 @@ where
                 .child
                 .plumb_from_cluster(layers, my_cluster, replicated);
 
-            combined_ops = combined_ops.interleave(routed);
+            combined_ops = combined_ops.merge_unordered(routed);
         }
 
         // Both streams are NoOrder from network operations

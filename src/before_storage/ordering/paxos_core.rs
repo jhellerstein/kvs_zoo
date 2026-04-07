@@ -120,12 +120,10 @@ pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::
 
     let just_became_leader = p_is_leader
         .clone()
-        .filter_if_none(p_is_leader.clone().defer_tick());
+        .filter_if(!p_is_leader.clone().defer_tick().is_some());
 
     let c_to_proposers = c_to_proposers(
-        just_became_leader
-            .clone()
-            .if_some_then(p_ballot.clone())
+        p_ballot.clone().filter_if(just_became_leader.clone().is_some())
             .all_ticks(),
     );
 
@@ -152,7 +150,7 @@ pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::
     sequencing_max_ballot_complete_cycle.complete(sequencing_max_ballots);
 
     (
-        just_became_leader.if_some_then(p_ballot).all_ticks(),
+        p_ballot.filter_if(just_became_leader.is_some()).all_ticks(),
         p_to_replicas,
     )
 }
@@ -193,8 +191,8 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
         proposer_tick.forward_ref::<Optional<(), _, _>>();
 
     let p_received_max_ballot = p1b_fail
-        .interleave(p_received_p2b_ballots)
-        .interleave(p_to_proposers_i_am_leader_forward_ref)
+        .merge_unordered(p_received_p2b_ballots)
+        .merge_unordered(p_to_proposers_i_am_leader_forward_ref)
         .max()
         .unwrap_or(proposers.singleton(q!(Ballot {
             num: 0,
@@ -224,10 +222,10 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
 
     p_to_proposers_i_am_leader_complete_cycle.complete(p_to_proposers_i_am_leader);
 
-    let p_to_acceptors_p1a = p_trigger_election
-        .if_some_then(p_ballot.clone())
+    let p_to_acceptors_p1a = p_ballot.clone()
+        .filter_if(p_trigger_election.is_some())
         .all_ticks()
-        .broadcast_bincode(acceptors, nondet!(/** TODO */))
+        .broadcast(acceptors, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values();
 
     let (a_max_ballot, a_to_proposers_p1b) = acceptor_p1(
@@ -317,15 +315,14 @@ fn p_leader_heartbeat<'a>(
     let i_am_leader_check_timeout_delay_multiplier =
         paxos_config.i_am_leader_check_timeout_delay_multiplier;
 
-    let p_to_proposers_i_am_leader = p_is_leader
-        .clone()
-        .if_some_then(p_ballot)
+    let p_to_proposers_i_am_leader = p_ballot
+        .filter_if(p_is_leader.clone().is_some())
         .latest()
         .sample_every(
             q!(Duration::from_secs(i_am_leader_send_timeout)),
             nondet!(/** leader heartbeat interval */),
         )
-        .broadcast_bincode(proposers, nondet!(/** TODO */))
+        .broadcast(proposers, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values();
 
     let p_leader_expired = p_to_proposers_i_am_leader
@@ -335,7 +332,7 @@ fn p_leader_heartbeat<'a>(
             nondet!(/** leader liveness timeout */),
         )
         .snapshot(proposer_tick, nondet!(/** absorbed into timeout */))
-        .filter_if_none(p_is_leader);
+        .filter_if(!p_is_leader.is_some());
 
     let p_trigger_election = p_leader_expired.filter_if_some(
         proposers
@@ -400,7 +397,7 @@ fn acceptor_p1<'a, L: Serialize + DeserializeOwned + Clone>(
                 )
             )))
             .all_ticks()
-            .demux_bincode(proposers)
+            .demux(proposers, TCP.fail_stop().bincode())
             .values(),
     )
 }
@@ -457,7 +454,7 @@ fn p_p1b<'a, P: Clone + Serialize + DeserializeOwned>(
     let p_is_leader = p_received_quorum_of_p1bs
         .clone()
         .map(q!(|_| ()))
-        .filter_if_some(p_has_largest_ballot.clone());
+        .filter_if(p_has_largest_ballot.clone().is_some());
 
     (
         p_is_leader,
@@ -623,7 +620,7 @@ fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream
                 slot,
                 value
             }))
-            .broadcast_bincode(acceptors, nondet!(/** TODO */))
+            .broadcast(acceptors, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values(),
         a_checkpoint,
         proposers,
@@ -761,7 +758,7 @@ pub fn acceptor_p2<'a, P: PaxosPayload>(
             )
         )))
         .all_ticks()
-        .demux_bincode(proposers)
+        .demux(proposers, TCP.fail_stop().bincode())
         .values();
 
     (

@@ -474,12 +474,12 @@ impl KVSCore {
         }));
 
         let responses = put_responses
-            .interleave(delete_responses)
-            .interleave(get_responses);
+            .merge_unordered(delete_responses)
+            .merge_unordered(get_responses);
 
         let put_data = puts.map(q!(|(key, value, _, _)| DataEvent::Put { key, value }));
         let delete_data = deletes.clone().map(q!(|(key, _, _)| DataEvent::Delete { key }));
-        let data = put_data.interleave(delete_data);
+        let data = put_data.merge_unordered(delete_data);
 
         let meta = deletes.map(q!(|(key, _, _)| MetaEvent::Tomb { key }));
 
@@ -523,7 +523,7 @@ mod tests {
         // In a real implementation, we'd test this with Hydro streams
         // For now, we simulate the sequential processing logic
         let mut state: super::OverwriteMap<String, String> =
-            std::collections::HashMap::new();
+            super::OverwriteMap::default();
         let mut responses = Vec::new();
 
         for op in operations {
@@ -574,7 +574,7 @@ mod tests {
 
         // Sequential processing (correct for linearizability)
         let mut state: super::OverwriteMap<String, String> =
-            std::collections::HashMap::new();
+            super::OverwriteMap::default();
         let mut sequential_responses = Vec::new();
 
         for op in &operations {
@@ -597,7 +597,7 @@ mod tests {
 
         // Split processing (incorrect for linearizability)
         let mut split_state: super::OverwriteMap<String, String> =
-            std::collections::HashMap::new();
+            super::OverwriteMap::default();
         let mut split_responses = vec!["".to_string(); 4];
 
         // Process all PUTs first (wrong!)
@@ -672,7 +672,7 @@ mod tests {
         ];
 
         let mut state: super::OverwriteMap<String, String> =
-            std::collections::HashMap::new();
+            super::OverwriteMap::default();
         let mut responses = Vec::new();
 
         for op in operations {
@@ -772,7 +772,7 @@ mod tests {
 
             // Simulate the core processing logic
             let mut state: super::OverwriteMap<String, String> =
-                std::collections::HashMap::new();
+                super::OverwriteMap::default();
             let should_respond = true; // Client operations should respond
             let request_id = op.request_id();
             let client_id = op.client_id();
@@ -827,7 +827,7 @@ mod tests {
 
             // Simulate the core processing logic
             let mut state: super::OverwriteMap<String, String> =
-                std::collections::HashMap::new();
+                super::OverwriteMap::default();
             let should_respond = true; // Even if should_respond is true...
             let request_id = op.request_id();
             let client_id = op.client_id();
@@ -878,7 +878,7 @@ mod tests {
 
             // Simulate the core processing logic
             let mut state: super::OverwriteMap<String, String> =
-                std::collections::HashMap::new();
+                super::OverwriteMap::default();
             let request_id = op.request_id();
             let client_id = op.client_id();
             let should_emit_response = client_id.is_some();

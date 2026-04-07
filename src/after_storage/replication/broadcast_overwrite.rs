@@ -44,9 +44,9 @@ where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         local_data
-            .broadcast_bincode(cluster, nondet!(/** broadcast writes to all replicas */))
+            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values()
-            .weakest_ordering()
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 

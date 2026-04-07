@@ -2,11 +2,11 @@
 
 use futures::{SinkExt, StreamExt};
 // use hydro_lang::prelude::*;
-use kvs_zoo::after_storage::replication::BroadcastReplication;
+use kvs_zoo::after_storage::replication::BroadcastOverwrite;
 use kvs_zoo::before_storage::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow_ordered;
 
 #[derive(Clone)]
 struct OrderedCluster;
@@ -16,25 +16,25 @@ struct ReplicaLeaf;
 type LinearizableKVS = KVSCluster<
     OrderedCluster,
     PaxosDispatcher<String, String>,
-    BroadcastReplication<String, String>,
+    BroadcastOverwrite<String, String>,
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
 #[serial_test::serial]
 #[test]
 fn get_waits_for_prior_put_slot() {
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
     let kvs = LinearizableKVS::new(
         PaxosDispatcher::new(),
-        BroadcastReplication::<String, String>::new(),
+        BroadcastOverwrite::<String, String>::new(),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 
     let (layers, bidi_port) =
-        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &flow, kvs);
+        plumb_kvs_dataflow_ordered::<String, String, _>(&proxy, &client_external, &mut flow, kvs);
 
     // Responses are already plumbed inside plumb_kvs_dataflow; nothing to add here.
 

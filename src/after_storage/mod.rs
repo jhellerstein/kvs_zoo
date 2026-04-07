@@ -188,7 +188,7 @@ where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // No replication - just relax ordering to match trait signature
-        local_data.weakest_ordering()
+        local_data.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 
@@ -230,7 +230,7 @@ where
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         // No replication - just relax ordering to match trait signature
-        local_data.weakest_ordering()
+        local_data.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 
@@ -270,6 +270,6 @@ where
         let a_out = self.a.replicate_data(cluster, local_data.clone());
         let b_out = self.b.replicate_data(cluster, local_data);
         // Both return NoOrder, interleave preserves that
-        a_out.interleave(b_out)
+        a_out.merge_unordered(b_out)
     }
 }

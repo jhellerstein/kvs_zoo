@@ -223,8 +223,8 @@ impl<K, V> Before<K, V> for () {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -249,7 +249,7 @@ impl<K, V> Before<K, V> for () {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
+            .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }
@@ -284,8 +284,8 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast_bincode(target_cluster, nondet!(/** identity */))
-            .weakest_ordering()
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -305,7 +305,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast_bincode(target_cluster, nondet!(/** identity layer hop */))
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values()
     }
 }

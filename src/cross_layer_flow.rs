@@ -106,13 +106,13 @@ where
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     // Both streams are NoOrder (coordination-free processing), so interleave is fine
-    let combined_responses = local_responses.interleave(replicate_responses);
+    let combined_responses = local_responses.merge_unordered(replicate_responses);
 
     // Convert KVSResponse to String for compatibility with existing code
     let responses = combined_responses.map(q!(|response| response.to_string()));
 
     // Both data streams are NoOrder (coordination-free processing), so interleave is fine
-    let data = local_data.interleave(replicate_data);
+    let data = local_data.merge_unordered(replicate_data);
 
     // Wrap meta events in lattice singletons for monotonic composition
     let meta =
@@ -120,7 +120,7 @@ where
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([
                 ev
             ])))
-            .interleave(replicate_meta.map(q!(|ev| {
+            .merge_unordered(replicate_meta.map(q!(|ev| {
                 lattices::set_union::SetUnionHashSet::new_from([ev])
             })));
 

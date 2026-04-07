@@ -93,7 +93,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let client_ops_to_process = if kvs.requires_linearizable() {
             client_ops  // Preserve TotalOrder from ordering layers (e.g., Paxos)
         } else {
-            client_ops.weakest_ordering()  // Downgrade to NoOrder for process()
+            client_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()  // Downgrade to NoOrder for process()
         };
         let crate::kvs_core::CoreOutput {
             responses: client_responses,
@@ -112,15 +112,15 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Responses and data are already NoOrder, so interleave is fine.
         let combined_responses = client_responses
-            .interleave(replica_responses);
+            .merge_unordered(replica_responses);
 
         let data_events = client_data_events
-            .interleave(replica_data_events);
+            .merge_unordered(replica_data_events);
 
         // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-            .interleave(
+            .merge_unordered(
                 replica_meta_stream
                     .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
             );
@@ -129,7 +129,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
         // Send KVSResponse structs to proxy (they contain client_id)
-        let proxy_responses = combined_responses.send_bincode($proxy);
+        let proxy_responses = combined_responses.send($proxy, TCP.fail_stop().bincode());
 
         // Extract client IDs and format responses for completion
         let to_complete = proxy_responses
@@ -300,18 +300,18 @@ where
         q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
-    let combined_responses = client_responses.interleave(replica_responses);
-    let data_events = client_data_events.interleave(replica_data_events);
+    let combined_responses = client_responses.merge_unordered(replica_responses);
+    let data_events = client_data_events.merge_unordered(replica_data_events);
     let meta_stream = client_meta_stream
         .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        .interleave(
+        .merge_unordered(
             replica_meta_stream
                 .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
         );
 
     let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
-    let proxy_responses = combined_responses.send_bincode(proxy);
+    let proxy_responses = combined_responses.send(proxy, TCP.fail_stop().bincode());
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {

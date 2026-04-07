@@ -41,8 +41,8 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_slotted_from_process<'a, O>(
@@ -66,8 +66,8 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
                 slotted_op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -92,7 +92,7 @@ impl<K, V> Before<K, V> for RoundRobinRouter {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
+            .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }
