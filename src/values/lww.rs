@@ -1,81 +1,83 @@
 //! Last-Writer-Wins (LWW) value wrapper
 //!
-//! Provides last-writer-wins semantics using a Lamport timestamp to determine
-//! which write is "last." The merge operation always keeps the value with the
-//! higher timestamp, making it a proper lattice (commutative, associative,
-//! idempotent).
+//! Provides simple overwrite semantics where the most recent write always wins.
+//! This is the simplest conflict resolution strategy but provides no guarantees
+//! about which "write" is actually more recent in distributed systems.
+//!
+//! **This is NOT a lattice.** The merge operation is not commutative: the
+//! "other" argument always wins, so `a.merge(b)` ≠ `b.merge(a)`. In a
+//! distributed system with concurrent writes, the result depends on message
+//! arrival order — which is non-deterministic.
+//!
+//! For a proper lattice-based alternative, use [`CausalWrapper`](super::CausalWrapper)
+//! which wraps values with vector clocks to provide causal consistency.
 
 use lattices::{IsBot, LatticeFrom, Merge};
 use serde::{Deserialize, Serialize};
 
-/// A proper LWW register: a (timestamp, value) pair where merge keeps the
-/// higher timestamp. This is a valid lattice under the max-timestamp order.
+/// Wrapper type that implements last-writer-wins semantics via the Merge trait.
 ///
-/// The timestamp must be set by the writer. In a distributed system, use a
-/// Lamport clock or HLC to ensure timestamps are unique and monotonically
-/// increasing per writer.
+/// The merge always accepts the "other" value, making it suitable for
+/// single-node or totally-ordered (e.g. Paxos-sequenced) settings where
+/// "last" is well-defined. In unordered replicated settings, this is
+/// non-deterministic — use [`CausalWrapper`](super::CausalWrapper) instead.
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Hash)]
-pub struct LwwWrapper<T> {
-    pub timestamp: u64,
-    pub value: T,
-}
+pub struct LwwWrapper<T>(pub T);
 
 impl<T> LwwWrapper<T> {
-    /// Create a new LWW wrapper with timestamp 0.
     pub fn new(value: T) -> Self {
-        LwwWrapper { timestamp: 0, value }
+        LwwWrapper(value)
     }
 
-    /// Create a new LWW wrapper with an explicit timestamp.
-    pub fn with_timestamp(value: T, timestamp: u64) -> Self {
-        LwwWrapper { timestamp, value }
-    }
-
-    /// Get a reference to the wrapped value.
     pub fn get(&self) -> &T {
-        &self.value
+        &self.0
     }
 
-    /// Get a mutable reference to the wrapped value.
     pub fn get_mut(&mut self) -> &mut T {
-        &mut self.value
+        &mut self.0
     }
 
-    /// Extract the wrapped value.
     pub fn into_inner(self) -> T {
-        self.value
+        self.0
     }
 }
 
 impl<T: PartialEq> Merge<LwwWrapper<T>> for LwwWrapper<T> {
     fn merge(&mut self, other: LwwWrapper<T>) -> bool {
-        // Keep the value with the higher timestamp. Ties go to `other`
-        // to ensure idempotence (merging identical values is a no-op).
-        if other.timestamp > self.timestamp {
-            self.timestamp = other.timestamp;
-            self.value = other.value;
-            true
-        } else {
-            false
-        }
+        let changed = self.0 != other.0;
+        self.0 = other.0;
+        changed
     }
 }
 
 impl<T: Default> IsBot for LwwWrapper<T> {
     fn is_bot(&self) -> bool {
-        self.timestamp == 0
+        false
     }
 }
 
 impl<T> From<T> for LwwWrapper<T> {
     fn from(value: T) -> Self {
-        LwwWrapper::new(value)
+        LwwWrapper(value)
+    }
+}
+
+impl<T> std::ops::Deref for LwwWrapper<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for LwwWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 impl<T: std::fmt::Display> std::fmt::Display for LwwWrapper<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}@{}", self.value, self.timestamp)
+        self.0.fmt(f)
     }
 }
 
