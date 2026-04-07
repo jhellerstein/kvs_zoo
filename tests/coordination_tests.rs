@@ -106,9 +106,10 @@ fn coordination_paxos_kvs() {
 }
 
 /// Linearizable replicated KVS: Paxos ordering + broadcast overwrite replication.
-/// Currently FAILS: Hydro's internal membership tracking in broadcast uses a
-/// non-commutative fold that the analysis catches. This is a false positive —
-/// the membership set only grows (fail-stop model) but isn't annotated as such.
+/// Currently FAILS: Hydro's broadcast uses membership tracking with a non-commutative
+/// fold. Membership can change (nodes join/leave), making the broadcast output
+/// non-monotone. To fix, the KVS would need to establish a fixed or grow-only
+/// membership explicitly.
 #[test]
 fn coordination_linearizable_replicated_kvs() {
     use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
