@@ -11,7 +11,6 @@ use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
 struct OrderedCluster; // Paxos ordering layer
@@ -27,10 +26,10 @@ struct ReplicaLeaf; // Leaf executor with slot enforcement + responder
 // - Child: Sharded router layer
 // - Grandchild: Per-shard replica group (RR) with sequenced broadcast replication
 // - Leaf: Slot-enforced apply + responder
-// Values: LwwWrapper<String> for linearizable semantics.
+// Values: String for linearizable semantics.
 type LinearizableShardedReplicatedKVS = KVSCluster<
     OrderedCluster,
-    PaxosDispatcher<String, LwwWrapper<String>>,
+    PaxosDispatcher<String, String>,
     (),
     KVSCluster<
         Shard,
@@ -39,7 +38,7 @@ type LinearizableShardedReplicatedKVS = KVSCluster<
         KVSCluster<
             Replica,
             RoundRobinRouter,
-            BroadcastReplication<String, LwwWrapper<String>>,
+            BroadcastReplication<String, String>,
             KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
         >,
     >,
@@ -75,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // - SlotOrderEnforcer implements RequiresLinearizable (enforces sequential execution)
     // - KVSCluster propagates the requirement through nested layers
     // When detected, plumbing preserves TotalOrder through to storage instead of downgrading to NoOrder
-    let (layers, bidi_port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+    let (layers, bidi_port) = plumb_kvs_dataflow::<String, String, _>(
         &proxy,
         &client_external,
         &flow,
@@ -127,8 +126,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo operations across shards
     let ops = vec![
-        KVSOperation::Put("user:alice".into(), LwwWrapper::new("A".into()), 1, None),
-        KVSOperation::Put("user:bob".into(), LwwWrapper::new("B".into()), 2, None),
+        KVSOperation::Put("user:alice".into(), "A".to_string(), 1, None),
+        KVSOperation::Put("user:bob".into(), "B".to_string(), 2, None),
         KVSOperation::Get("user:alice".into(), 3, None),
         KVSOperation::Get("user:bob".into(), 4, None),
     ];

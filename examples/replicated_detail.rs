@@ -9,7 +9,6 @@ use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::plumbing::extract_put_deltas;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -35,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, String>, String>(
             &client_external,
         );
 
@@ -67,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (_ops_clone, local_put_deltas) = extract_put_deltas(ordered_ops.clone());
 
     // Use the After-stage gossip strategy to replicate PUT deltas to peers
-    let gossip = SimpleGossip::<String, LwwWrapper<String>>::default();
+    let gossip = SimpleGossip::<String, String>::default();
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
     // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
@@ -122,9 +121,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("beta".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("beta".into(), "two".to_string(), 3, None),
         Op::Get("beta".into(), 4, None),
     ];
 

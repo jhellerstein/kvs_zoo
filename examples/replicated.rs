@@ -7,7 +7,7 @@ use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
-use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
+use kvs_zoo::values::{CausalString, VCWrapper};
 
 /// Supported lattice semantics for the replicated example.
 #[derive(Clone, Debug, ValueEnum)]
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.lattice {
-        LatticeKind::Lww => run_example::<LwwWrapper<String>>(&args, lww_ops()).await,
+        LatticeKind::Lww => run_example::<String>(&args, lww_ops()).await,
         LatticeKind::Causal => run_example::<CausalString>(&args, causal_ops()).await,
     }
 }
@@ -122,13 +122,13 @@ where
     Ok(())
 }
 
-fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>> {
+fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, String>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("beta".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("beta".into(), "two".to_string(), 3, None),
         Op::Get("beta".into(), 4, None),
     ]
 }

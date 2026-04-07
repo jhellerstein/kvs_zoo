@@ -1,62 +1,81 @@
-//! # Value Wrappers and Consistency Semantics
+//! # Value Types and Consistency Semantics
 //!
-//! This module provides different value wrapper types that implement various
-//! consistency semantics for distributed key-value stores. Each wrapper
-//! implements the `lattices::Merge` trait to define how conflicting values
-//! should be resolved.
+//! This module provides value wrapper types for distributed key-value stores.
 //!
-//! ## Consistency Models
+//! ## Two Storage Paths
 //!
-//! - **Last-Writer-Wins (LWW)** - Simple overwrite semantics
-//! - **Causal Consistency** - Vector clock based causal ordering
-//! - **Set Union** - Merge conflicting values into sets
+//! The KVS core supports two storage strategies:
 //!
-//! ## Value Wrappers
+//! - **Lattice merge**: Values implement [`LatticeValue`] (which requires
+//!   `lattices::Merge`). Storage uses a commutative, idempotent fold —
+//!   replicas converge without ordering. Use [`CausalWrapper`] for this path.
 //!
-//! - [`LwwWrapper<T>`] - Last-writer-wins semantics
-//! - [`CausalWrapper<T>`] - Causal consistency with vector clocks
+//! - **Overwrite**: Plain Rust types (e.g. `String`). Storage uses last-writer-wins
+//!   assignment. Deterministic only when the architecture provides ordering
+//!   (single-node, Paxos-sequenced, etc.).
+//!
+//! ## Value Types
+//!
+//! - [`CausalWrapper<T>`] - Causal consistency with vector clocks (lattice)
 //! - [`VCWrapper`] - Vector clock for causal ordering
+//! - Plain `String`, `i64`, etc. - Overwrite semantics
 //!
-//! ## Usage Patterns
+//! ## Example
 //!
 //! ```rust
-//! use kvs_zoo::values::{LwwWrapper, CausalWrapper, VCWrapper};
+//! use kvs_zoo::values::{CausalWrapper, VCWrapper};
 //! use lattices::Merge;
 //!
-//! // Last-writer-wins: simple overwrite
-//! let mut lww1 = LwwWrapper::new("value1".to_string());
-//! let lww2 = LwwWrapper::new("value2".to_string());
-//! lww1.merge(lww2); // lww1 now contains "value2"
-//!
-//! // Causal consistency: preserves causal relationships
+//! // Causal consistency: preserves causal relationships (lattice)
 //! let mut causal1 = CausalWrapper::new(VCWrapper::new(), "value1".to_string());
 //! let causal2 = CausalWrapper::new(VCWrapper::new(), "value2".to_string());
 //! causal1.merge(causal2); // Merges based on vector clock dominance
-//! ```
 //!
-//! ## Architecture Integration
-//!
-//! These value wrappers plug into any KVS wiring built with the composable
-//! before_storage/after_storage layers. See the examples for end-to-end
-//! configurations (local, replicated, sharded, linearizable) using
-//! `plumb_kvs_dataflow` (in `kvs_zoo::wiring`) and the KVS cluster spec.
-//!
-//! ```rust
-//! use kvs_zoo::values::{LwwWrapper, CausalWrapper, VCWrapper};
-//! // Values are generic over the server wiring; pick the wrapper that matches
-//! // your desired consistency semantics and use it in your KVS spec.
-//! let _v1: LwwWrapper<String> = LwwWrapper::new("hello".to_string());
-//! let _v2: CausalWrapper<String> = CausalWrapper::new(VCWrapper::new(), "hi".to_string());
+//! // Overwrite: just use a plain type — no wrapper needed
+//! let _v: String = "hello".to_string();
 //! ```
 
 pub mod causal;
-pub mod lww;
 pub mod vector_clock;
 
 // Re-export main types for convenience
 pub use causal::{CausalString, CausalWrapper};
-pub use lww::LwwWrapper;
 pub use vector_clock::VCWrapper;
 
 // Re-export lattice traits for convenience
 pub use lattices::Merge;
+
+/// Marker trait for value types whose `Merge` is a proper lattice
+/// (commutative, associative, idempotent).
+///
+/// Types implementing this trait can be used in the coordination-free
+/// lattice merge storage path, where replicas converge without ordering.
+///
+/// Do NOT implement this for types with non-commutative merge (e.g.,
+/// last-writer-wins overwrite). Use the overwrite storage path instead.
+pub trait LatticeValue:
+    Clone
+    + lattices::Merge<Self>
+    + lattices::LatticeFrom<Self>
+    + lattices::IsBot
+    + Default
+    + Send
+    + Sync
+    + 'static
+{
+}
+
+// CausalWrapper is a proper lattice via DomPair<VCWrapper, SetUnionHashSet<T>>
+impl<T> LatticeValue for CausalWrapper<T> where
+    T: Clone
+        + std::hash::Hash
+        + Eq
+        + std::fmt::Debug
+        + Default
+        + Send
+        + Sync
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + 'static
+{
+}

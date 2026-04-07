@@ -7,7 +7,6 @@ use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_core::{KVSCore, KVSNode};
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -33,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, String>, String>(
             &client_external,
         );
 
@@ -126,8 +125,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run demo operations
     let ops = vec![
-        KVSOperation::Put("user:1".into(), LwwWrapper::new("alice".into()), 1, None),
-        KVSOperation::Put("user:2".into(), LwwWrapper::new("bob".into()), 2, None),
+        KVSOperation::Put("user:1".into(), "alice".to_string(), 1, None),
+        KVSOperation::Put("user:2".into(), "bob".to_string(), 2, None),
         KVSOperation::Get("user:1".into(), 3, None),
         KVSOperation::Get("user:2".into(), 4, None),
     ];
@@ -148,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn shard_info(op: &KVSOperation<String, LwwWrapper<String>>, shards: u64) -> Option<String> {
+fn shard_info(op: &KVSOperation<String, String>, shards: u64) -> Option<String> {
     match op {
         KVSOperation::Put(key, _, _, _)
         | KVSOperation::Get(key, _, _)

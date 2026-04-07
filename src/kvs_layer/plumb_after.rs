@@ -25,7 +25,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -124,7 +123,6 @@ pub trait ReplicationPlumb<K, V> {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static;
@@ -146,7 +144,6 @@ impl<K, V> ReplicationPlumb<K, V> for () {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -168,7 +165,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -202,7 +198,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -221,7 +216,6 @@ where
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -288,7 +282,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -307,7 +300,6 @@ where
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,

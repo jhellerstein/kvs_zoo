@@ -83,9 +83,8 @@ where
         responses: local_responses,
         data: local_data,
         meta: local_meta,
-    } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
+    } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
         leaf_ops.clone(),
-        q!(|| std::collections::HashMap::new()),
     );
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops);
 
@@ -101,9 +100,8 @@ where
         responses: replicate_responses,
         data: replicate_data,
         meta: replicate_meta,
-    } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
+    } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
         leaf_replicated_ops,
-        q!(|| std::collections::HashMap::new()),
     );
 
     // Merge to keep the replicate path live; replicate_responses is typically empty

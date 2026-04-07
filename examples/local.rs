@@ -5,7 +5,6 @@ use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
-use kvs_zoo::values::LwwWrapper;
 
 // Marker type for Hydro location type / KVS layer type
 #[derive(Clone)]
@@ -34,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Build a Hydro graph for the LocalKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+    let (layers, port) = plumb_kvs_dataflow::<String, String, _>(
         &proxy,
         &client_external,
         &flow,
@@ -66,9 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use kvs_zoo::protocol::KVSOperation as Op;
     
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("alpha".into(), "two".to_string(), 3, None),
         Op::Get("alpha".into(), 4, None),
     ];
     

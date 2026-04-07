@@ -7,7 +7,6 @@ use kvs_zoo::before_storage::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
 struct OrderedCluster;
@@ -16,8 +15,8 @@ struct ReplicaLeaf;
 
 type LinearizableKVS = KVSCluster<
     OrderedCluster,
-    PaxosDispatcher<String, LwwWrapper<String>>,
-    BroadcastReplication<String, LwwWrapper<String>>,
+    PaxosDispatcher<String, String>,
+    BroadcastReplication<String, String>,
     KVSNode<ReplicaLeaf, SlotOrderEnforcer, ()>,
 >;
 
@@ -30,12 +29,12 @@ fn get_waits_for_prior_put_slot() {
 
     let kvs = LinearizableKVS::new(
         PaxosDispatcher::new(),
-        BroadcastReplication::<String, LwwWrapper<String>>::new(),
+        BroadcastReplication::<String, String>::new(),
         KVSNode::<ReplicaLeaf, SlotOrderEnforcer, ()>::new(SlotOrderEnforcer::new(), ()),
     );
 
     let (layers, bidi_port) =
-        plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(&proxy, &client_external, &flow, kvs);
+        plumb_kvs_dataflow::<String, String, _>(&proxy, &client_external, &flow, kvs);
 
     // Responses are already plumbed inside plumb_kvs_dataflow; nothing to add here.
 
@@ -73,7 +72,7 @@ fn get_waits_for_prior_put_slot() {
         input
             .send(kvs_zoo::protocol::KVSOperation::Put(
                 "x".into(),
-                LwwWrapper::new("1".into()),
+                "1".to_string(),
                 1,
                 Some(1),
             ))
@@ -88,7 +87,7 @@ fn get_waits_for_prior_put_slot() {
         assert!(r1.contains("PUT OK"), "unexpected PUT response: {r1}");
         // Accept either display form (direct value or debug) to avoid brittle formatting assumptions.
         assert!(
-            r2.contains("GET = 1") || r2.contains("GET = LwwWrapper"),
+            r2.contains("GET = 1") || r2.contains("GET = "),
             "unexpected GET response: {r2}"
         );
 

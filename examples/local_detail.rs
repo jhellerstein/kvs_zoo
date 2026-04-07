@@ -6,7 +6,6 @@ use hydro_lang::prelude::*;
 use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -32,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, String>, String>(
             &client_external,
         );
 
@@ -94,9 +93,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("alpha".into(), "two".to_string(), 3, None),
         Op::Get("alpha".into(), 4, None),
     ];
     for op in ops {

@@ -7,7 +7,6 @@ use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 #[derive(Clone)]
 struct Region;
@@ -24,7 +23,7 @@ type GeoKVS = KVSCluster<
     KVSCluster<
         Datacenter,
         ShardedRouter,
-        SimpleGossip<String, LwwWrapper<String>>,
+        SimpleGossip<String, String>,
         KVSCluster<Node, SingleNodeRouter, (), ()>,
     >,
 >;
@@ -59,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Build a Hydro graph for the GeoKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+    let (layers, port) = plumb_kvs_dataflow::<String, String, _>(
         &proxy,
         &client_external,
         &flow,
@@ -104,8 +103,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Demo workload
     let ops = vec![
-        KVSOperation::Put("acct:alice".into(), LwwWrapper::new("1".into()), 1, None),
-        KVSOperation::Put("acct:bob".into(), LwwWrapper::new("2".into()), 2, None),
+        KVSOperation::Put("acct:alice".into(), "1".to_string(), 1, None),
+        KVSOperation::Put("acct:bob".into(), "2".to_string(), 2, None),
         KVSOperation::Get("acct:alice".into(), 3, None),
         KVSOperation::Get("acct:bob".into(), 4, None),
     ];

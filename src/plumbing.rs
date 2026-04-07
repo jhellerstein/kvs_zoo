@@ -42,7 +42,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -147,17 +146,10 @@ macro_rules! plumb_kvs_dataflow_impl {
     }};
 }
 
-/// Standalone plumbing function: binds a KVS layer specification into Hydro dataflow.
+/// Standalone plumbing function using the **overwrite** storage path.
 ///
-/// This function takes a KVS architecture (expressed as nested `KVSCluster` types),
-/// creates a cluster for each layer, plumbs inter-cluster communication, and returns
-/// cluster handles plus the client I/O port.
-///
-/// Users then assign hosts to the returned cluster handles using standard Hydro
-/// deployment APIs (`.with_cluster(layers.get::<Name>(), ...)`).
-///
-/// This version uses standard HashMap storage (keys can be deleted and re-added).
-/// Automatically selects ordered or unordered processing based on KVS configuration.
+/// Values use last-writer-wins assignment. No `Merge` trait required.
+/// Suitable for plain types (String, etc.) in single-node or ordered architectures.
 pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
@@ -190,9 +182,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
-        + lattices::LatticeFrom<V>
-        + lattices::IsBot
         + Send
         + Sync
         + 'static,
@@ -202,7 +191,6 @@ where
         + ReplicationPlumb<KeyType, V>
         + crate::background::BackgroundPlumb<KeyType, V>,
 {
-    // Default to unordered processing
     plumb_kvs_dataflow_impl!(
         KeyType,
         V,
@@ -210,7 +198,7 @@ where
         client_external,
         flow,
         kvs,
-        |ops| crate::kvs_core::KVSCore::process::<KeyType, V, _, _, _, _>(ops, q!(|| std::collections::HashMap::<KeyType, V>::new()))
+        |ops| crate::kvs_core::KVSCore::process_overwrite::<KeyType, V, _>(ops)
     )
 }
 
@@ -264,7 +252,7 @@ where
         client_external,
         flow,
         kvs,
-        |ops| crate::kvs_core::KVSCore::process::<String, V, _, _, _, _>(ops, q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()))
+        |ops| crate::kvs_core::KVSCore::process_lattice::<String, V, _>(ops)
     )
 }
 
