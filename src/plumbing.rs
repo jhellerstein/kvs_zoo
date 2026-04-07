@@ -204,6 +204,67 @@ where
 
 
 
+/// Standalone plumbing function using the **lattice merge** storage path.
+///
+/// Values must implement `Merge + LatticeFrom + IsBot` (lattice types).
+/// Storage uses commutative+idempotent fold — coordination-free convergence.
+/// Suitable for CausalWrapper and other lattice types in replicated architectures.
+pub fn plumb_kvs_dataflow_lattice<'a, KeyType, V, K>(
+    proxy: &Process<'a, ()>,
+    client_external: &External<'a, ()>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
+    kvs: K,
+) -> (
+    crate::kvs_layer::KVSClusters<'a>,
+    ExternalBincodeBidi<
+        KVSOperation<KeyType, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
+)
+where
+    KeyType: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + lattices::Merge<V>
+        + lattices::LatticeFrom<V>
+        + lattices::IsBot
+        + Send
+        + Sync
+        + 'static,
+    K: crate::kvs_layer::KVSSpec<V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V>
+        + crate::kvs_layer::AfterPlumb<V>
+        + ReplicationPlumb<KeyType, V>
+        + crate::background::BackgroundPlumb<KeyType, V>,
+{
+    plumb_kvs_dataflow_impl!(
+        KeyType,
+        V,
+        proxy,
+        client_external,
+        flow,
+        kvs,
+        |ops| crate::kvs_core::KVSCore::process_lattice::<KeyType, V, _>(ops)
+    )
+}
+
+
 /// Standalone plumbing function with tombstone-based storage.
 ///
 /// This variant uses `LocalHashMapFst<V>` for permanent tombstone deletion

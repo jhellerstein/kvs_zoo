@@ -4,7 +4,7 @@ use hydro_lang::compile::builder::FlowBuilder;
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::{plumb_kvs_dataflow, plumb_kvs_dataflow_lattice};
 use kvs_zoo::values::CausalWrapper;
 
 #[derive(Clone)]
@@ -44,7 +44,7 @@ fn coordination_replicated_causal_kvs() {
     let proxy = flow.process::<()>();
     let ext = flow.external::<()>();
     let kvs: KVSCluster<N, RoundRobinRouter, SimpleGossip<String, CausalWrapper<String>>, ()> = Default::default();
-    let _ = plumb_kvs_dataflow::<String, CausalWrapper<String>, _>(&proxy, &ext, &mut flow, kvs);
+    let _ = plumb_kvs_dataflow_lattice::<String, CausalWrapper<String>, _>(&proxy, &ext, &mut flow, kvs);
     let report = flow.finalize().check_coordination();
     println!("\n=== Replicated KVS (gossip + CausalWrapper lattice) ===\n{report}");
 }
@@ -76,3 +76,5 @@ fn coordination_replicated_causal_kvs() {
 //     let report = flow.finalize().check_coordination();
 //     println!("\n=== Linearizable Replicated KVS (Paxos) ===\n{report}");
 // }
+
+
