@@ -4,7 +4,7 @@ use hydro_lang::compile::builder::FlowBuilder;
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter, SingleNodeRouter};
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::{plumb_kvs_dataflow, plumb_kvs_dataflow_lattice};
+use kvs_zoo::plumbing::{plumb_kvs_dataflow, plumb_kvs_dataflow_lattice, plumb_kvs_dataflow_ordered};
 use kvs_zoo::values::CausalWrapper;
 
 #[derive(Clone)]
@@ -86,3 +86,21 @@ fn coordination_scan_total_order() {
 // TotalOrder output in the Hydro type system. Currently it produces NoOrder
 // and relies on runtime ordering guarantees. This is a gap between the
 // protocol's semantic guarantees and the type-level representation.
+
+/// Paxos-ordered KVS with overwrite values (no replication).
+/// Should PASS: Paxos provides TotalOrder, scan processes sequentially.
+#[test]
+fn coordination_paxos_kvs() {
+    use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
+
+    #[derive(Clone)]
+    struct Ordered;
+
+    let mut flow = FlowBuilder::new();
+    let proxy = flow.process::<()>();
+    let ext = flow.external::<()>();
+    let kvs: KVSCluster<Ordered, PaxosDispatcher<String, String>, (), ()> = Default::default();
+    let _ = plumb_kvs_dataflow_ordered::<String, String, _>(&proxy, &ext, &mut flow, kvs);
+    let report = flow.finalize().check_coordination();
+    println!("\n=== Paxos-ordered KVS (overwrite, no replication) ===\n{report}");
+}

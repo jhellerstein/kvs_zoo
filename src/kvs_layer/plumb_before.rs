@@ -213,7 +213,7 @@ where
             my_cluster,
             layers,
         );
-        self.child.plumb_from_cluster::<NoOrder>(layers, my_cluster, routed)
+        self.child.plumb_from_cluster::<NoOrder>(layers, my_cluster, routed.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>())
     }
 }
 
@@ -259,6 +259,7 @@ where
         let my_cluster = layers.get::<Name>();
         self.before
             .dispatch_from_process_with_layers::<Name, _>(layers, operations, my_cluster)
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn plumb_from_cluster<'a, O>(
@@ -287,6 +288,6 @@ where
             source_cluster,
             source_cluster,
             _layers,
-        )
+        ).weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }

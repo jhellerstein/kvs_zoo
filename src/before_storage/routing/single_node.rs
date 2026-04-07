@@ -19,6 +19,7 @@ impl SingleNodeRouter {
 impl RequiresLinearizable for SingleNodeRouter {}
 
 impl<K, V> Before<K, V> for SingleNodeRouter {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -27,7 +28,7 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -53,7 +54,7 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,

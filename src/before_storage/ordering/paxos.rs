@@ -108,6 +108,8 @@ where
     K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     V: PaxosPayload + Eq,
 {
+    type OutputOrder = hydro_lang::live_collections::stream::TotalOrder;
+
     fn dispatch_from_process<'a, O>(
         &self,
         _operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -116,7 +118,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -138,7 +140,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -170,6 +172,7 @@ where
         let ordered_at_proposers = self.paxos_run(operations, proposers, acceptors);
 
         // Deliver ordered operations to the target KVS cluster for further processing.
+        // The operations are sent in Paxos slot order; assume_ordering reflects this.
         ordered_at_proposers
             .map(q!(|op| (
                 hydro_lang::location::MemberId::from_raw_id(0u32),
@@ -178,6 +181,11 @@ where
             .into_keyed()
             .demux_bincode(target_cluster)
             .values()
+            .assume_ordering(nondet!(
+                /// Paxos establishes total order via slot-based sequencing.
+                /// The demux preserves this order because operations are sent
+                /// one-by-one in slot order from the proposer.
+            ))
     }
 
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
@@ -190,7 +198,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -222,14 +230,16 @@ where
         KVSOperation<K, V>,
         Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.weakest_ordering()
+        operations.assume_ordering(nondet!(
+            /// Paxos-ordered operations retain their order through inter-cluster routing.
+        ))
     }
 }
 

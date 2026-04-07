@@ -84,7 +84,7 @@ where
         data: local_data,
         meta: local_meta,
     } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
-        leaf_ops.clone(),
+        leaf_ops.clone().weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
     );
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops);
 
@@ -101,7 +101,7 @@ where
         data: replicate_data,
         meta: replicate_meta,
     } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
-        leaf_replicated_ops,
+        leaf_replicated_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
     );
 
     // Merge to keep the replicate path live; replicate_responses is typically empty

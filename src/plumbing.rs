@@ -207,6 +207,124 @@ where
 
 
 
+/// Standalone plumbing function using the **ordered** storage path (scan).
+///
+/// Uses `process_ordered` for client operations arriving in TotalOrder
+/// (e.g., from Paxos). Replica operations use overwrite. No `Merge` required.
+pub fn plumb_kvs_dataflow_ordered<'a, KeyType, V, K>(
+    proxy: &Process<'a, ()>,
+    client_external: &External<'a, ()>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
+    kvs: K,
+) -> (
+    crate::kvs_layer::KVSClusters<'a>,
+    ExternalBincodeBidi<
+        KVSOperation<KeyType, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
+)
+where
+    KeyType: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Send
+        + Sync
+        + 'static,
+    K: crate::kvs_layer::KVSSpec<V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V>
+        + crate::kvs_layer::AfterPlumb<V>
+        + ReplicationPlumb<KeyType, V>
+        + crate::background::BackgroundPlumb<KeyType, V>,
+{
+    use hydro_lang::live_collections::stream::TotalOrder;
+
+    let mut kvs = kvs;
+    let mut layers = crate::kvs_layer::KVSClusters::new();
+    let _entry_cluster = kvs.create_clusters(flow, &mut layers);
+
+    let (bidi_port, operations_stream, _membership, complete_sink) =
+        proxy.bidi_external_many_bincode::<_, KVSOperation<KeyType, V>, String>(client_external);
+
+    let initial_ops = operations_stream
+        .entries()
+        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))));
+
+    let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
+    let (client_ops, local_put_deltas) = extract_put_deltas(routed_ops);
+    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+
+    // Client ops arrive in TotalOrder from Paxos — use process_ordered (scan)
+    let client_ops_ordered = client_ops
+        .assume_ordering::<TotalOrder>(nondet!(
+            /// The Before layer (Paxos) establishes total order via consensus.
+            /// The plumbing weakened it to NoOrder at the trait boundary;
+            /// we restore it here for process_ordered.
+        ));
+    let crate::kvs_core::CoreOutput {
+        responses: client_responses,
+        data: client_data_events,
+        meta: client_meta_stream,
+    } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
+        client_ops_ordered,
+        q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
+    );
+
+    // Replica ops: also use process_ordered (empty when no replication,
+    // ordered when replication preserves Paxos order)
+    let replica_ops_ordered = replication_ops
+        .assume_ordering::<TotalOrder>(nondet!(
+            /// Replica operations inherit order from the Paxos-sequenced client path.
+        ));
+    let crate::kvs_core::CoreOutput {
+        responses: replica_responses,
+        data: replica_data_events,
+        meta: replica_meta_stream,
+    } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
+        replica_ops_ordered,
+        q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
+    );
+
+    let combined_responses = client_responses.interleave(replica_responses);
+    let data_events = client_data_events.interleave(replica_data_events);
+    let meta_stream = client_meta_stream
+        .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+        .interleave(
+            replica_meta_stream
+                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+        );
+
+    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
+
+    let proxy_responses = combined_responses.send_bincode(proxy);
+    let to_complete = proxy_responses
+        .entries()
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
+        .into_keyed();
+    complete_sink.complete(to_complete);
+
+    (layers, bidi_port)
+}
+
+
+
 /// Standalone plumbing function using the **lattice merge** storage path.
 ///
 /// Values must implement `Merge + LatticeFrom + IsBot` (lattice types).

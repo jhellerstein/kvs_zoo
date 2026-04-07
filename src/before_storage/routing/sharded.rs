@@ -49,6 +49,8 @@ where
     K: Clone + Serialize + for<'de> Deserialize<'de> + AsRef<[u8]> + Send + Sync + 'static,
     V: Clone + Serialize + for<'de> Deserialize<'de> + PartialEq + Eq + Default + 'static,
 {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
+
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -57,7 +59,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -85,7 +87,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,

@@ -31,7 +31,13 @@ pub trait RequiresLinearizable {
 /* ------------------------------------------------------------------------- */
 
 /// Before-stage component for routing operations from proxy to cluster.
+///
+/// `OutputOrder` indicates the ordering guarantee on the output stream:
+/// - `NoOrder` for routers (network reordering)
+/// - `TotalOrder` for ordering layers like Paxos (slot-based sequencing)
 pub trait Before<K, V>: RequiresLinearizable {
+    type OutputOrder: hydro_lang::live_collections::stream::Ordering;
+
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -40,7 +46,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -75,7 +81,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -111,7 +117,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         (usize, KVSOperation<K, V>),
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -149,23 +155,12 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    {
-        // Network operations produce NoOrder
-        operations
-            .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw_id(0u32),
-                op
-            )))
-            .into_keyed()
-            .demux_bincode(target_cluster)
-            .values()
-    }
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 
     /// Mirrors `dispatch_from_process_with_layers` for inter-cluster routing with layer handles.
     /// Default implementations fall back to `dispatch_from_cluster`.
@@ -179,7 +174,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -206,6 +201,7 @@ impl RequiresLinearizable for () {}
 
 /// Unit (No‑Op) Before-stage for leaf nodes
 impl<K, V> Before<K, V> for () {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -214,7 +210,7 @@ impl<K, V> Before<K, V> for () {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -240,7 +236,7 @@ impl<K, V> Before<K, V> for () {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -271,6 +267,7 @@ impl IdentityDispatch {
 impl RequiresLinearizable for IdentityDispatch {}
 
 impl<K, V> Before<K, V> for IdentityDispatch {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -279,7 +276,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -300,7 +297,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -349,6 +346,8 @@ where
     A: Before<K, V>,
     B: Before<K, V>,
 {
+    type OutputOrder = B::OutputOrder;
+
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -357,7 +356,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -395,7 +394,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -418,7 +417,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -465,7 +464,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
