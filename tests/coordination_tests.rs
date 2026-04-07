@@ -106,8 +106,9 @@ fn coordination_paxos_kvs() {
 }
 
 /// Linearizable replicated KVS: Paxos ordering + broadcast overwrite replication.
-/// Should PASS: Paxos provides TotalOrder, scan processes sequentially,
-/// replicas receive ordered writes via BroadcastOverwrite.
+/// Currently FAILS: Hydro's internal membership tracking in broadcast uses a
+/// non-commutative fold that the analysis catches. This is a false positive —
+/// the membership set only grows (fail-stop model) but isn't annotated as such.
 #[test]
 fn coordination_linearizable_replicated_kvs() {
     use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
