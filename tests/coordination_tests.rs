@@ -11,7 +11,7 @@ use kvs_zoo::values::CausalWrapper;
 struct N;
 
 /// Local single-node KVS with overwrite (plain String) values.
-/// Should be future-monotone: single node, deterministic order.
+/// FAIL: overwrite fold is not commutative.
 #[test]
 fn coordination_local_kvs() {
     let mut flow = FlowBuilder::new();
@@ -24,7 +24,7 @@ fn coordination_local_kvs() {
 }
 
 /// Sharded KVS with overwrite values.
-/// Should be future-monotone: each shard is single-node.
+/// FAIL: overwrite fold is not commutative.
 #[test]
 fn coordination_sharded_kvs() {
     let mut flow = FlowBuilder::new();
@@ -37,7 +37,7 @@ fn coordination_sharded_kvs() {
 }
 
 /// Replicated KVS with gossip and CausalWrapper (lattice) values.
-/// Should be future-monotone: lattice merge is commutative.
+/// PASS: lattice merge is commutative+idempotent.
 #[test]
 fn coordination_replicated_causal_kvs() {
     let mut flow = FlowBuilder::new();
@@ -49,33 +49,40 @@ fn coordination_replicated_causal_kvs() {
     println!("\n=== Replicated KVS (gossip + CausalWrapper lattice) ===\n{report}");
 }
 
-// TODO: Linearizable KVS needs BroadcastReplication to support overwrite values.
-// Currently BroadcastReplication requires V: Merge, but with Paxos ordering
-// the replicas should just apply writes in order (no merge needed).
-// This is a future refactor — split BroadcastReplication into lattice vs ordered variants.
-//
-// type LinearizableKVS = KVSCluster<
-//     Ordered,
-//     Pipeline<PaxosDispatcher<String, String>, RoundRobinRouter>,
-//     (),
-//     KVSCluster<
-//         SeqRep,
-//         RoundRobinRouter,
-//         BroadcastReplication<String, String>,
-//         KVSNode<Leaf, SlotOrderEnforcer, Responder>,
-//     >,
-// >;
-//
-// #[test]
-// fn coordination_linearizable_kvs() {
-//     let mut flow = FlowBuilder::new();
-//     let proxy = flow.process::<()>();
-//     let ext = flow.external::<()>();
-//     let kvs: LinearizableKVS = Default::default();
-//     let _ = plumb_kvs_dataflow::<String, String, _>(&proxy, &ext, &mut flow, kvs);
-//     let report = flow.finalize().check_coordination();
-//     println!("\n=== Linearizable Replicated KVS (Paxos) ===\n{report}");
-// }
+/// Test that scan on a TotalOrder stream proves prefix order.
+/// This simulates the Paxos-ordered path: operations arrive in total order,
+/// scan processes them sequentially, producing a prefix-ordered output.
+#[test]
+fn coordination_scan_total_order() {
+    use hydro_lang::prelude::*;
+    use hydro_lang::live_collections::stream::TotalOrder;
 
+    let mut flow = FlowBuilder::new();
+    let process = flow.process::<()>();
 
+    // Simulate a TotalOrder input (e.g., from Paxos)
+    let input: Stream<String, _, _, TotalOrder> = process
+        .source_iter(q!(vec!["a".to_string(), "b".to_string()]))
+        .assume_ordering::<TotalOrder>(nondet!(/** simulating Paxos output */));
 
+    // Scan: sequential stateful processing on TotalOrder input
+    let output = input.scan(
+        q!(|| Vec::<String>::new()),
+        q!(|state, item| {
+            state.push(item.clone());
+            Some(format!("{}: {:?}", item, state))
+        }),
+    );
+
+    // Observable sink: for_each (side effect)
+    output.for_each(q!(|item| println!("{item}")));
+
+    let report = flow.finalize().check_coordination();
+    println!("\n=== Scan on TotalOrder (simulated Paxos) ===\n{report}");
+    assert!(report.all_monotone(), "Scan on TotalOrder should be monotone under prefix order");
+}
+
+// TODO: Full Paxos-ordered KVS test requires the Paxos dispatcher to produce
+// TotalOrder output in the Hydro type system. Currently it produces NoOrder
+// and relies on runtime ordering guarantees. This is a gap between the
+// protocol's semantic guarantees and the type-level representation.
