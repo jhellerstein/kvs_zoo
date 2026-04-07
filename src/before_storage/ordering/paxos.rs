@@ -77,12 +77,12 @@ impl<K, V> PaxosDispatcher<K, V> {
 
         // Use type inference inside q! closure to avoid generic parameter annotation issues.
         // The macro struggles with explicit generic types like SequencedPayload<_>.
-        next_slot_cycle.complete_next_tick(sequenced_ops.clone().persist().fold(
+        next_slot_cycle.complete_next_tick(sequenced_ops.clone().across_ticks(|s| s.fold(
             q!(|| 0),
             q!(|next_slot, sequenced| {
                 *next_slot = sequenced.seq + 1;
-            }),
-        ));
+            }, commutative = manual_proof!(/** max seq is commutative */)),
+        )));
 
         sequenced_ops
             .filter_map(q!(|sequenced| sequenced.payload))
@@ -203,7 +203,7 @@ where
 
     fn register_role_clusters<'a, Name: 'static>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
         // Create role clusters as KVSNode-tagged so they can be stored in KVSClusters

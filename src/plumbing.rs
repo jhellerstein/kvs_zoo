@@ -161,7 +161,7 @@ macro_rules! plumb_kvs_dataflow_impl {
 pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
-    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
@@ -226,7 +226,7 @@ where
 pub fn plumb_kvs_dataflow_with_tombstones<'a, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
-    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,

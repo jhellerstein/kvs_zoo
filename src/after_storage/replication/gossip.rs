@@ -257,11 +257,11 @@ where
             .batch(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
 
         // Build hot set: new updates + tombstone deletes from previous tick
-        let hot_set = new_puts.chain(hot_cycle).fold_commutative_idempotent(
+        let hot_set = new_puts.chain(hot_cycle).fold(
             q!(|| MapUnionWithTombstones::new(M::default(), T::default())),
             q!(|old, new| {
                 lattices::Merge::merge(old, new);
-            }),
+            }, commutative = manual_proof!(/** lattice merge is commutative */), idempotent = manual_proof!(/** lattice merge is idempotent */)),
         );
 
         // Snapshot hot set for gossiping

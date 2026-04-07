@@ -193,7 +193,7 @@ pub trait Before<K, V>: RequiresLinearizable {
     /// Most dispatchers have nothing to register; default does nothing.
     fn register_role_clusters<'a, Name: 'static>(
         &self,
-        _flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        _flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         _layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
     }
@@ -488,7 +488,7 @@ where
 
     fn register_role_clusters<'a, Name: 'static>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
         self.first.register_role_clusters::<Name>(flow, layers);

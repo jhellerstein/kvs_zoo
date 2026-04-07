@@ -146,7 +146,7 @@ pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::
         ),
     );
 
-    a_log_complete_cycle.complete(a_log.snapshot_atomic(nondet!(
+    a_log_complete_cycle.complete(a_log.snapshot_atomic(&acceptor_tick, nondet!(
         /// We will always write payloads to the log before acknowledging them to the proposers, which guarantees that if the leader changes the quorum overlap between sequencing and leader election will include the committed value.
     )));
     sequencing_max_ballot_complete_cycle.complete(sequencing_max_ballots);
@@ -199,7 +199,7 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
         .unwrap_or(proposers.singleton(q!(Ballot {
             num: 0,
             proposer_id: MemberId::from_raw_id(0)
-        })));
+        })).into());
 
     let (p_ballot, p_has_largest_ballot) = p_ballot_calc(
         proposer_tick,
@@ -377,8 +377,7 @@ fn acceptor_p1<'a, L: Serialize + DeserializeOwned + Clone>(
     let a_max_ballot =
         p_to_acceptors_p1a
             .clone()
-            .persist()
-            .max()
+            .across_ticks(|s| s.max())
             .unwrap_or(acceptor_tick.singleton(q!(Ballot {
                 num: 0,
                 proposer_id: MemberId::from_raw_id(0)
@@ -495,7 +494,7 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
         .map(q!(|(_checkpoint, log)| log))
         .flatten_unordered()
         .into_keyed()
-        .fold_commutative::<(usize, Option<LogValue<P>>), _, _>(
+        .fold::<(usize, Option<LogValue<P>>), _, _, _, _>(
             q!(|| (0, None)),
             q!(|curr_entry, new_entry| {
                 if let Some(curr_entry_payload) = &mut curr_entry.1 {
@@ -514,7 +513,7 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
                 } else {
                     *curr_entry = (1, Some(new_entry));
                 }
-            }),
+            }, commutative = manual_proof!(/** TODO */)),
         )
         .map(q!(|(count, entry)| (count, entry.unwrap())));
     let p_log_to_try_commit = p_p1b_highest_entries_and_count
@@ -634,7 +633,7 @@ fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream
 
     let p_to_replicas = join_responses(
         quorums.map(q!(|k| (k, ()))),
-        payloads_to_send.batch_atomic(nondet!(
+        payloads_to_send.batch_atomic(&proposer_tick, nondet!(
             /// The metadata will always be generated before we get a quorum because our batch of `payloads_to_send` is at least after what we sent to the acceptors.
         )),
     );
@@ -726,29 +725,26 @@ pub fn acceptor_p2<'a, P: PaxosPayload>(
             None
         }));
     let a_log = a_p2as_to_place_in_log
-        .all_ticks_atomic()
-        .into_keyed()
-        .reduce_watermark_commutative(
-            a_checkpoint.clone(),
-            q!(|prev_entry, entry| {
-                if entry.ballot > prev_entry.ballot {
-                    *prev_entry = LogValue {
-                        ballot: entry.ballot,
-                        value: entry.value,
-                    };
-                }
-            }),
-        );
+        .across_ticks(|s| {
+            s.into_keyed().reduce_watermark(
+                a_checkpoint.clone(),
+                q!(|prev_entry, entry| {
+                    if entry.ballot > prev_entry.ballot {
+                        *prev_entry = LogValue {
+                            ballot: entry.ballot,
+                            value: entry.value,
+                        };
+                    }
+                }, commutative = manual_proof!(/** max by ballot */)),
+            )
+        });
     let a_log_snapshot = a_log
-        .snapshot_atomic(nondet!(
-            /// We need to know the current state of the log for p1b
-        ))
         .entries()
-        .fold_commutative(
+        .fold(
             q!(|| HashMap::new()),
             q!(|map, (slot, entry)| {
                 map.insert(slot, entry);
-            }),
+            }, commutative = manual_proof!(/** inserting elements into map is commutative because no keys will overlap */)),
         );
 
     let a_to_proposers_p2b = p_to_acceptors_p2a_batch

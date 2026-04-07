@@ -313,11 +313,11 @@ impl KVSCore {
         
         let storage = put_updates
             .into_keyed()
-            .fold_commutative_idempotent(
-                q!(|| Default::default()),
+            .fold(
+                q!(|| V::default()),
                 q!(|old, new| {
                     lattices::Merge::merge(old, new);
-                })
+                }, commutative = manual_proof!(/** lattice merge is commutative */), idempotent = manual_proof!(/** lattice merge is idempotent */))
             );
 
         // Batch gets into ticks and snapshot storage at the same tick
@@ -327,17 +327,17 @@ impl KVSCore {
             .into_keyed();
         let storage_snapshot = storage.snapshot(&tick, nondet!(/** snapshot storage for gets */));
         
-        // Use get_many to lookup keys in the storage snapshot
-        let get_results = storage_snapshot.get_many(gets_batched);
+        // Join gets with storage snapshot by key
+        let get_results = storage_snapshot.join_keyed_stream(gets_batched);
         
         let get_responses = get_results
             .values()
-            .filter_map(q!(|(value_opt, (request_id, client_id))| {
+            .filter_map(q!(|(storage_value, (request_id, client_id))| {
                 if client_id.is_some() {
                     Some(KVSResponse::GetResult {
                         request_id,
                         client_id,
-                        value: value_opt,
+                        value: Some(storage_value),
                     })
                 } else {
                     None

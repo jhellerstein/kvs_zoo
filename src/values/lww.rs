@@ -1,99 +1,81 @@
 //! Last-Writer-Wins (LWW) value wrapper
 //!
-//! Provides simple overwrite semantics where the most recent write always wins.
-//! This is the simplest conflict resolution strategy but provides no guarantees
-//! about which "write" is actually more recent in distributed systems.
+//! Provides last-writer-wins semantics using a Lamport timestamp to determine
+//! which write is "last." The merge operation always keeps the value with the
+//! higher timestamp, making it a proper lattice (commutative, associative,
+//! idempotent).
 
 use lattices::{IsBot, LatticeFrom, Merge};
 use serde::{Deserialize, Serialize};
 
-/// Wrapper type that implements last-writer-wins semantics via the Merge trait
+/// A proper LWW register: a (timestamp, value) pair where merge keeps the
+/// higher timestamp. This is a valid lattice under the max-timestamp order.
 ///
-/// This allows us to use the same Merge-based core for both conflict resolution
-/// and simple overwrite semantics. The LWW wrapper always accepts the "other"
-/// value during merge operations.
-///
-/// ## Warning
-///
-/// LWW is a non-deterministic Merge implementation in distributed systems!
-/// The "last" writer depends on message ordering, which is not guaranteed
-/// to be the same across replicas in asynchronous networks. Use with caution
-/// in production systems.
-///
-/// ## Usage
-///
-/// ```rust
-/// use kvs_zoo::values::{LwwWrapper, Merge};
-///
-/// let mut lww1 = LwwWrapper::new("first".to_string());
-/// let lww2 = LwwWrapper::new("second".to_string());
-///
-/// lww1.merge(lww2); // lww1 now contains "second"
-/// assert_eq!(lww1.get(), "second");
-/// ```
+/// The timestamp must be set by the writer. In a distributed system, use a
+/// Lamport clock or HLC to ensure timestamps are unique and monotonically
+/// increasing per writer.
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Hash)]
-pub struct LwwWrapper<T>(pub T);
+pub struct LwwWrapper<T> {
+    pub timestamp: u64,
+    pub value: T,
+}
 
 impl<T> LwwWrapper<T> {
-    /// Create a new LWW wrapper around a value
+    /// Create a new LWW wrapper with timestamp 0.
     pub fn new(value: T) -> Self {
-        LwwWrapper(value)
+        LwwWrapper { timestamp: 0, value }
     }
 
-    /// Get a reference to the wrapped value
+    /// Create a new LWW wrapper with an explicit timestamp.
+    pub fn with_timestamp(value: T, timestamp: u64) -> Self {
+        LwwWrapper { timestamp, value }
+    }
+
+    /// Get a reference to the wrapped value.
     pub fn get(&self) -> &T {
-        &self.0
+        &self.value
     }
 
-    /// Get a mutable reference to the wrapped value
+    /// Get a mutable reference to the wrapped value.
     pub fn get_mut(&mut self) -> &mut T {
-        &mut self.0
+        &mut self.value
     }
 
-    /// Extract the wrapped value
+    /// Extract the wrapped value.
     pub fn into_inner(self) -> T {
-        self.0
+        self.value
     }
 }
 
 impl<T: PartialEq> Merge<LwwWrapper<T>> for LwwWrapper<T> {
     fn merge(&mut self, other: LwwWrapper<T>) -> bool {
-        // Always overwrite with the "other" value (last writer wins)
-        let changed = self.0 != other.0;
-        self.0 = other.0;
-        changed
+        // Keep the value with the higher timestamp. Ties go to `other`
+        // to ensure idempotence (merging identical values is a no-op).
+        if other.timestamp > self.timestamp {
+            self.timestamp = other.timestamp;
+            self.value = other.value;
+            true
+        } else {
+            false
+        }
     }
 }
 
 impl<T: Default> IsBot for LwwWrapper<T> {
     fn is_bot(&self) -> bool {
-        false
+        self.timestamp == 0
     }
 }
 
 impl<T> From<T> for LwwWrapper<T> {
     fn from(value: T) -> Self {
-        LwwWrapper(value)
-    }
-}
-
-impl<T> std::ops::Deref for LwwWrapper<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> std::ops::DerefMut for LwwWrapper<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        LwwWrapper::new(value)
     }
 }
 
 impl<T: std::fmt::Display> std::fmt::Display for LwwWrapper<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}@{}", self.value, self.timestamp)
     }
 }
 
