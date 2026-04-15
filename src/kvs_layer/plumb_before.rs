@@ -5,6 +5,9 @@ use crate::before_storage::Before;
 
 /// Trait to plumb routing across layers using per-layer Before components (routing/ordering).
 pub trait KVSPlumb<K, V> {
+    /// The ordering guarantee on the output stream.
+    type OutputOrder: hydro_lang::live_collections::stream::Ordering;
+
     fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
@@ -74,9 +77,56 @@ pub trait KVSPlumb<K, V> {
             + Send
             + Sync
             + 'static;
+
+    /// Like `plumb_from_process`, but preserves the Before layer's output ordering.
+    /// Only meaningful when `OutputOrder` is `TotalOrder`.
+    fn plumb_from_process_ordered<'a, O: hydro_lang::live_collections::stream::Ordering>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+    ) -> Stream<
+        crate::protocol::KVSOperation<K, V>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
+        Unbounded,
+        Self::OutputOrder,
+    >
+    where
+        K: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::hash::Hash
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+        V: Clone
+            + serde::Serialize
+            + for<'de> serde::Deserialize<'de>
+            + PartialEq
+            + Eq
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static;
 }
 
 impl<K, V> KVSPlumb<K, V> for () {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
+
+    fn plumb_from_process_ordered<'a, O: hydro_lang::live_collections::stream::Ordering>(
+        &self,
+        _layers: &crate::kvs_layer::KVSClusters<'a>,
+        _operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    where
+        K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
+    {
+        panic!("Terminal () cannot preserve ordering");
+    }
+
     fn plumb_from_process<'a, O>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
@@ -129,6 +179,21 @@ where
     B: Before<K, V> + Clone,
     Child: KVSPlumb<K, V>,
 {
+    type OutputOrder = B::OutputOrder;
+
+    fn plumb_from_process_ordered<'a, O: hydro_lang::live_collections::stream::Ordering>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    where
+        K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
+    {
+        let my_cluster = layers.get::<Name>();
+        self.before.dispatch_from_process_with_layers::<Name, _>(layers, operations, my_cluster)
+    }
+
     fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
@@ -241,6 +306,21 @@ where
         + 'static,
     B: Before<K, V> + Clone,
 {
+    type OutputOrder = B::OutputOrder;
+
+    fn plumb_from_process_ordered<'a, O: hydro_lang::live_collections::stream::Ordering>(
+        &self,
+        layers: &crate::kvs_layer::KVSClusters<'a>,
+        operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    where
+        K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
+        V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
+    {
+        let my_cluster = layers.get::<Name>();
+        self.before.dispatch_from_process_with_layers::<Name, _>(layers, operations, my_cluster)
+    }
+
     fn plumb_from_process<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,

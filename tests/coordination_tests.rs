@@ -142,7 +142,7 @@ fn coordination_linearizable_replicated_kvs() {
     let proxy = flow.process::<()>();
     let ext = flow.external::<()>();
     let kvs: LinearizableKVS = Default::default();
-    let _ = plumb_kvs_dataflow_ordered::<String, String, _>(&proxy, &ext, &mut flow, kvs);
+    let _ = plumb_kvs_dataflow::<String, String, _>(&proxy, &ext, &mut flow, kvs);
     let report = flow.finalize().check_coordination();
     println!("\n=== Linearizable Replicated KVS (Paxos + BroadcastOverwrite) ===\n{report}");
 }

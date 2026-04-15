@@ -85,7 +85,7 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Fan out PUT deltas through any configured replication layers. Replicas generate
         // operations that enter the core without triggering client responses.
-        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weaken_ordering());
 
         // Core processing for client-originating operations (storage-specific).
         // Preserve ordering if the KVS architecture requires linearizability,
@@ -247,7 +247,7 @@ where
         + Sync
         + 'static,
     K: crate::kvs_layer::KVSSpec<V>
-        + crate::kvs_layer::KVSPlumb<KeyType, V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V, OutputOrder = hydro_lang::live_collections::stream::TotalOrder>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
         + crate::background::BackgroundPlumb<KeyType, V>,
@@ -265,17 +265,14 @@ where
         .entries()
         .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))));
 
-    let routed_ops = kvs.plumb_from_process(&layers, initial_ops);
+    let routed_ops = kvs.plumb_from_process_ordered(&layers, initial_ops);
     let (client_ops, local_put_deltas) = extract_put_deltas(routed_ops);
-    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weaken_ordering());
 
-    // Client ops arrive in TotalOrder from Paxos — use process_ordered (scan)
-    let client_ops_ordered = client_ops
-        .assume_ordering::<TotalOrder>(nondet!(
-            /// The Before layer (Paxos) establishes total order via consensus.
-            /// The plumbing weakened it to NoOrder at the trait boundary;
-            /// we restore it here for process_ordered.
-        ));
+    // Client ops arrive with the Before layer's OutputOrder.
+    // The KVSPlumb<..., OutputOrder = TotalOrder> bound guarantees this is TotalOrder.
+    // No assume_ordering needed — the type system carries the guarantee.
+    let client_ops_ordered = client_ops;
     let crate::kvs_core::CoreOutput {
         responses: client_responses,
         data: client_data_events,
@@ -285,8 +282,7 @@ where
         q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
-    // Replica ops: also use process_ordered (empty when no replication,
-    // ordered when replication preserves Paxos order)
+    // Replica ops: replication output is NoOrder; assume ordering for process_ordered.
     let replica_ops_ordered = replication_ops
         .assume_ordering::<TotalOrder>(nondet!(
             /// Replica operations inherit order from the Paxos-sequenced client path.
