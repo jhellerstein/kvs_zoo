@@ -111,9 +111,9 @@ macro_rules! plumb_kvs_dataflow_impl {
             meta: replica_meta_stream,
         } = $process_expr(replication_ops);
 
-        // Responses and data are already NoOrder, so interleave is fine.
-        let combined_responses = client_responses
-            .interleave(replica_responses);
+        // Replica responses have no client_id and would be filtered out anyway.
+        // Keep them separate from the observable output to preserve consistency labels.
+        let _ = replica_responses;
 
         let data_events = client_data_events
             .interleave(replica_data_events);
@@ -130,7 +130,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
         // Send KVSResponse structs to proxy (they contain client_id)
-        let proxy_responses = combined_responses.send_bincode($proxy);
+        let proxy_responses = client_responses.send_bincode($proxy);
 
         // Extract client IDs and format responses for completion
         let to_complete = proxy_responses
