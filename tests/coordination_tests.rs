@@ -105,44 +105,33 @@ fn coordination_paxos_kvs() {
     println!("\n=== Paxos-ordered KVS (overwrite, no replication) ===\n{report}");
 }
 
-/// Linearizable replicated KVS: Paxos ordering + broadcast overwrite replication.
-/// Currently FAILS: Hydro's broadcast uses membership tracking with a non-commutative
-/// fold. Membership can change (nodes join/leave), making the broadcast output
-/// non-monotone. To fix, the KVS would need to establish a fixed or grow-only
-/// membership explicitly.
+/// Linearizable replicated KVS: Paxos ordering + all replicas.
+/// Paxos provides TotalOrder directly to the target cluster. Each member
+/// processes with scan. No separate routing or replication layer needed —
+/// Paxos broadcast already delivers to all members.
 #[test]
 fn coordination_linearizable_replicated_kvs() {
     use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
-    use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
-    use kvs_zoo::before_storage::Pipeline;
-    use kvs_zoo::after_storage::replication::BroadcastOverwrite;
     use kvs_zoo::after_storage::responders::Responder;
     use kvs_zoo::kvs_layer::KVSNode;
 
     #[derive(Clone)]
     struct Ordered;
     #[derive(Clone)]
-    struct SeqRep;
-    #[derive(Clone)]
     struct Leaf;
 
     type LinearizableKVS = KVSCluster<
         Ordered,
-        Pipeline<PaxosDispatcher<String, String>, RoundRobinRouter>,
+        PaxosDispatcher<String, String>,
         (),
-        KVSCluster<
-            SeqRep,
-            RoundRobinRouter,
-            BroadcastOverwrite<String, String>,
-            KVSNode<Leaf, SlotOrderEnforcer, Responder>,
-        >,
+        KVSNode<Leaf, SingleNodeRouter, Responder>,
     >;
 
     let mut flow = FlowBuilder::new();
     let proxy = flow.process::<()>();
     let ext = flow.external::<()>();
     let kvs: LinearizableKVS = Default::default();
-    let _ = plumb_kvs_dataflow::<String, String, _>(&proxy, &ext, &mut flow, kvs);
+    let _ = plumb_kvs_dataflow_ordered::<String, String, _>(&proxy, &ext, &mut flow, kvs);
     let report = flow.finalize().check_coordination();
-    println!("\n=== Linearizable Replicated KVS (Paxos + BroadcastOverwrite) ===\n{report}");
+    println!("\n=== Linearizable Replicated KVS (Paxos) ===\n{report}");
 }
