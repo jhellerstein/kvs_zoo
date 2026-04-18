@@ -110,9 +110,11 @@ macro_rules! plumb_kvs_dataflow_impl {
             meta: replica_meta_stream,
         } = $process_expr(replication_ops);
 
-        // Responses and data are already NoOrder, so interleave is fine.
-        let combined_responses = client_responses
-            .merge_unordered(replica_responses);
+        // Replica responses have no client_id and would be filtered out anyway.
+        // Keep them separate from the observable output to preserve consistency labels.
+        let _ = replica_responses;
+
+        // Data and meta events are internal (not observable) — merge is fine.
 
         let data_events = client_data_events
             .merge_unordered(replica_data_events);
@@ -129,7 +131,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
         // Send KVSResponse structs to proxy (they contain client_id)
-        let proxy_responses = combined_responses.send($proxy, TCP.fail_stop().bincode());
+        let proxy_responses = client_responses.send($proxy, TCP.fail_stop().bincode());
 
         // Extract client IDs and format responses for completion
         let to_complete = proxy_responses
@@ -296,7 +298,8 @@ where
         q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
-    let combined_responses = client_responses.merge_unordered(replica_responses);
+    // Replica responses have no client_id — drop them to keep observable output clean.
+    let _ = replica_responses;
     let data_events = client_data_events.merge_unordered(replica_data_events);
     let meta_stream = client_meta_stream
         .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
@@ -307,7 +310,7 @@ where
 
     let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
-    let proxy_responses = combined_responses.send(proxy, TCP.fail_stop().bincode());
+    let proxy_responses = client_responses.send(proxy, TCP.fail_stop().bincode());
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {
