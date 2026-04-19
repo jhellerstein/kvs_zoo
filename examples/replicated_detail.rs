@@ -1,21 +1,27 @@
 //! Replicated KVS (single shard + After-stage gossip replication)
-//!
-//! Uses CausalWrapper<String> values so gossip replication can merge
-//! via lattice semantics (coordination-free convergence).
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::ReplicationStrategy;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::plumbing::extract_put_deltas;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::CausalWrapper;
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 Replicated KVS Demo (gossip + CausalWrapper)");
+    let args = Args::parse();
+    println!("🚀 Replicated KVS Demo (gossip)");
 
+    // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
@@ -23,10 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
+    // Define KVS architecture
     let replicas = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
 
+    // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<String, CausalWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, String>, String>(
             &client_external,
         );
 
@@ -43,33 +51,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             op
         )))
         .into_keyed()
-        .demux(&replicas, TCP.fail_stop().bincode())
+        .demux_bincode(&replicas)
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
             nondet!(/** routed to single member */),
         );
 
+    // Per-node total ordering for correctness
+    let ordered_ops = routed_ops
+        .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+            nondet!(/** sequential processing per node */),
+        );
+
     // After-storage flow: derive applied PUT deltas from the core and replicate them
-    let (_ops_clone, local_put_deltas) = extract_put_deltas(routed_ops.clone());
+    let (_ops_clone, local_put_deltas) = extract_put_deltas(ordered_ops.clone());
 
     // Use the After-stage gossip strategy to replicate PUT deltas to peers
-    let gossip = SimpleGossip::<String, CausalWrapper<String>>::default();
+    let gossip = SimpleGossip::<String, String>::default();
     let replicated_puts = gossip.replicate_data(&replicas, local_put_deltas);
 
     // Merge local ops (with client_id) with replicated PUTs (client_id=None, no respond)
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| kvs_zoo::protocol::KVSOperation::Put(k, v, 0, None)));
-    let all_ops = routed_ops
-        .merge_unordered(replicated_ops);
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, 0, None)));
+    let all_ops = ordered_ops
+        .clone()
+        .interleave(replicated_ops)
+        .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
+        nondet!(/** per-node sequential processing */),
+    );
 
-    // Lattice merge path: CausalWrapper values converge via commutative merge
     let kvs_zoo::kvs_core::CoreOutput {
         responses,
         data,
         meta,
-    } = KVSCore::process_lattice(all_ops);
+    } = KVSCore::process::<_, _, _, _, _, _>(all_ops, q!(|| std::collections::HashMap::new()));
     let _data_keep_alive = data.inspect(q!(|event| println!("[after] data {:?}", event)));
     let _meta_keep_alive = meta.inspect(q!(|event| println!("[after] meta {:?}", event)));
 
-    let proxy_responses = responses.send(&proxy, TCP.fail_stop().bincode());
+    let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {
@@ -79,6 +96,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     complete_sink.complete(to_complete);
 
     let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
 
     // Deploy: 3 replicas for the cluster
     let nodes = built
@@ -99,11 +120,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
-    use kvs_zoo::values::VCWrapper;
     let ops = vec![
-        Op::Put("alpha".into(), CausalWrapper::new(VCWrapper::new(), "one".to_string()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("beta".into(), CausalWrapper::new(VCWrapper::new(), "two".to_string()), 3, None),
+        Op::Put("beta".into(), "two".to_string(), 3, None),
         Op::Get("beta".into(), 4, None),
     ];
 

@@ -202,7 +202,7 @@ where
         let batch_timeout_ms = self.config.batch_timeout_ms;
 
         let accumulated_kvs = local_put_tuples.into_keyed().fold(
-            q!(|| Default::default()),
+            q!(|| V::default()),
             q!(|acc, v| {
                 lattices::Merge::merge(acc, v);
             }, commutative = manual_proof!(/** lattice merge is commutative */)),

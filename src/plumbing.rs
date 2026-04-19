@@ -281,7 +281,7 @@ where
         meta: client_meta_stream,
     } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
         client_ops_ordered,
-        q!(|| Default::default()),
+        q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
     // Replica ops: replication output is NoOrder; assume ordering for process_ordered.
@@ -295,7 +295,7 @@ where
         meta: replica_meta_stream,
     } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
         replica_ops_ordered,
-        q!(|| Default::default()),
+        q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
     // Replica responses have no client_id — drop them to keep observable output clean.

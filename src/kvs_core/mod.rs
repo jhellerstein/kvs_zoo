@@ -165,7 +165,7 @@ impl KVSCore {
         let storage = put_updates
             .into_keyed()
             .fold(
-                q!(|| Default::default()),
+                q!(|| V::default()),
                 q!(|old, new| {
                     lattices::Merge::merge(old, new);
                 }, commutative = manual_proof!(/** V: LatticeValue — merge is commutative */), idempotent = manual_proof!(/** V: LatticeValue — merge is idempotent */))
@@ -220,7 +220,7 @@ impl KVSCore {
             ))
             .into_keyed()
             .fold(
-                q!(|| Default::default()),
+                q!(|| V::default()),
                 q!(|old, new| { *old = new; })
             );
 
@@ -268,28 +268,28 @@ impl KVSCore {
             let should_emit_response = client_id.is_some();
 
             let (response, data, meta) = match operation {
-                crate::protocol::KVSOperation::Put(key, value, _, _) => {
+                KVSOperation::Put(key, value, _, _) => {
                     let value_for_event = value.clone();
                     state.apply_put(key.clone(), value);
 
                     let response = if should_emit_response {
-                        Some(crate::protocol::KVSResponse::PutOk {
+                        Some(KVSResponse::PutOk {
                             request_id,
                             client_id,
                         })
                     } else {
                         None
                     };
-                    let data = Some(crate::kvs_core::events::DataEvent::Put {
+                    let data = Some(DataEvent::Put {
                         key: key.clone(),
                         value: value_for_event,
                     });
                     (response, data, None)
                 }
-                crate::protocol::KVSOperation::Get(key, _, _) => {
+                KVSOperation::Get(key, _, _) => {
                     let value = state.apply_get(&key).cloned();
                     let response = if should_emit_response {
-                        Some(crate::protocol::KVSResponse::GetResult {
+                        Some(KVSResponse::GetResult {
                             request_id,
                             client_id,
                             value: value.clone(),
@@ -297,28 +297,28 @@ impl KVSCore {
                     } else {
                         None
                     };
-                    let data = Some(crate::kvs_core::events::DataEvent::Get {
+                    let data = Some(DataEvent::Get {
                         key: key.clone(),
                         value,
                     });
                     (response, data, None)
                 }
-                crate::protocol::KVSOperation::Delete(key, _, _) => {
+                KVSOperation::Delete(key, _, _) => {
                     state.apply_delete(key.clone());
                     let response = if should_emit_response {
-                        Some(crate::protocol::KVSResponse::DeleteOk {
+                        Some(KVSResponse::DeleteOk {
                             request_id,
                             client_id,
                         })
                     } else {
                         None
                     };
-                    let data = Some(crate::kvs_core::events::DataEvent::Delete { key: key.clone() });
-                    let meta = Some(crate::kvs_core::events::MetaEvent::Tomb { key: key.clone() });
+                    let data = Some(DataEvent::Delete { key: key.clone() });
+                    let meta = Some(MetaEvent::Tomb { key: key.clone() });
                     (response, data, meta)
                 }
             };
-            Some(crate::kvs_core::CoreEmission {
+            Some(CoreEmission {
                 response,
                 data,
                 meta,
@@ -373,19 +373,19 @@ impl KVSCore {
         L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
     {
         let puts = operations.clone().filter_map(q!(|op| match op {
-            crate::protocol::KVSOperation::Put(key, value, request_id, client_id) => {
+            KVSOperation::Put(key, value, request_id, client_id) => {
                 Some((key, value, request_id, client_id))
             }
             _ => None,
         }));
 
         let deletes = operations.clone().filter_map(q!(|op| match op {
-            crate::protocol::KVSOperation::Delete(key, request_id, client_id) => Some((key, request_id, client_id)),
+            KVSOperation::Delete(key, request_id, client_id) => Some((key, request_id, client_id)),
             _ => None,
         }));
 
         let gets = operations.filter_map(q!(|op| match op {
-            crate::protocol::KVSOperation::Get(key, request_id, client_id) => Some((key, request_id, client_id)),
+            KVSOperation::Get(key, request_id, client_id) => Some((key, request_id, client_id)),
             _ => None,
         }));
 
@@ -437,7 +437,7 @@ impl KVSCore {
             .values()
             .filter_map(q!(|(storage_value, (request_id, client_id))| {
                 if client_id.is_some() {
-                    Some(crate::protocol::KVSResponse::GetResult {
+                    Some(KVSResponse::GetResult {
                         request_id,
                         client_id,
                         value: Some(storage_value),
@@ -453,7 +453,7 @@ impl KVSCore {
             .clone()
             .filter_map(q!(|(_, _, request_id, client_id)| {
                 if client_id.is_some() {
-                    Some(crate::protocol::KVSResponse::PutOk {
+                    Some(KVSResponse::PutOk {
                         request_id,
                         client_id,
                     })
@@ -464,7 +464,7 @@ impl KVSCore {
 
         let delete_responses = deletes.clone().filter_map(q!(|(_, request_id, client_id)| {
             if client_id.is_some() {
-                Some(crate::protocol::KVSResponse::DeleteOk {
+                Some(KVSResponse::DeleteOk {
                     request_id,
                     client_id,
                 })
@@ -477,11 +477,11 @@ impl KVSCore {
             .merge_unordered(delete_responses)
             .merge_unordered(get_responses);
 
-        let put_data = puts.map(q!(|(key, value, _, _)| crate::kvs_core::events::DataEvent::Put { key, value }));
-        let delete_data = deletes.clone().map(q!(|(key, _, _)| crate::kvs_core::events::DataEvent::Delete { key }));
+        let put_data = puts.map(q!(|(key, value, _, _)| DataEvent::Put { key, value }));
+        let delete_data = deletes.clone().map(q!(|(key, _, _)| DataEvent::Delete { key }));
         let data = put_data.merge_unordered(delete_data);
 
-        let meta = deletes.map(q!(|(key, _, _)| crate::kvs_core::events::MetaEvent::Tomb { key }));
+        let meta = deletes.map(q!(|(key, _, _)| MetaEvent::Tomb { key }));
 
         CoreOutput {
             responses,

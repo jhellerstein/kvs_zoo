@@ -243,23 +243,23 @@ where
         // Create tick and cycle for hot set with tombstone-based deletes feeding back
         let gossip_tick = cluster.tick();
         let (set_hot_cycle, hot_cycle) =
-            gossip_tick.cycle::<Stream<MapUnionWithTombstones<std::collections::HashMap<K, V>, std::collections::HashSet<K>>, _, _, NoOrder>>();
+            gossip_tick.cycle::<Stream<MapUnionWithTombstones<M, T>, _, _, NoOrder>>();
 
         // Batch inputs into the tick context - convert to PUT deltas
         let new_puts = local_put_tuples
             .clone()
             .map(q!(|(k, v)| {
                 MapUnionWithTombstones::new_from(
-                    std::iter::once((k, v)).collect::<std::collections::HashMap<_, _>>(),
-                    std::collections::HashSet::new(),
+                    std::iter::once((k, v)).collect::<M>(),
+                    T::default(),
                 )
             }))
             .batch(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
 
         // Build hot set: new updates + tombstone deletes from previous tick
         let hot_set = new_puts.chain(hot_cycle).fold(
-            q!(|| Default::default()),
-            q!(|old: &mut lattices::map_union_with_tombstones::MapUnionWithTombstones<std::collections::HashMap<_, _>, std::collections::HashSet<_>>, new| {
+            q!(|| MapUnionWithTombstones::new(M::default(), T::default())),
+            q!(|old, new| {
                 lattices::Merge::merge(old, new);
             }, commutative = manual_proof!(/** lattice merge is commutative */), idempotent = manual_proof!(/** lattice merge is idempotent */)),
         );
@@ -269,15 +269,13 @@ where
 
         // Get all live (non-tombstoned) entries and decide whether to tombstone each
         let gossip_and_deletes = hot_snapshot
-            .map(q!(|hot_map: lattices::map_union_with_tombstones::MapUnionWithTombstones<std::collections::HashMap<_, _>, std::collections::HashSet<_>>| {
-                let (map, tombstones): (&std::collections::HashMap<_, _>, _) = hot_map.as_reveal_ref();
-                let mut result = Vec::new();
-                for (k, v) in map.iter() {
-                    if !tombstones.contains(k) {
-                        result.push((Clone::clone(k), Clone::clone(v)));
-                    }
-                }
-                result
+            .map(q!(|hot_map| {
+                let (map, tombstones) = hot_map.as_reveal_ref();
+                // Only iterate over keys that are NOT tombstoned
+                map.into_iter()
+                    .filter(|(k, _v)| !tombstones.contains(k))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<Vec<_>>()
             }))
             .flatten_unordered()
             .map(q!(move |(k, v)| {
@@ -296,7 +294,7 @@ where
             .filter(q!(|(_k, _v, should_delete)| *should_delete))
             .map(q!(|(k, _v, _)| {
                 // Create a tombstone delta: empty map, singleton tombstone set
-                MapUnionWithTombstones::new_from(std::collections::HashMap::new(), std::iter::once(k).collect::<std::collections::HashSet<_>>())
+                MapUnionWithTombstones::new_from(M::default(), std::iter::once(k).collect::<T>())
             }));
 
         // Complete the cycle - tombstone deletes feed back into next tick

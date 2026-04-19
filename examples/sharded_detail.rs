@@ -1,12 +1,22 @@
 //! Sharded KVS (hash-partitioned)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
+use kvs_zoo::before_storage::routing::ShardedRouter;
 use kvs_zoo::kvs_core::{KVSCore, KVSNode};
 use kvs_zoo::protocol::KVSOperation;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Sharded Local KVS Demo");
 
     // Standard Hydro deployment
@@ -37,31 +47,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let routed_ops = initial_ops
         .map(q!(|op| {
             match op {
-                kvs_zoo::protocol::KVSOperation::Put(k, v, rid, cid) => {
-                    let idx = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(&k, 3usize);
+                KVSOperation::Put(k, v, rid, cid) => {
+                    let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw_id(idx),
-                        kvs_zoo::protocol::KVSOperation::Put(k, v, rid, cid),
+                        KVSOperation::Put(k, v, rid, cid),
                     )
                 }
-                kvs_zoo::protocol::KVSOperation::Get(k, rid, cid) => {
-                    let idx = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(&k, 3usize);
+                KVSOperation::Get(k, rid, cid) => {
+                    let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw_id(idx),
-                        kvs_zoo::protocol::KVSOperation::Get(k, rid, cid),
+                        KVSOperation::Get(k, rid, cid),
                     )
                 }
-                kvs_zoo::protocol::KVSOperation::Delete(k, rid, cid) => {
-                    let idx = kvs_zoo::before_storage::routing::ShardedRouter::calculate_shard_id(&k, 3usize);
+                KVSOperation::Delete(k, rid, cid) => {
+                    let idx = ShardedRouter::calculate_shard_id(&k, 3usize);
                     (
                         hydro_lang::location::MemberId::from_raw_id(idx),
-                        kvs_zoo::protocol::KVSOperation::Delete(k, rid, cid),
+                        KVSOperation::Delete(k, rid, cid),
                     )
                 }
             }
         }))
         .into_keyed()
-        .demux(&shards, TCP.fail_stop().bincode())
+        .demux_bincode(&shards)
         .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(
             nondet!(/** routed to one shard */),
         );
@@ -76,12 +86,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_overwrite(ordered_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>());
+    } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
     let _data_keep_alive = data.inspect(q!(|_| ())); // Sharded demo ignores data events for now
     let _meta_keep_alive = meta.inspect(q!(|_| ())); // Sharded demo ignores metadata for now
 
     // Send responses back to proxy and complete the client request
-    let proxy_responses = responses.send(&proxy, TCP.fail_stop().bincode());
+    let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {
@@ -91,6 +101,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     complete_sink.complete(to_complete);
 
     let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
 
     // Deploy: 3 shards, 1 node each
     let nodes = built

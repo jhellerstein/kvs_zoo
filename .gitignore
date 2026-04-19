@@ -37,3 +37,8 @@ fuzz/corpus/
 
 # OS-specific files
 Thumbs.db
+COMMIT_MESSAGE.md
+COMMIT_MSG.txt
+STAGELEFT_GENERICS_ISSUE_REPORT.md
+STAGELEFT_GENERICS_NOTES.md
+hydro_graph.json

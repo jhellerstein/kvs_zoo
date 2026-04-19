@@ -1,12 +1,21 @@
 //! Local KVS (detailed wiring, single node)
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::protocol::KVSOperation;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Local KVS Demo (detailed)");
 
     // Standard Hydro deployment
@@ -34,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             op.with_client_id(Some(client_id))
         )))
         .into_keyed()
-        .demux(&local, TCP.fail_stop().bincode());
+        .demux_bincode(&local);
 
     // Per-node total ordering for correctness
     let ordered_ops = routed_ops
@@ -47,12 +56,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process_overwrite(ordered_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>());
+    } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
     let _data_keep_alive = data.inspect(q!(|_| ())); // Local demo currently ignores data events
     let _meta_keep_alive = meta.inspect(q!(|_| ())); // Local demo currently ignores metadata
 
     // Send responses back to proxy and complete the client request
-    let proxy_responses = responses.send(&proxy, TCP.fail_stop().bincode());
+    let proxy_responses = responses.send_bincode(&proxy);
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {
@@ -62,6 +71,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     complete_sink.complete(to_complete);
 
     let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
 
     // Deploy: single node
     let nodes = built

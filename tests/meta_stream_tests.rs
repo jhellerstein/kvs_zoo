@@ -73,7 +73,7 @@ async fn background_plumb_routes_meta_events() {
                     Vec::<(String, String,)>::new()
                 ))
                 .map(q!(|(key, value)| kvs_zoo::DataEvent::Put { key, value }))
-                .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** no foreground data */));
+                .assume_ordering(nondet!(/** no foreground data */));
 
             let meta_stream = cluster_entry
                 .source_iter(q!(vec!["alpha".to_string()]))
@@ -84,8 +84,8 @@ async fn background_plumb_routes_meta_events() {
                 ])));
 
             let (bg_data, bg_meta) = spec.plumb_background(&layers,
-                data_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>().into(),
-                meta_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>().into());
+                data_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
+                meta_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>());
             bg_data
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
                     nondet!(/** test */),
@@ -93,7 +93,7 @@ async fn background_plumb_routes_meta_events() {
                 .for_each(q!(|_data| ()));
 
             bg_meta
-                .send(process, TCP.fail_stop().bincode())
+                .send_bincode(process)
                 .entries()
                 .map(q!(|(_member, event)| event))
         },
@@ -165,7 +165,7 @@ async fn tomb_index_background_emits_summary() {
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
                 KVSCore::process_overwrite::<String, String, _>(ops);
             let _data_keep_alive = data.inspect(q!(|_| ()));
-            meta.send(process, TCP.fail_stop().bincode())
+            meta.send_bincode(process)
                 .entries()
                 .map(q!(|(_member, event)| event))
         },

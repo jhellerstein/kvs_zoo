@@ -4,28 +4,34 @@
 //! Unlike standard deletion (which removes keys), tombstone deletion marks
 //! keys as permanently deleted. Once tombstoned, a key cannot be resurrected
 //! by subsequent PUT operations.
-//!
-//! Uses CausalWrapper<String> values for lattice-based gossip replication.
 
+use clap::Parser;
 use futures::{SinkExt, StreamExt};
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::values::CausalWrapper;
 
 // Marker type naming this KVS layer
 #[derive(Clone)]
 struct Replica;
 
 // KVS architecture type: single layer with RoundRobin + Gossip
-type ReplicatedTombstoneKVS = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<String, CausalWrapper<String>>, ()>;
+type ReplicatedTombstoneKVS<V> = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<String, V>, ()>;
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    run_example().await
+    let args = Args::parse();
+    run_example(&args).await
 }
 
-async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
+async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Replicated KVS with Tombstones Demo");
     println!("   This demo shows permanent tombstone-based deletion\n");
 
@@ -38,7 +44,7 @@ async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Define KVS architecture via defaults; override only the gossip interval
-    let mut kvs_spec: ReplicatedTombstoneKVS = Default::default();
+    let mut kvs_spec: ReplicatedTombstoneKVS<String> = Default::default();
     kvs_spec.after = SimpleGossip::new(100usize); // 100ms gossip interval
 
     // Build a Hydro graph for the ReplicatedTombstoneKVS type with tombstone storage
@@ -50,6 +56,11 @@ async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let built = flow.finalize();
+    built.generate_graph_with_config(&args.graph, None)?;
+
+    if args.graph.should_exit_after_graph_generation() {
+        return Ok(());
+    }
 
     // Deploy: 3 replicas for the cluster
     let nodes = built
@@ -92,15 +103,14 @@ async fn run_example() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Generate operations that demonstrate tombstone permanence
 fn tombstone_demo_ops() -> Vec<(
-    kvs_zoo::protocol::KVSOperation<String, CausalWrapper<String>>,
+    kvs_zoo::protocol::KVSOperation<String, String>,
     &'static str,
 )> {
     use kvs_zoo::protocol::KVSOperation as Op;
-    use kvs_zoo::values::VCWrapper;
 
     vec![
         (
-            Op::Put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()), 1, None),
+            Op::Put("x".to_string(), "1".to_string(), 1, None),
             "PUT x = \"1\"",
         ),
         (Op::Get("x".to_string(), 2, None), "GET x (expect \"1\")"),
@@ -113,7 +123,7 @@ fn tombstone_demo_ops() -> Vec<(
             "GET x (expect None - tombstoned)",
         ),
         (
-            Op::Put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string()), 5, None),
+            Op::Put("x".to_string(), "2".to_string(), 5, None),
             "PUT x = \"2\" (attempt resurrection)",
         ),
         (

@@ -1,0 +1,6 @@
+[patch."https://github.com/hydro-project/hydro.git"]
+hydro_lang = { path = "/Users/jmhwork/code/calm/hydro/hydro_lang" }
+hydro_std = { path = "/Users/jmhwork/code/calm/hydro/hydro_std" }
+hydro_deploy = { path = "/Users/jmhwork/code/calm/hydro/hydro_deploy/core" }
+dfir_rs = { path = "/Users/jmhwork/code/calm/hydro/dfir_rs" }
+lattices = { path = "/Users/jmhwork/code/calm/hydro/lattices" }

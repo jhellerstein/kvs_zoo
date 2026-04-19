@@ -1,10 +1,13 @@
-//! Linearizable Sharded+Replicated KVS (Paxos ordering → all replicas)
+//! Linearizable KVS (Paxos ordering, simplified) — SEQUENTIALLY CONSISTENT
+//!
+//! Same architecture as linearizable_replicated.
 //!
 //! NOTE: Simplified to use PaxosDispatcher directly (no sharding layer)
 //! because ShardedRouter erases TotalOrder in the type system.
 //! The coordination analysis correctly reports SEQUENTIALLY CONSISTENT.
 
-use futures::{SinkExt, StreamExt};
+use clap::Parser;
+use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
 use kvs_zoo::before_storage::routing::SingleNodeRouter;
@@ -24,12 +27,17 @@ type LinearizableKVS = KVSCluster<
     KVSNode<Leaf, SingleNodeRouter, Responder>,
 >;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(flatten)]
+    graph: GraphConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
     println!("🚀 Linearizable KVS Demo (Paxos ordering)");
 
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
 
     let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
@@ -45,50 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let built = flow.finalize();
-
-    let nodes = built
-        .with_default_optimize()
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(
-            layers.get_role::<OrderedCluster, kvs_zoo::before_storage::ordering::Proposer>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get_role::<OrderedCluster, kvs_zoo::before_storage::ordering::Acceptor>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<OrderedCluster>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<Leaf>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (mut out, mut input) = nodes.connect_bincode(bidi_port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-
-    // Demo operations across shards
-    let ops = vec![
-        KVSOperation::Put("user:alice".into(), "A".to_string(), 1, None),
-        KVSOperation::Put("user:bob".into(), "B".to_string(), 2, None),
-        KVSOperation::Get("user:alice".into(), 3, None),
-        KVSOperation::Get("user:bob".into(), 4, None),
-    ];
-    for op in ops {
-        input.send(op).await?;
-        if let Some(resp) = out.next().await {
-            println!("→ {}", resp);
-        }
-    }
-
-    deployment.stop().await?;
-    println!("✅ Linearizable Sharded+Replicated demo complete");
+    let report = built.check_coordination();
+    println!("{report}");
+    built.generate_graph_with_config(&args.graph, None)?;
     Ok(())
 }
