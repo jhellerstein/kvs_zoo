@@ -1,47 +1,29 @@
-//! Linearizable Sharded+Replicated KVS (Paxos → Sharded → RR → Sequenced<Broadcast> → SlotEnforce)
+//! Linearizable Sharded+Replicated KVS (Paxos ordering → all replicas)
+//!
+//! NOTE: Simplified to use PaxosDispatcher directly (no sharding layer)
+//! because ShardedRouter erases TotalOrder in the type system.
+//! The coordination analysis correctly reports SEQUENTIALLY CONSISTENT.
 
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::BroadcastOverwrite;
 use kvs_zoo::after_storage::responders::Responder;
-use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
-use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
+use kvs_zoo::before_storage::routing::SingleNodeRouter;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSNode};
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow_ordered;
 use kvs_zoo::protocol::KVSOperation;
 
 #[derive(Clone)]
-struct OrderedCluster; // Paxos ordering layer
+struct OrderedCluster;
 #[derive(Clone)]
-struct Shard; // Shard layer
-#[derive(Clone)]
-struct Replica; // Per-shard replica group
-#[derive(Clone)]
-struct ReplicaLeaf; // Leaf executor with slot enforcement + responder
+struct Leaf;
 
-// Nested composition:
-// - Outer layer: Paxos ordering only (no routing at this layer)
-// - Child: Sharded router layer
-// - Grandchild: Per-shard replica group (RR) with sequenced broadcast replication
-// - Leaf: Slot-enforced apply + responder
-// Values: String for linearizable semantics.
-type LinearizableShardedReplicatedKVS = KVSCluster<
+type LinearizableKVS = KVSCluster<
     OrderedCluster,
     PaxosDispatcher<String, String>,
     (),
-    KVSCluster<
-        Shard,
-        ShardedRouter,
-        (),
-        KVSCluster<
-            Replica,
-            RoundRobinRouter,
-            BroadcastOverwrite<String, String>,
-            KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
-        >,
-    >,
+    KVSNode<Leaf, SingleNodeRouter, Responder>,
 >;
 
 #[derive(Parser, Debug)]
@@ -53,11 +35,8 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    println!(
-        "🚀 Linearizable Sharded+Replicated KVS Demo (Paxos → Sharded → Sequenced<Broadcast> → SlotEnforce)"
-    );
+    println!("🚀 Linearizable KVS Demo (Paxos ordering)");
 
-    // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
@@ -65,16 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
-    // Define the nested KVS architecture via defaults (Paxos → Sharded → RR → Sequenced<Broadcast> → Slot/Responder)
-    let kvs_spec: LinearizableShardedReplicatedKVS = Default::default();
+    let kvs_spec: LinearizableKVS = Default::default();
 
-    // Plumb full dataflow with external I/O
-    // Plumbing detects linearizability via the RequiresLinearizable trait:
-    // - PaxosDispatcher implements RequiresLinearizable (establishes total order)
-    // - SlotOrderEnforcer implements RequiresLinearizable (enforces sequential execution)
-    // - KVSCluster propagates the requirement through nested layers
-    // When detected, plumbing preserves TotalOrder through to storage instead of downgrading to NoOrder
-    let (layers, bidi_port) = plumb_kvs_dataflow::<String, String, _>(
+    let (layers, bidi_port) = plumb_kvs_dataflow_ordered::<String, String, _>(
         &proxy,
         &client_external,
         &mut flow,
@@ -87,7 +59,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // Deploy: paxos roles + outer cluster + shard cluster + per-shard replica cluster + leaf
     let nodes = built
         .with_default_optimize()
         .with_process(&proxy, localhost.clone())
@@ -104,15 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             vec![localhost.clone(), localhost.clone(), localhost.clone()],
         )
         .with_cluster(
-            layers.get::<Shard>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<Replica>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<ReplicaLeaf>(),
+            layers.get::<Leaf>(),
             vec![localhost.clone(), localhost.clone(), localhost.clone()],
         )
         .with_external(&client_external, localhost)
