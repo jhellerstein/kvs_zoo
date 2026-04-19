@@ -105,32 +105,33 @@ pub fn get_live<'a, V>(state: &'a StoreState<V>, key: &str) -> Option<&'a V> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::values::LwwWrapper;
+    use crate::values::CausalWrapper;
+    use crate::values::VCWrapper;
     use lattices::Merge;
 
     #[test]
     fn put_delete_resurrect_flow() {
-        let mut state: StoreState<LwwWrapper<String>> = StoreState::default();
+        let mut state: StoreState<CausalWrapper<String>> = StoreState::default();
 
         // PUT k=1
-        state.merge(delta_put("k".to_string(), LwwWrapper::new("1".to_string())));
-        assert_eq!(get_live(&state, "k").unwrap().get(), "1");
+        state.merge(delta_put("k".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
+        assert_eq!(get_live(&state, "k").unwrap().single_value().unwrap(), "1");
 
         // DELETE k
-        state.merge(delta_del::<LwwWrapper<String>>("k".to_string()));
+        state.merge(delta_del::<CausalWrapper<String>>("k".to_string()));
         assert!(get_live(&state, "k").is_none());
 
         // PUT k=2 (resurrection)
-        state.merge(delta_put("k".to_string(), LwwWrapper::new("2".to_string())));
-        assert_eq!(get_live(&state, "k").unwrap().get(), "2");
+        state.merge(delta_put("k".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string())));
+        assert_eq!(get_live(&state, "k").unwrap().single_value().unwrap(), "2");
     }
 
     #[test]
     fn delete_idempotent() {
-        let mut state: StoreState<LwwWrapper<String>> = StoreState::default();
-        state.merge(delta_put("x".to_string(), LwwWrapper::new("A".to_string())));
-        state.merge(delta_del::<LwwWrapper<String>>("x".to_string()));
-        state.merge(delta_del::<LwwWrapper<String>>("x".to_string())); // second delete
+        let mut state: StoreState<CausalWrapper<String>> = StoreState::default();
+        state.merge(delta_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "A".to_string())));
+        state.merge(delta_del::<CausalWrapper<String>>("x".to_string()));
+        state.merge(delta_del::<CausalWrapper<String>>("x".to_string())); // second delete
         assert!(get_live(&state, "x").is_none());
     }
 }

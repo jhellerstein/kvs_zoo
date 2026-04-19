@@ -22,6 +22,7 @@ use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 impl<K, V> Before<K, V> for SlotOrderEnforcer {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -30,7 +31,7 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -44,8 +45,8 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -57,7 +58,7 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -71,7 +72,7 @@ impl<K, V> Before<K, V> for SlotOrderEnforcer {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
+            .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }

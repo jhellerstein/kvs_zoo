@@ -49,7 +49,7 @@ impl LeafAfterHook for Responder {
             } else {
                 None
             }))
-            .weakest_ordering()
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 
@@ -91,7 +91,7 @@ where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         // No replication at leaf - just relax ordering to match trait signature
-        local_data.weakest_ordering()
+        local_data.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 }
 

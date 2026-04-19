@@ -2,12 +2,11 @@
 
 use clap::{Parser, ValueEnum};
 use futures::{SinkExt, StreamExt};
-use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
-use kvs_zoo::values::{CausalString, LwwWrapper, VCWrapper};
+use kvs_zoo::plumbing::plumb_kvs_dataflow_lattice;
+use kvs_zoo::values::{CausalString, VCWrapper};
 
 /// Supported lattice semantics for the replicated example.
 #[derive(Clone, Debug, ValueEnum)]
@@ -25,8 +24,6 @@ type ReplicatedKVS<V> = KVSCluster<Replica, RoundRobinRouter, SimpleGossip<Strin
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
     /// Choose lattice semantics for replicated values
     #[clap(long, value_enum, default_value_t = LatticeKind::Causal)]
     lattice: LatticeKind,
@@ -37,13 +34,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.lattice {
-        LatticeKind::Lww => run_example::<LwwWrapper<String>>(&args, lww_ops()).await,
-        LatticeKind::Causal => run_example::<CausalString>(&args, causal_ops()).await,
+        LatticeKind::Lww => run_example(causal_ops()).await,
+        LatticeKind::Causal => run_example(causal_ops()).await,
     }
 }
 
 async fn run_example<V>(
-    args: &Args,
     ops: Vec<kvs_zoo::protocol::KVSOperation<String, V>>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
@@ -69,7 +65,7 @@ where
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -79,14 +75,9 @@ where
 
     // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<String, V, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow_lattice::<String, V, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
 
     // Deploy: 3 replicas for the cluster
     let nodes = built
@@ -122,13 +113,13 @@ where
     Ok(())
 }
 
-fn lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, LwwWrapper<String>>> {
+fn _lww_ops() -> Vec<kvs_zoo::protocol::KVSOperation<String, String>> {
     use kvs_zoo::protocol::KVSOperation as Op;
 
     vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("beta".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("beta".into(), "two".to_string(), 3, None),
         Op::Get("beta".into(), 4, None),
     ]
 }

@@ -1,48 +1,38 @@
-//! Single-node router (Before stage)
+//! Broadcast router (Before stage): sends every operation to every cluster member.
+//!
+//! Preserves TotalOrder when the input is TotalOrder, since broadcast over
+//! TCP fail-stop delivers elements in order to each member.
 
 use crate::before_storage::{Before, RequiresLinearizable};
 use crate::kvs_core::KVSNode;
 use crate::protocol::KVSOperation;
+use hydro_lang::live_collections::stream::TotalOrder;
 use hydro_lang::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default)]
-pub struct SingleNodeRouter;
+pub struct BroadcastRouter;
 
-impl SingleNodeRouter {
-    pub fn new() -> Self {
-        Self
-    }
-}
+impl RequiresLinearizable for BroadcastRouter {}
 
-// Routing layers don't require linearizable processing
-impl RequiresLinearizable for SingleNodeRouter {}
+impl<K, V> Before<K, V> for BroadcastRouter {
+    type OutputOrder = TotalOrder;
 
-impl<K, V> Before<K, V> for SingleNodeRouter {
-    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<
-        KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        Self::OutputOrder,
-    >
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw_id(0u32),
-                op
-            )))
-            .into_keyed()
-            .demux(target_cluster, TCP.fail_stop().bincode())
-            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** broadcast membership */))
+            .assume_ordering::<TotalOrder>(nondet!(
+                /// Broadcast over TCP fail-stop preserves ordering per member.
+            ))
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -50,24 +40,17 @@ impl<K, V> Before<K, V> for SingleNodeRouter {
         operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
         _source_cluster: &Cluster<'a, KVSNode>,
         target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<
-        KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
-        Unbounded,
-        Self::OutputOrder,
-    >
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw_id(0u32),
-                op
-            )))
-            .into_keyed()
-            .demux(target_cluster, TCP.fail_stop().bincode())
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** broadcast membership */))
             .values()
+            .assume_ordering::<TotalOrder>(nondet!(
+                /// Broadcast over TCP fail-stop preserves ordering per member.
+            ))
     }
 }

@@ -1,13 +1,11 @@
 //! Recursive 3-level KVS (region → datacenter → node)
-use clap::Parser;
 use futures::{SinkExt, StreamExt};
-use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::{ShardedRouter, SingleNodeRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow_lattice;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
+use kvs_zoo::values::CausalWrapper;
 
 #[derive(Clone)]
 struct Region;
@@ -24,26 +22,19 @@ type GeoKVS = KVSCluster<
     KVSCluster<
         Datacenter,
         ShardedRouter,
-        SimpleGossip<String, LwwWrapper<String>>,
+        SimpleGossip<String, CausalWrapper<String>>,
         KVSCluster<Node, SingleNodeRouter, (), ()>,
     >,
 >;
 
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
     println!("🚀 3-Level Recursive Cluster Demo");
 
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -59,18 +50,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Build a Hydro graph for the GeoKVS type, return layer handles and client I/O ports
-    let (layers, port) = plumb_kvs_dataflow::<String, LwwWrapper<String>, _>(
+    let (layers, port) = plumb_kvs_dataflow_lattice::<String, CausalWrapper<String>, _>(
         &proxy,
         &client_external,
-        &flow,
+        &mut flow,
         kvs_spec,
     );
 
     let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
 
     // Deploy clusters per layer
     let nodes = built
@@ -103,9 +90,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
     // Demo workload
+    use kvs_zoo::values::VCWrapper;
     let ops = vec![
-        KVSOperation::Put("acct:alice".into(), LwwWrapper::new("1".into()), 1, None),
-        KVSOperation::Put("acct:bob".into(), LwwWrapper::new("2".into()), 2, None),
+        KVSOperation::Put("acct:alice".into(), CausalWrapper::new(VCWrapper::new(), "1".to_string()), 1, None),
+        KVSOperation::Put("acct:bob".into(), CausalWrapper::new(VCWrapper::new(), "2".to_string()), 2, None),
         KVSOperation::Get("acct:alice".into(), 3, None),
         KVSOperation::Get("acct:bob".into(), 4, None),
     ];

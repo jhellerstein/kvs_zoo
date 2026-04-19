@@ -5,7 +5,6 @@
 //! core processing, and back to the correct client.
 
 use kvs_zoo::protocol::{KVSOperation, KVSResponse};
-use kvs_zoo::values::LwwWrapper;
 use std::collections::HashMap;
 
 /// Test that a single client's operations return responses to that client
@@ -22,14 +21,14 @@ fn test_single_client_flow() {
     let operations = vec![
         KVSOperation::Put(
             "key1".to_string(),
-            LwwWrapper::new("value1".to_string()),
+            "value1".to_string(),
             1,
             Some(client_id),
         ),
         KVSOperation::Get("key1".to_string(), 2, Some(client_id)),
         KVSOperation::Put(
             "key2".to_string(),
-            LwwWrapper::new("value2".to_string()),
+            "value2".to_string(),
             3,
             Some(client_id),
         ),
@@ -57,7 +56,7 @@ fn test_single_client_flow() {
         let op_client_id = op.client_id();
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, String>> = match op {
             KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -220,7 +219,7 @@ fn test_multiple_concurrent_clients() {
             client_a,
             KVSOperation::Put(
                 "shared_key".to_string(),
-                LwwWrapper::new("a1".to_string()),
+                "a1".to_string(),
                 1,
                 Some(client_a),
             ),
@@ -229,7 +228,7 @@ fn test_multiple_concurrent_clients() {
             client_b,
             KVSOperation::Put(
                 "shared_key".to_string(),
-                LwwWrapper::new("b1".to_string()),
+                "b1".to_string(),
                 2,
                 Some(client_b),
             ),
@@ -250,7 +249,7 @@ fn test_multiple_concurrent_clients() {
             client_a,
             KVSOperation::Put(
                 "key_a".to_string(),
-                LwwWrapper::new("value_a".to_string()),
+                "value_a".to_string(),
                 6,
                 Some(client_a),
             ),
@@ -259,7 +258,7 @@ fn test_multiple_concurrent_clients() {
             client_b,
             KVSOperation::Put(
                 "key_b".to_string(),
-                LwwWrapper::new("value_b".to_string()),
+                "value_b".to_string(),
                 7,
                 Some(client_b),
             ),
@@ -268,7 +267,7 @@ fn test_multiple_concurrent_clients() {
             client_c,
             KVSOperation::Put(
                 "key_c".to_string(),
-                LwwWrapper::new("value_c".to_string()),
+                "value_c".to_string(),
                 8,
                 Some(client_c),
             ),
@@ -301,7 +300,7 @@ fn test_multiple_concurrent_clients() {
 
     // Simulate the core processing
     let mut state = HashMap::new();
-    let mut responses_by_client: HashMap<u64, Vec<KVSResponse<String, LwwWrapper<String>>>> =
+    let mut responses_by_client: HashMap<u64, Vec<KVSResponse<String, String>>> =
         HashMap::new();
 
     for (expected_client_id, op) in operations {
@@ -318,7 +317,7 @@ fn test_multiple_concurrent_clients() {
         let op_client_id = op.client_id();
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, String>> = match op {
             KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -469,7 +468,7 @@ fn test_replication_without_client_responses() {
             true,
             KVSOperation::Put(
                 "key1".to_string(),
-                LwwWrapper::new("value1".to_string()),
+                "value1".to_string(),
                 1,
                 Some(client_id),
             ),
@@ -479,7 +478,7 @@ fn test_replication_without_client_responses() {
             false,
             KVSOperation::Put(
                 "key1".to_string(),
-                LwwWrapper::new("value1_replica".to_string()),
+                "value1_replica".to_string(),
                 2,
                 None,
             ),
@@ -496,7 +495,7 @@ fn test_replication_without_client_responses() {
             true,
             KVSOperation::Put(
                 "key2".to_string(),
-                LwwWrapper::new("value2".to_string()),
+                "value2".to_string(),
                 5,
                 Some(client_id),
             ),
@@ -506,7 +505,7 @@ fn test_replication_without_client_responses() {
             false,
             KVSOperation::Put(
                 "key2".to_string(),
-                LwwWrapper::new("value2_replica".to_string()),
+                "value2_replica".to_string(),
                 6,
                 None,
             ),
@@ -551,7 +550,7 @@ fn test_replication_without_client_responses() {
         let should_respond = is_client_op;
         let should_emit_response = should_respond && op_client_id.is_some();
 
-        let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
+        let response: Option<KVSResponse<String, String>> = match op {
             KVSOperation::Put(key, value, request_id, _) => {
                 state.insert(key.clone(), value);
                 if should_emit_response {
@@ -685,11 +684,11 @@ fn test_end_to_end_pipeline_simulation() {
     let external_inputs = vec![
         (
             1u64,
-            KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), 1, None),
+            KVSOperation::Put("x".to_string(), "v1".to_string(), 1, None),
         ),
         (
             2u64,
-            KVSOperation::Put("y".to_string(), LwwWrapper::new("v2".to_string()), 2, None),
+            KVSOperation::Put("y".to_string(), "v2".to_string(), 2, None),
         ),
         (1u64, KVSOperation::Get("x".to_string(), 3, None)),
         (2u64, KVSOperation::Get("y".to_string(), 4, None)),
@@ -698,7 +697,7 @@ fn test_end_to_end_pipeline_simulation() {
             1u64,
             KVSOperation::Put(
                 "x".to_string(),
-                LwwWrapper::new("v1_updated".to_string()),
+                "v1_updated".to_string(),
                 6,
                 None,
             ),
@@ -733,7 +732,7 @@ fn test_end_to_end_pipeline_simulation() {
         .map(|(client_id, op)| {
             // Simulate serialization/deserialization
             let serialized = serde_json::to_string(&op).unwrap();
-            let deserialized: KVSOperation<String, LwwWrapper<String>> =
+            let deserialized: KVSOperation<String, String> =
                 serde_json::from_str(&serialized).unwrap();
 
             // Verify client_id preserved through serialization
@@ -756,7 +755,7 @@ fn test_end_to_end_pipeline_simulation() {
             let op_client_id = op.client_id();
             let should_emit_response = should_respond && op_client_id.is_some();
 
-            let response: Option<KVSResponse<String, LwwWrapper<String>>> = match op {
+            let response: Option<KVSResponse<String, String>> = match op {
                 KVSOperation::Put(key, value, request_id, _) => {
                     state.insert(key.clone(), value.clone());
                     if should_emit_response {

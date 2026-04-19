@@ -1,29 +1,19 @@
 //! Local KVS (detailed wiring, single node)
 
-use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::prelude::*;
-use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
-
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
     println!("🚀 Local KVS Demo (detailed)");
 
     // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -32,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy
-        .bidi_external_many_bincode::<_, KVSOperation<String, LwwWrapper<String>>, String>(
+        .bidi_external_many_bincode::<_, KVSOperation<String, String>, String>(
             &client_external,
         );
 
@@ -44,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             op.with_client_id(Some(client_id))
         )))
         .into_keyed()
-        .demux_bincode(&local);
+        .demux(&local, TCP.fail_stop().bincode());
 
     // Per-node total ordering for correctness
     let ordered_ops = routed_ops
@@ -57,12 +47,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         responses,
         data,
         meta,
-    } = KVSCore::process::<_, _, _, _, _, _>(ordered_ops, q!(|| std::collections::HashMap::new()));
+    } = KVSCore::process_overwrite(ordered_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>());
     let _data_keep_alive = data.inspect(q!(|_| ())); // Local demo currently ignores data events
     let _meta_keep_alive = meta.inspect(q!(|_| ())); // Local demo currently ignores metadata
 
     // Send responses back to proxy and complete the client request
-    let proxy_responses = responses.send_bincode(&proxy);
+    let proxy_responses = responses.send(&proxy, TCP.fail_stop().bincode());
     let to_complete = proxy_responses
         .entries()
         .filter_map(q!(|(_member_id, response)| {
@@ -72,10 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     complete_sink.complete(to_complete);
 
     let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
 
     // Deploy: single node
     let nodes = built
@@ -94,9 +80,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run demo operations
     use kvs_zoo::protocol::KVSOperation as Op;
     let ops = vec![
-        Op::Put("alpha".into(), LwwWrapper::new("one".into()), 1, None),
+        Op::Put("alpha".into(), "one".to_string(), 1, None),
         Op::Get("alpha".into(), 2, None),
-        Op::Put("alpha".into(), LwwWrapper::new("two".into()), 3, None),
+        Op::Put("alpha".into(), "two".to_string(), 3, None),
         Op::Get("alpha".into(), 4, None),
     ];
     for op in ops {

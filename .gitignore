@@ -4,6 +4,8 @@
 # IDE and editor files
 .vscode/
 .idea/
+.kiro/
+.infinity/
 *.swp
 *.swo
 *~

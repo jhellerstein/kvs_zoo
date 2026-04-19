@@ -2,7 +2,6 @@ use futures::StreamExt;
 use hydro_lang::prelude::*;
 use kvs_zoo::kvs_core::KVSCore;
 use kvs_zoo::kvs_layer::{KVSCluster, KVSClusters, KVSSpec};
-use kvs_zoo::values::LwwWrapper;
 use kvs_zoo::{BackgroundPlumb, MetaEvent};
 use std::time::Duration;
 use tokio::time::timeout;
@@ -15,7 +14,7 @@ async fn delete_emits_tomb_meta_event() {
                 .source_iter(q!(vec![
                     kvs_zoo::protocol::KVSOperation::Put(
                         "alpha".to_string(),
-                        kvs_zoo::values::LwwWrapper::new("one".to_string()),
+                        "one".to_string(),
                         1,
                         Some(1),
                     ),
@@ -24,7 +23,7 @@ async fn delete_emits_tomb_meta_event() {
                 .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** deterministic demo ops */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
+                KVSCore::process_overwrite::<String, String, _>(ops);
             let _data_keep_alive = data.inspect(q!(|_| ()));
             meta
         },
@@ -66,15 +65,15 @@ async fn background_plumb_routes_meta_events() {
 
             let mut layers = KVSClusters::new();
             let cluster_entry = <KVSCluster<TestLayer, (), (), (), ()> as KVSSpec<
-                LwwWrapper<String>,
+                String,
             >>::create_clusters(&spec, flow, &mut layers);
 
             let data_stream = cluster_entry
                 .source_iter(q!(
-                    Vec::<(String, kvs_zoo::values::LwwWrapper<String>,)>::new()
+                    Vec::<(String, String,)>::new()
                 ))
                 .map(q!(|(key, value)| kvs_zoo::DataEvent::Put { key, value }))
-                .assume_ordering(nondet!(/** no foreground data */));
+                .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** no foreground data */));
 
             let meta_stream = cluster_entry
                 .source_iter(q!(vec!["alpha".to_string()]))
@@ -84,7 +83,9 @@ async fn background_plumb_routes_meta_events() {
                     ev
                 ])));
 
-            let (bg_data, bg_meta) = spec.plumb_background(&layers, data_stream, meta_stream);
+            let (bg_data, bg_meta) = spec.plumb_background(&layers,
+                data_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>().into(),
+                meta_stream.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>().into());
             bg_data
                 .assume_ordering::<hydro_lang::live_collections::stream::TotalOrder>(
                     nondet!(/** test */),
@@ -92,7 +93,7 @@ async fn background_plumb_routes_meta_events() {
                 .for_each(q!(|_data| ()));
 
             bg_meta
-                .send_bincode(process)
+                .send(process, TCP.fail_stop().bincode())
                 .entries()
                 .map(q!(|(_member, event)| event))
         },
@@ -155,16 +156,16 @@ async fn tomb_index_background_emits_summary() {
             let ops = cluster
                 .source_iter(q!(vec![kvs_zoo::protocol::KVSOperation::<
                     String,
-                    kvs_zoo::values::LwwWrapper<String>,
+                    String,
                 >::Delete(
                     "alpha".to_string(), 1, Some(1),
                 ),]))
                 .assume_ordering::<hydro_lang::live_collections::stream::NoOrder>(nondet!(/** single delete */));
 
             let kvs_zoo::kvs_core::CoreOutput { data, meta, .. } =
-                KVSCore::process::<String, LwwWrapper<String>, _, _, _, _>(ops, q!(|| std::collections::HashMap::new()));
+                KVSCore::process_overwrite::<String, String, _>(ops);
             let _data_keep_alive = data.inspect(q!(|_| ()));
-            meta.send_bincode(process)
+            meta.send(process, TCP.fail_stop().bincode())
                 .entries()
                 .map(q!(|(_member, event)| event))
         },

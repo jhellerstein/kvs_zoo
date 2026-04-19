@@ -42,7 +42,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -86,7 +85,7 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Fan out PUT deltas through any configured replication layers. Replicas generate
         // operations that enter the core without triggering client responses.
-        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas);
+        let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weaken_ordering());
 
         // Core processing for client-originating operations (storage-specific).
         // Preserve ordering if the KVS architecture requires linearizability,
@@ -94,7 +93,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let client_ops_to_process = if kvs.requires_linearizable() {
             client_ops  // Preserve TotalOrder from ordering layers (e.g., Paxos)
         } else {
-            client_ops.weakest_ordering()  // Downgrade to NoOrder for process()
+            client_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()  // Downgrade to NoOrder for process()
         };
         let crate::kvs_core::CoreOutput {
             responses: client_responses,
@@ -115,13 +114,15 @@ macro_rules! plumb_kvs_dataflow_impl {
         // Keep them separate from the observable output to preserve consistency labels.
         let _ = replica_responses;
 
+        // Data and meta events are internal (not observable) — merge is fine.
+
         let data_events = client_data_events
-            .interleave(replica_data_events);
+            .merge_unordered(replica_data_events);
 
         // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-            .interleave(
+            .merge_unordered(
                 replica_meta_stream
                     .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
             );
@@ -130,7 +131,7 @@ macro_rules! plumb_kvs_dataflow_impl {
         let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
 
         // Send KVSResponse structs to proxy (they contain client_id)
-        let proxy_responses = client_responses.send_bincode($proxy);
+        let proxy_responses = client_responses.send($proxy, TCP.fail_stop().bincode());
 
         // Extract client IDs and format responses for completion
         let to_complete = proxy_responses
@@ -147,21 +148,191 @@ macro_rules! plumb_kvs_dataflow_impl {
     }};
 }
 
-/// Standalone plumbing function: binds a KVS layer specification into Hydro dataflow.
+/// Standalone plumbing function using the **overwrite** storage path.
 ///
-/// This function takes a KVS architecture (expressed as nested `KVSCluster` types),
-/// creates a cluster for each layer, plumbs inter-cluster communication, and returns
-/// cluster handles plus the client I/O port.
-///
-/// Users then assign hosts to the returned cluster handles using standard Hydro
-/// deployment APIs (`.with_cluster(layers.get::<Name>(), ...)`).
-///
-/// This version uses standard HashMap storage (keys can be deleted and re-added).
-/// Automatically selects ordered or unordered processing based on KVS configuration.
+/// Values use last-writer-wins assignment. No `Merge` trait required.
+/// Suitable for plain types (String, etc.) in single-node or ordered architectures.
 pub fn plumb_kvs_dataflow<'a, KeyType, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
-    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
+    kvs: K,
+) -> (
+    crate::kvs_layer::KVSClusters<'a>,
+    ExternalBincodeBidi<
+        KVSOperation<KeyType, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
+)
+where
+    KeyType: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Send
+        + Sync
+        + 'static,
+    K: crate::kvs_layer::KVSSpec<V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V>
+        + crate::kvs_layer::AfterPlumb<V>
+        + ReplicationPlumb<KeyType, V>
+        + crate::background::BackgroundPlumb<KeyType, V>,
+{
+    plumb_kvs_dataflow_impl!(
+        KeyType,
+        V,
+        proxy,
+        client_external,
+        flow,
+        kvs,
+        |ops| crate::kvs_core::KVSCore::process_overwrite::<KeyType, V, _>(ops)
+    )
+}
+
+
+
+
+
+
+/// Standalone plumbing function using the **ordered** storage path (scan).
+///
+/// Uses `process_ordered` for client operations arriving in TotalOrder
+/// (e.g., from Paxos). Replica operations use overwrite. No `Merge` required.
+pub fn plumb_kvs_dataflow_ordered<'a, KeyType, V, K>(
+    proxy: &Process<'a, ()>,
+    client_external: &External<'a, ()>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
+    kvs: K,
+) -> (
+    crate::kvs_layer::KVSClusters<'a>,
+    ExternalBincodeBidi<
+        KVSOperation<KeyType, V>,
+        String,
+        hydro_lang::location::external_process::Many,
+    >,
+)
+where
+    KeyType: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + std::hash::Hash
+        + std::fmt::Debug
+        + Send
+        + Sync
+        + 'static,
+    V: Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Eq
+        + Default
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Send
+        + Sync
+        + 'static,
+    K: crate::kvs_layer::KVSSpec<V>
+        + crate::kvs_layer::KVSPlumb<KeyType, V, OutputOrder = hydro_lang::live_collections::stream::TotalOrder>
+        + crate::kvs_layer::AfterPlumb<V>
+        + ReplicationPlumb<KeyType, V>
+        + crate::background::BackgroundPlumb<KeyType, V>,
+{
+    use hydro_lang::live_collections::stream::TotalOrder;
+
+    let mut kvs = kvs;
+    let mut layers = crate::kvs_layer::KVSClusters::new();
+    let _entry_cluster = kvs.create_clusters(flow, &mut layers);
+
+    let (bidi_port, operations_stream, _membership, complete_sink) =
+        proxy.bidi_external_many_bincode::<_, KVSOperation<KeyType, V>, String>(client_external);
+
+    let initial_ops = operations_stream
+        .entries()
+        .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))));
+
+    let routed_ops = kvs.plumb_from_process_ordered(&layers, initial_ops);
+    let (client_ops, local_put_deltas) = extract_put_deltas(routed_ops);
+    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weaken_ordering());
+
+    // Client ops arrive with the Before layer's OutputOrder.
+    // The KVSPlumb<..., OutputOrder = TotalOrder> bound guarantees this is TotalOrder.
+    // No assume_ordering needed — the type system carries the guarantee.
+    let client_ops_ordered = client_ops;
+    let crate::kvs_core::CoreOutput {
+        responses: client_responses,
+        data: client_data_events,
+        meta: client_meta_stream,
+    } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
+        client_ops_ordered,
+        q!(|| Default::default()),
+    );
+
+    // Replica ops: replication output is NoOrder; assume ordering for process_ordered.
+    let replica_ops_ordered = replication_ops
+        .assume_ordering::<TotalOrder>(nondet!(
+            /// Replica operations inherit order from the Paxos-sequenced client path.
+        ));
+    let crate::kvs_core::CoreOutput {
+        responses: replica_responses,
+        data: replica_data_events,
+        meta: replica_meta_stream,
+    } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
+        replica_ops_ordered,
+        q!(|| Default::default()),
+    );
+
+    // Replica responses have no client_id — drop them to keep observable output clean.
+    let _ = replica_responses;
+    let data_events = client_data_events.merge_unordered(replica_data_events);
+    let meta_stream = client_meta_stream
+        .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+        .merge_unordered(
+            replica_meta_stream
+                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+        );
+
+    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
+
+    let proxy_responses = client_responses.send(proxy, TCP.fail_stop().bincode());
+    let to_complete = proxy_responses
+        .entries()
+        .filter_map(q!(|(_member_id, response)| {
+            response.client_id().map(|cid| (cid, response.to_string()))
+        }))
+        .into_keyed();
+    complete_sink.complete(to_complete);
+
+    (layers, bidi_port)
+}
+
+
+
+/// Standalone plumbing function using the **lattice merge** storage path.
+///
+/// Values must implement `Merge + LatticeFrom + IsBot` (lattice types).
+/// Storage uses commutative+idempotent fold — coordination-free convergence.
+/// Suitable for CausalWrapper and other lattice types in replicated architectures.
+pub fn plumb_kvs_dataflow_lattice<'a, KeyType, V, K>(
+    proxy: &Process<'a, ()>,
+    client_external: &External<'a, ()>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
@@ -202,7 +373,6 @@ where
         + ReplicationPlumb<KeyType, V>
         + crate::background::BackgroundPlumb<KeyType, V>,
 {
-    // Default to unordered processing
     plumb_kvs_dataflow_impl!(
         KeyType,
         V,
@@ -210,10 +380,9 @@ where
         client_external,
         flow,
         kvs,
-        |ops| crate::kvs_core::KVSCore::process::<KeyType, V, _, _, _, _>(ops, q!(|| std::collections::HashMap::<KeyType, V>::new()))
+        |ops| crate::kvs_core::KVSCore::process_lattice::<KeyType, V, _>(ops)
     )
 }
-
 
 
 /// Standalone plumbing function with tombstone-based storage.
@@ -226,7 +395,7 @@ where
 pub fn plumb_kvs_dataflow_with_tombstones<'a, V, K>(
     proxy: &Process<'a, ()>,
     client_external: &External<'a, ()>,
-    flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+    flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
     kvs: K,
 ) -> (
     crate::kvs_layer::KVSClusters<'a>,
@@ -264,7 +433,7 @@ where
         client_external,
         flow,
         kvs,
-        |ops| crate::kvs_core::KVSCore::process::<String, V, _, _, _, _>(ops, q!(|| crate::kvs_core::local_map::LocalHashMapFst::<V>::default()))
+        |ops| crate::kvs_core::KVSCore::process_lattice::<String, V, _>(ops)
     )
 }
 

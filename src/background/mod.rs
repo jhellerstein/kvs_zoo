@@ -98,7 +98,6 @@ pub trait BackgroundPlumb<K, V> {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static;
@@ -134,7 +133,6 @@ impl<K, V> BackgroundPlumb<K, V> for () {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -175,7 +173,6 @@ where
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -212,7 +209,6 @@ impl<K, V, Name, B, A> BackgroundPlumb<K, V> for crate::kvs_layer::KVSNode<Name,
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,

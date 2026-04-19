@@ -1,20 +1,12 @@
 //! Sharded + Replicated KVS (shards × replicas)
 
-use clap::Parser;
 use futures::{SinkExt, StreamExt};
-use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
 use kvs_zoo::plumbing::plumb_kvs_dataflow;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::CausalString;
-
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(flatten)]
-    graph: GraphConfig,
-}
 
 // Hydro location types = KVS layer types (no duplication!)
 #[derive(Clone)]
@@ -33,14 +25,13 @@ type ShardedReplicatedKVS = KVSCluster<
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
     println!("🚀 Sharded + Replicated KVS Demo");
 
     // Standard Hydro deployment
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -52,13 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
 
     // Deploy: one cluster per layer
     // - Shard cluster: 3 members (default)

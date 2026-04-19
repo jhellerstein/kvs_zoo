@@ -25,14 +25,13 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
 {
     // broadcast_bincode already introduces non-determinism, no need to re-assert ordering
     stream
-        .broadcast_bincode(target_cluster, nondet!(/** forward puts to parent layer */))
+        .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values()
 }
 
@@ -124,7 +123,6 @@ pub trait ReplicationPlumb<K, V> {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static;
@@ -146,7 +144,6 @@ impl<K, V> ReplicationPlumb<K, V> for () {
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -168,7 +165,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -202,7 +198,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -221,7 +216,6 @@ where
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -251,13 +245,13 @@ where
             let replicated = self
                 .after
                 .replicate_data(my_cluster, replication_input)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
+                .map(q!(|(k, v)| crate::protocol::KVSOperation::Put(k, v, u64::MAX, None)));
 
             let routed = self
                 .child
                 .plumb_from_cluster(layers, my_cluster, replicated);
 
-            combined_ops = combined_ops.interleave(routed);
+            combined_ops = combined_ops.merge_unordered(routed);
         }
 
         // Both streams are NoOrder from network operations
@@ -288,7 +282,6 @@ where
         + Default
         + std::fmt::Debug
         + std::fmt::Display
-        + lattices::Merge<V>
         + Send
         + Sync
         + 'static,
@@ -307,7 +300,6 @@ where
             + Default
             + std::fmt::Debug
             + std::fmt::Display
-            + lattices::Merge<V>
             + Send
             + Sync
             + 'static,
@@ -322,7 +314,7 @@ where
             let replicated = self
                 .after
                 .replicate_data(my_cluster, deltas)
-                .map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
+                .map(q!(|(k, v)| crate::protocol::KVSOperation::Put(k, v, u64::MAX, None)));
             (pass_up, replicated)
         }
     }
