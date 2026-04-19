@@ -3,7 +3,7 @@
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
+use kvs_zoo::after_storage::replication::BroadcastOverwrite;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::Pipeline;
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
@@ -31,7 +31,7 @@ type LinearizableReplicatedKVS = KVSCluster<
     KVSCluster<
         SequenceReplicated,
         RoundRobinRouter,
-        BroadcastReplication<String, String>,
+        BroadcastOverwrite<String, String>,
         KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >,
 >;
@@ -51,15 +51,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
     // Define the nested KVS architecture with synchronous broadcast for snappy local demos
     // (Paxos → RR → Broadcast(synchronous) → Slot/Responder)
     // SlotOrderEnforcer handles ordering; replication is coordination-free
-    let inner_after = BroadcastReplication::<String, String>::with_config(
-        BroadcastReplicationConfig::synchronous(),
+    let inner_after = BroadcastOverwrite::<String, String>::new(
+        
     );
     let inner_leaf = kvs_zoo::kvs_layer::KVSNode::<ReplicaLeaf, SlotOrderEnforcer, Responder>::new(
         SlotOrderEnforcer::new(),
@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let inner = kvs_zoo::kvs_layer::KVSCluster::<
         SequenceReplicated,
         RoundRobinRouter,
-        BroadcastReplication<String, String>,
+        BroadcastOverwrite<String, String>,
         kvs_zoo::kvs_layer::KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
     >::new(RoundRobinRouter::new(), inner_after, inner_leaf);
 
@@ -90,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, String, _>(
         &proxy,
         &client_external,
-        &flow,
+        &mut flow,
         kvs_spec,
     );
 

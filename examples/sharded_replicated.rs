@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;

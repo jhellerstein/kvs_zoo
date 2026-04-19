@@ -3,7 +3,7 @@
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
-use kvs_zoo::after_storage::replication::BroadcastReplication;
+use kvs_zoo::after_storage::replication::BroadcastOverwrite;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::ordering::SlotOrderEnforcer;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
@@ -38,7 +38,7 @@ type LinearizableShardedReplicatedKVS = KVSCluster<
         KVSCluster<
             Replica,
             RoundRobinRouter,
-            BroadcastReplication<String, String>,
+            BroadcastOverwrite<String, String>,
             KVSNode<ReplicaLeaf, SlotOrderEnforcer, Responder>,
         >,
     >,
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (layers, bidi_port) = plumb_kvs_dataflow::<String, String, _>(
         &proxy,
         &client_external,
-        &flow,
+        &mut flow,
         kvs_spec,
     );
 

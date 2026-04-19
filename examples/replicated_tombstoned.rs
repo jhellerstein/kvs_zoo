@@ -39,7 +39,7 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -51,7 +51,7 @@ async fn run_example(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let (layers, port) = kvs_zoo::plumbing::plumb_kvs_dataflow_with_tombstones(
         &proxy,
         &client_external,
-        &flow,
+        &mut flow,
         kvs_spec,
     );
 

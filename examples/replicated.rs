@@ -6,7 +6,7 @@ use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::SimpleGossip;
 use kvs_zoo::before_storage::routing::RoundRobinRouter;
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow_lattice;
 use kvs_zoo::values::{CausalString, VCWrapper};
 
 /// Supported lattice semantics for the replicated example.
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     match args.lattice {
-        LatticeKind::Lww => run_example::<String>(&args, lww_ops()).await,
+        LatticeKind::Lww => run_example::<CausalString>(&args, causal_ops()).await,
         LatticeKind::Causal => run_example::<CausalString>(&args, causal_ops()).await,
     }
 }
@@ -69,7 +69,7 @@ where
     let mut deployment = hydro_deploy::Deployment::new();
     let localhost = deployment.Localhost();
 
-    let flow = hydro_lang::compile::builder::FlowBuilder::new();
+    let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
     let client_external = flow.external::<()>();
 
@@ -79,7 +79,7 @@ where
 
     // Build a Hydro graph for the ReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<String, V, _>(&proxy, &client_external, &flow, kvs_spec);
+        plumb_kvs_dataflow_lattice::<String, V, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
     built.generate_graph_with_config(&args.graph, None)?;
