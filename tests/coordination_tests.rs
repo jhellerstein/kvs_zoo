@@ -56,16 +56,19 @@ fn coordination_replicated_causal_kvs() {
 fn coordination_scan_total_order() {
     use hydro_lang::prelude::*;
     use hydro_lang::live_collections::stream::TotalOrder;
+    use hydro_lang::consistency::{Consistent, Seq};
 
     let mut flow = FlowBuilder::new();
     let process = flow.process::<()>();
 
-    // Simulate a TotalOrder input (e.g., from Paxos)
-    let input: Stream<String, _, _, TotalOrder> = process
+    // source_iter returns Consistent<Seq, Stream<...>> automatically
+    let input = process
         .source_iter(q!(vec!["a".to_string(), "b".to_string()]))
         .assume_ordering::<TotalOrder>(nondet!(/** simulating Paxos output */));
 
-    // Scan: sequential stateful processing on TotalOrder input
+    // Hover over `input` in IDE: Consistent<Seq, Stream<String, Process<'_>, Bounded, TotalOrder, ExactlyOnce>>
+
+    // Scan preserves Seq
     let output = input.scan(
         q!(|| Vec::<String>::new()),
         q!(|state, item| {
@@ -74,7 +77,9 @@ fn coordination_scan_total_order() {
         }),
     );
 
-    // Observable sink: for_each (side effect)
+    // Hover over `output`: Consistent<Seq, Stream<String, Process<'_>, Bounded, TotalOrder, ExactlyOnce>>
+
+    // for_each consumes — Seq is visible in the type right before this call
     output.for_each(q!(|item| println!("{item}")));
 
     let report = flow.finalize().check_coordination();
