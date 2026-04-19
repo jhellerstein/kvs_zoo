@@ -31,7 +31,13 @@ pub trait RequiresLinearizable {
 /* ------------------------------------------------------------------------- */
 
 /// Before-stage component for routing operations from proxy to cluster.
+///
+/// `OutputOrder` indicates the ordering guarantee on the output stream:
+/// - `NoOrder` for routers (network reordering)
+/// - `TotalOrder` for ordering layers like Paxos (slot-based sequencing)
 pub trait Before<K, V>: RequiresLinearizable {
+    type OutputOrder: hydro_lang::live_collections::stream::Ordering;
+
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -40,7 +46,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -75,7 +81,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -111,7 +117,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         (usize, KVSOperation<K, V>),
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -149,23 +155,12 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    {
-        // Network operations produce NoOrder
-        operations
-            .map(q!(|op| (
-                hydro_lang::location::MemberId::from_raw_id(0u32),
-                op
-            )))
-            .into_keyed()
-            .demux_bincode(target_cluster)
-            .values()
-    }
+        V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static;
 
     /// Mirrors `dispatch_from_process_with_layers` for inter-cluster routing with layer handles.
     /// Default implementations fall back to `dispatch_from_cluster`.
@@ -179,7 +174,7 @@ pub trait Before<K, V>: RequiresLinearizable {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -193,7 +188,7 @@ pub trait Before<K, V>: RequiresLinearizable {
     /// Most dispatchers have nothing to register; default does nothing.
     fn register_role_clusters<'a, Name: 'static>(
         &self,
-        _flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        _flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         _layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
     }
@@ -206,6 +201,7 @@ impl RequiresLinearizable for () {}
 
 /// Unit (No‑Op) Before-stage for leaf nodes
 impl<K, V> Before<K, V> for () {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -214,7 +210,7 @@ impl<K, V> Before<K, V> for () {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -227,8 +223,8 @@ impl<K, V> Before<K, V> for () {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
-            .weakest_ordering()
+            .demux(target_cluster, TCP.fail_stop().bincode())
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -240,7 +236,7 @@ impl<K, V> Before<K, V> for () {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -253,7 +249,7 @@ impl<K, V> Before<K, V> for () {
                 op
             )))
             .into_keyed()
-            .demux_bincode(target_cluster)
+            .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }
@@ -271,6 +267,7 @@ impl IdentityDispatch {
 impl RequiresLinearizable for IdentityDispatch {}
 
 impl<K, V> Before<K, V> for IdentityDispatch {
+    type OutputOrder = hydro_lang::live_collections::stream::NoOrder;
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -279,7 +276,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -287,8 +284,8 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast_bincode(target_cluster, nondet!(/** identity */))
-            .weakest_ordering()
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
+            .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
@@ -300,7 +297,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -308,7 +305,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast_bincode(target_cluster, nondet!(/** identity layer hop */))
+            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values()
     }
 }
@@ -349,6 +346,8 @@ where
     A: Before<K, V>,
     B: Before<K, V>,
 {
+    type OutputOrder = B::OutputOrder;
+
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
@@ -357,7 +356,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -395,7 +394,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -418,7 +417,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -465,7 +464,7 @@ where
         KVSOperation<K, V>,
         Cluster<'a, KVSNode>,
         Unbounded,
-        hydro_lang::live_collections::stream::NoOrder,
+        Self::OutputOrder,
     >
     where
         O: hydro_lang::live_collections::stream::Ordering,
@@ -488,7 +487,7 @@ where
 
     fn register_role_clusters<'a, Name: 'static>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
         self.first.register_role_clusters::<Name>(flow, layers);

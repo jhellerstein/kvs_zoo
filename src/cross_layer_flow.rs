@@ -83,9 +83,8 @@ where
         responses: local_responses,
         data: local_data,
         meta: local_meta,
-    } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
-        leaf_ops.clone(),
-        q!(|| std::collections::HashMap::new()),
+    } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
+        leaf_ops.clone().weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
     );
     let (_ops_clone, applied_puts) = crate::plumbing::extract_put_deltas(leaf_ops);
 
@@ -93,7 +92,7 @@ where
     let replicated_puts = parent_after.replicate_data(parent_cluster, applied_puts);
 
     // 5) before_storage (leaf): route replicated PUTs, apply without responses
-    let replicated_ops = replicated_puts.map(q!(|(k, v)| KVSOperation::Put(k, v, u64::MAX, None)));
+    let replicated_ops = replicated_puts.map(q!(|(k, v)| crate::protocol::KVSOperation::Put(k, v, u64::MAX, None)));
     let leaf_replicated_ops =
         leaf_before.dispatch_from_cluster(replicated_ops, parent_cluster, parent_cluster);
     // Use coordination-free processing for replicated operations
@@ -101,20 +100,19 @@ where
         responses: replicate_responses,
         data: replicate_data,
         meta: replicate_meta,
-    } = crate::kvs_core::KVSCore::process::<K, V, _, _, _, _>(
-        leaf_replicated_ops,
-        q!(|| std::collections::HashMap::new()),
+    } = crate::kvs_core::KVSCore::process_lattice::<K, V, _>(
+        leaf_replicated_ops.weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>(),
     );
 
     // Merge to keep the replicate path live; replicate_responses is typically empty
     // Both streams are NoOrder (coordination-free processing), so interleave is fine
-    let combined_responses = local_responses.interleave(replicate_responses);
+    let combined_responses = local_responses.merge_unordered(replicate_responses);
 
     // Convert KVSResponse to String for compatibility with existing code
     let responses = combined_responses.map(q!(|response| response.to_string()));
 
     // Both data streams are NoOrder (coordination-free processing), so interleave is fine
-    let data = local_data.interleave(replicate_data);
+    let data = local_data.merge_unordered(replicate_data);
 
     // Wrap meta events in lattice singletons for monotonic composition
     let meta =
@@ -122,7 +120,7 @@ where
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([
                 ev
             ])))
-            .interleave(replicate_meta.map(q!(|ev| {
+            .merge_unordered(replicate_meta.map(q!(|ev| {
                 lattices::set_union::SetUnionHashSet::new_from([ev])
             })));
 

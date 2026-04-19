@@ -8,7 +8,7 @@ pub trait KVSSpec<V> {
     /// Returns the cluster that should receive operations FROM this layer (i.e., the child's entry point).
     fn create_clusters<'a>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) -> Cluster<'a, crate::kvs_core::KVSNode>
     where
@@ -25,7 +25,7 @@ pub trait KVSSpec<V> {
 impl<V> KVSSpec<V> for () {
     fn create_clusters<'a>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         _layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) -> Cluster<'a, crate::kvs_core::KVSNode>
     where
@@ -46,7 +46,7 @@ where
 {
     fn create_clusters<'a>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) -> Cluster<'a, crate::kvs_core::KVSNode>
     where
@@ -76,7 +76,7 @@ where
 {
     fn create_clusters<'a>(
         &self,
-        flow: &hydro_lang::compile::builder::FlowBuilder<'a>,
+        flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) -> Cluster<'a, crate::kvs_core::KVSNode>
     where

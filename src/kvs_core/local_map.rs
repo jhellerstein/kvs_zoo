@@ -198,27 +198,27 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::values::LwwWrapper;
+    use crate::values::{CausalWrapper, VCWrapper};
     use lattices::Merge;
     use std::collections::HashMap;
 
     #[test]
     fn test_put_delta_creates_correct_structure() {
         // Create a PUT delta for key "x" with value "1"
-        let delta: LocalHashMapFst<LwwWrapper<String>> =
-            put_delta("x".to_string(), LwwWrapper::new("1".to_string()));
+        let delta: LocalHashMapFst<CausalWrapper<String>> =
+            put_delta("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()));
 
         // Verify the delta has the key in the map and no tombstones
         let (map, tombstones) = delta.as_reveal_ref();
         assert_eq!(map.len(), 1);
-        assert_eq!(map.get("x").unwrap().get(), "1");
+        assert_eq!(map.get("x").unwrap().single_value().unwrap(), "1");
         assert_eq!(tombstones.len(), 0);
     }
 
     #[test]
     fn test_delete_delta_creates_correct_structure() {
         // Create a DELETE delta for key "x"
-        let delta: LocalHashMapFst<LwwWrapper<String>> = delete_delta("x".to_string());
+        let delta: LocalHashMapFst<CausalWrapper<String>> = delete_delta("x".to_string());
 
         // Verify the delta has the key in tombstones and empty map
         let (map, tombstones) = delta.as_reveal_ref();
@@ -230,22 +230,22 @@ mod tests {
     #[test]
     fn test_get_live_respects_tombstones() {
         // Create a map with a value
-        let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
+        let mut state: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
         state.merge(put_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
-        >("x".to_string(), LwwWrapper::new("1".to_string())));
+        >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
 
         // Verify we can get the value
-        assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
+        assert_eq!(get_live(&state, &"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // Tombstone the key
         state.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
 
@@ -256,22 +256,22 @@ mod tests {
     #[test]
     fn test_tombstone_permanence_no_resurrection() {
         // This test verifies Requirement 3.1: tombstones are permanent
-        let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
+        let mut state: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
 
         // PUT x=1
         state.merge(put_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
-        >("x".to_string(), LwwWrapper::new("1".to_string())));
-        assert_eq!(get_live(&state, &"x".to_string()).unwrap().get(), "1");
+        >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
+        assert_eq!(get_live(&state, &"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // DELETE x
         state.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
         assert!(get_live(&state, &"x".to_string()).is_none());
@@ -279,10 +279,10 @@ mod tests {
         // PUT x=2 (attempt resurrection)
         state.merge(put_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
-        >("x".to_string(), LwwWrapper::new("2".to_string())));
+        >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string())));
 
         // Verify the key is STILL tombstoned (no resurrection)
         assert!(
@@ -294,33 +294,33 @@ mod tests {
     #[test]
     fn test_delete_idempotence() {
         // This test verifies Requirement 3.2: idempotent deletes
-        let mut state: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
+        let mut state: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
 
         // PUT x=1
         state.merge(put_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
-        >("x".to_string(), LwwWrapper::new("1".to_string())));
+        >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
 
         // DELETE x multiple times
         state.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
         state.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
         state.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
 
@@ -335,22 +335,22 @@ mod tests {
     #[test]
     fn test_tombstone_precedence_in_merge() {
         // This test verifies Requirement 3.3: tombstone precedence
-        let mut state1: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
-        let mut state2: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
+        let mut state1: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
+        let mut state2: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
 
         // State1: PUT x=1
         state1.merge(put_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
-        >("x".to_string(), LwwWrapper::new("1".to_string())));
+        >("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string())));
 
         // State2: DELETE x
         state2.merge(delete_delta::<
             String,
-            LwwWrapper<String>,
-            HashMap<String, LwwWrapper<String>>,
+            CausalWrapper<String>,
+            HashMap<String, CausalWrapper<String>>,
             FstTombstoneSet<String>,
         >("x".to_string()));
 
@@ -369,15 +369,15 @@ mod tests {
         use crate::kvs_core::KVSStorage;
         use std::collections::HashMap;
 
-        let mut store: HashMap<String, LwwWrapper<String>> = HashMap::default();
+        let mut store: HashMap<String, CausalWrapper<String>> = HashMap::default();
 
         // Test apply_put
-        store.apply_put("x".to_string(), LwwWrapper::new("1".to_string()));
-        assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "1");
+        store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()));
+        assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "1");
 
         // Test apply_put with merge
-        store.apply_put("x".to_string(), LwwWrapper::new("2".to_string()));
-        assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "2");
+        store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string()));
+        assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "2");
 
         // Test apply_delete
         store.apply_delete("x".to_string());
@@ -393,22 +393,22 @@ mod tests {
     // fn test_kvs_storage_trait_for_local_map() {
     //     use crate::kvs_core::KVSStorage;
     //
-    //     let mut store: LocalHashMapFst<LwwWrapper<String>> = LocalMap::default();
+    //     let mut store: LocalHashMapFst<CausalWrapper<String>> = LocalMap::default();
     //
     //     // Test apply_put
-    //     store.apply_put("x".to_string(), LwwWrapper::new("1".to_string()));
-    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "1");
+    //     store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "1".to_string()));
+    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "1");
     //
     //     // Test apply_put with merge
-    //     store.apply_put("x".to_string(), LwwWrapper::new("2".to_string()));
-    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().get(), "2");
+    //     store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "2".to_string()));
+    //     assert_eq!(store.apply_get(&"x".to_string()).unwrap().single_value().unwrap(), "2");
     //
     //     // Test apply_delete (creates tombstone)
     //     store.apply_delete("x".to_string());
     //     assert!(store.apply_get(&"x".to_string()).is_none());
     //
     //     // Test tombstone permanence via trait
-    //     store.apply_put("x".to_string(), LwwWrapper::new("3".to_string()));
+    //     store.apply_put("x".to_string(), CausalWrapper::new(VCWrapper::new(), "3".to_string()));
     //     assert!(
     //         store.apply_get(&"x".to_string()).is_none(),
     //         "Tombstone should be permanent"

@@ -5,7 +5,6 @@
 //! if operations are handled out of order.
 
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 /// Test that operations are processed in strict sequential order
 #[test]
@@ -16,28 +15,28 @@ fn test_strict_sequential_order() {
     let operations = vec![
         KVSOperation::Put(
             "counter".to_string(),
-            LwwWrapper::new("0".to_string()),
+            "0".to_string(),
             1,
             None,
         ),
         KVSOperation::Get("counter".to_string(), 2, None),
         KVSOperation::Put(
             "counter".to_string(),
-            LwwWrapper::new("1".to_string()),
+            "1".to_string(),
             3,
             None,
         ),
         KVSOperation::Get("counter".to_string(), 4, None),
         KVSOperation::Put(
             "counter".to_string(),
-            LwwWrapper::new("2".to_string()),
+            "2".to_string(),
             5,
             None,
         ),
         KVSOperation::Get("counter".to_string(), 6, None),
         KVSOperation::Put(
             "counter".to_string(),
-            LwwWrapper::new("3".to_string()),
+            "3".to_string(),
             7,
             None,
         ),
@@ -88,21 +87,21 @@ fn test_ordering_violation_detection() {
     let operations = vec![
         KVSOperation::Put(
             "x".to_string(),
-            LwwWrapper::new("first".to_string()),
+            "first".to_string(),
             1,
             None,
         ),
         KVSOperation::Get("x".to_string(), 2, None),
         KVSOperation::Put(
             "x".to_string(),
-            LwwWrapper::new("second".to_string()),
+            "second".to_string(),
             3,
             None,
         ),
         KVSOperation::Get("x".to_string(), 4, None),
         KVSOperation::Put(
             "x".to_string(),
-            LwwWrapper::new("third".to_string()),
+            "third".to_string(),
             5,
             None,
         ),
@@ -174,13 +173,13 @@ fn test_interleaved_operations_ordering() {
     // to verify that ordering is maintained across all keys
 
     let operations = vec![
-        KVSOperation::Put("a".to_string(), LwwWrapper::new("a1".to_string()), 1, None),
-        KVSOperation::Put("b".to_string(), LwwWrapper::new("b1".to_string()), 2, None),
+        KVSOperation::Put("a".to_string(), "a1".to_string(), 1, None),
+        KVSOperation::Put("b".to_string(), "b1".to_string(), 2, None),
         KVSOperation::Get("a".to_string(), 3, None),
         KVSOperation::Get("b".to_string(), 4, None),
-        KVSOperation::Put("a".to_string(), LwwWrapper::new("a2".to_string()), 5, None),
+        KVSOperation::Put("a".to_string(), "a2".to_string(), 5, None),
         KVSOperation::Get("a".to_string(), 6, None),
-        KVSOperation::Put("b".to_string(), LwwWrapper::new("b2".to_string()), 7, None),
+        KVSOperation::Put("b".to_string(), "b2".to_string(), 7, None),
         KVSOperation::Get("b".to_string(), 8, None),
         KVSOperation::Get("a".to_string(), 9, None),
     ];
@@ -227,7 +226,7 @@ fn test_missing_keys_sequential_order() {
         KVSOperation::Get("nonexistent".to_string(), 1, None),
         KVSOperation::Put(
             "key1".to_string(),
-            LwwWrapper::new("value1".to_string()),
+            "value1".to_string(),
             2,
             None,
         ),
@@ -235,7 +234,7 @@ fn test_missing_keys_sequential_order() {
         KVSOperation::Get("key1".to_string(), 4, None),
         KVSOperation::Put(
             "key1".to_string(),
-            LwwWrapper::new("updated".to_string()),
+            "updated".to_string(),
             5,
             None,
         ),
@@ -286,14 +285,14 @@ fn test_concurrent_clients_sequential_processing() {
         // Client 1 operations
         KVSOperation::Put(
             "shared".to_string(),
-            LwwWrapper::new("client1_v1".to_string()),
+            "client1_v1".to_string(),
             1,
             None,
         ),
         // Client 2 operations
         KVSOperation::Put(
             "shared".to_string(),
-            LwwWrapper::new("client2_v1".to_string()),
+            "client2_v1".to_string(),
             2,
             None,
         ),
@@ -304,7 +303,7 @@ fn test_concurrent_clients_sequential_processing() {
         // Client 1 updates
         KVSOperation::Put(
             "shared".to_string(),
-            LwwWrapper::new("client1_v2".to_string()),
+            "client1_v2".to_string(),
             5,
             None,
         ),
@@ -355,28 +354,28 @@ fn test_linearizability_violation_regression() {
     let operations = vec![
         KVSOperation::Put(
             "balance".to_string(),
-            LwwWrapper::new("1000".to_string()),
+            "1000".to_string(),
             1,
             None,
         ),
         KVSOperation::Get("balance".to_string(), 2, None), // Should see 1000
         KVSOperation::Put(
             "balance".to_string(),
-            LwwWrapper::new("900".to_string()),
+            "900".to_string(),
             3,
             None,
         ), // Withdraw 100
         KVSOperation::Get("balance".to_string(), 4, None), // Should see 900
         KVSOperation::Put(
             "balance".to_string(),
-            LwwWrapper::new("800".to_string()),
+            "800".to_string(),
             5,
             None,
         ), // Withdraw 100
         KVSOperation::Get("balance".to_string(), 6, None), // Should see 800
         KVSOperation::Put(
             "balance".to_string(),
-            LwwWrapper::new("850".to_string()),
+            "850".to_string(),
             7,
             None,
         ), // Deposit 50

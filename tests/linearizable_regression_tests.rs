@@ -5,7 +5,6 @@
 //! guarantees are preserved.
 
 use kvs_zoo::protocol::KVSOperation;
-use kvs_zoo::values::LwwWrapper;
 
 // Note: Legacy server-based type test removed; linearizability is validated via deployment tests.
 
@@ -18,21 +17,21 @@ fn test_linearizable_kvs_strict_ordering() {
     let operations = vec![
         KVSOperation::Put(
             "account".to_string(),
-            LwwWrapper::new("1000".to_string()),
+            "1000".to_string(),
             1,
             None,
         ),
         KVSOperation::Get("account".to_string(), 2, None),
         KVSOperation::Put(
             "account".to_string(),
-            LwwWrapper::new("900".to_string()),
+            "900".to_string(),
             3,
             None,
         ),
         KVSOperation::Get("account".to_string(), 4, None),
         KVSOperation::Put(
             "account".to_string(),
-            LwwWrapper::new("950".to_string()),
+            "950".to_string(),
             5,
             None,
         ),
@@ -81,11 +80,11 @@ fn test_linearizable_kvs_prevents_read_write_reordering() {
     // which would violate linearizability
 
     let operations = vec![
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v1".to_string()), 1, None),
+        KVSOperation::Put("x".to_string(), "v1".to_string(), 1, None),
         KVSOperation::Get("x".to_string(), 2, None), // Must see v1
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v2".to_string()), 3, None),
+        KVSOperation::Put("x".to_string(), "v2".to_string(), 3, None),
         KVSOperation::Get("x".to_string(), 4, None), // Must see v2
-        KVSOperation::Put("x".to_string(), LwwWrapper::new("v3".to_string()), 5, None),
+        KVSOperation::Put("x".to_string(), "v3".to_string(), 5, None),
         KVSOperation::Get("x".to_string(), 6, None), // Must see v3
     ];
 
@@ -157,7 +156,7 @@ fn test_linearizable_kvs_concurrent_clients() {
         // Client A starts a transaction
         KVSOperation::Put(
             "shared_counter".to_string(),
-            LwwWrapper::new("0".to_string()),
+            "0".to_string(),
             1,
             None,
         ),
@@ -166,7 +165,7 @@ fn test_linearizable_kvs_concurrent_clients() {
         // Client A increments
         KVSOperation::Put(
             "shared_counter".to_string(),
-            LwwWrapper::new("1".to_string()),
+            "1".to_string(),
             3,
             None,
         ),
@@ -175,7 +174,7 @@ fn test_linearizable_kvs_concurrent_clients() {
         // Client B increments
         KVSOperation::Put(
             "shared_counter".to_string(),
-            LwwWrapper::new("2".to_string()),
+            "2".to_string(),
             5,
             None,
         ),
@@ -184,7 +183,7 @@ fn test_linearizable_kvs_concurrent_clients() {
         // Client A increments
         KVSOperation::Put(
             "shared_counter".to_string(),
-            LwwWrapper::new("3".to_string()),
+            "3".to_string(),
             7,
             None,
         ),
@@ -240,13 +239,13 @@ fn test_linearizable_kvs_replica_consistency() {
     let operations = vec![
         KVSOperation::Put(
             "key1".to_string(),
-            LwwWrapper::new("value1".to_string()),
+            "value1".to_string(),
             1,
             None,
         ),
         KVSOperation::Put(
             "key2".to_string(),
-            LwwWrapper::new("value2".to_string()),
+            "value2".to_string(),
             2,
             None,
         ),
@@ -254,7 +253,7 @@ fn test_linearizable_kvs_replica_consistency() {
         KVSOperation::Get("key2".to_string(), 4, None),
         KVSOperation::Put(
             "key1".to_string(),
-            LwwWrapper::new("updated1".to_string()),
+            "updated1".to_string(),
             5,
             None,
         ),
@@ -333,26 +332,26 @@ fn test_linearizability_bug_regression() {
     let operations = vec![
         KVSOperation::Put(
             "flag".to_string(),
-            LwwWrapper::new("false".to_string()),
+            "false".to_string(),
             1,
             None,
         ),
         KVSOperation::Put(
             "data".to_string(),
-            LwwWrapper::new("initial".to_string()),
+            "initial".to_string(),
             2,
             None,
         ),
         KVSOperation::Get("flag".to_string(), 3, None), // Should see "false"
         KVSOperation::Put(
             "data".to_string(),
-            LwwWrapper::new("updated".to_string()),
+            "updated".to_string(),
             4,
             None,
         ),
         KVSOperation::Put(
             "flag".to_string(),
-            LwwWrapper::new("true".to_string()),
+            "true".to_string(),
             5,
             None,
         ),
