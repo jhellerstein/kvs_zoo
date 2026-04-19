@@ -24,9 +24,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("🚀 Local KVS Demo (single node)");
 
-    // Standard Hydro deployment
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
 
     let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
@@ -41,44 +38,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let built = flow.finalize();
+    let report = built.check_coordination();
+    println!("{report}");
     built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
-
-    // Deploy: cluster of 1 node for local storage
-    let nodes = built
-        .with_default_optimize()
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(layers.get::<LocalStorage>(), vec![localhost.clone()])
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (mut out, mut input) = nodes.connect_bincode(port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
-
-    // Run demo operations
-    use futures::{SinkExt, StreamExt};
-    use kvs_zoo::protocol::KVSOperation as Op;
-    
-    let ops = vec![
-        Op::Put("alpha".into(), "one".to_string(), 1, None),
-        Op::Get("alpha".into(), 2, None),
-        Op::Put("alpha".into(), "two".to_string(), 3, None),
-        Op::Get("alpha".into(), 4, None),
-    ];
-    
-    for op in ops {
-        input.send(op).await?;
-        if let Some(resp) = out.next().await {
-            println!("→ {}", resp);
-        }
-    }
-
-    println!("✅ Local demo complete");
-    deployment.stop().await?;
     Ok(())
 }

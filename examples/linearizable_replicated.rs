@@ -1,7 +1,6 @@
 //! Linearizable Replicated KVS (Paxos ordering → all replicas)
 
 use clap::Parser;
-use futures::{SinkExt, StreamExt};
 use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::responders::Responder;
 use kvs_zoo::before_storage::ordering::paxos::PaxosDispatcher;
@@ -35,9 +34,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     println!("🚀 Linearizable KVS Demo (Paxos ordering)");
 
-    // Standard Hydro deployment
-    let mut deployment = hydro_deploy::Deployment::new();
-    let localhost = deployment.Localhost();
 
     let mut flow = hydro_lang::compile::builder::FlowBuilder::new();
     let proxy = flow.process::<()>();
@@ -53,55 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let built = flow.finalize();
+    let report = built.check_coordination();
+    println!("{report}");
     built.generate_graph_with_config(&args.graph, None)?;
-    if args.graph.should_exit_after_graph_generation() {
-        return Ok(());
-    }
-
-    // Deploy: Paxos role clusters + target cluster + leaf
-    let nodes = built
-        .with_default_optimize()
-        .with_process(&proxy, localhost.clone())
-        .with_cluster(
-            layers.get_role::<OrderedCluster, kvs_zoo::before_storage::ordering::Proposer>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get_role::<OrderedCluster, kvs_zoo::before_storage::ordering::Acceptor>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<OrderedCluster>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_cluster(
-            layers.get::<Leaf>(),
-            vec![localhost.clone(), localhost.clone(), localhost.clone()],
-        )
-        .with_external(&client_external, localhost)
-        .deploy(&mut deployment);
-
-    deployment.deploy().await?;
-    let (mut out, mut input) = nodes.connect_bincode(bidi_port).await;
-
-    deployment.start().await?;
-    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-
-    // Demo operations
-    let ops = vec![
-        KVSOperation::Put("acct".into(), "100".to_string(), 1, None),
-        KVSOperation::Get("acct".into(), 2, None),
-        KVSOperation::Put("acct".into(), "200".to_string(), 3, None),
-        KVSOperation::Get("acct".into(), 4, None),
-    ];
-    for op in ops {
-        input.send(op).await?;
-        if let Some(resp) = out.next().await {
-            println!("→ {}", resp);
-        }
-    }
-
-    deployment.stop().await?;
-    println!("✅ Linearizable Replicated demo complete");
     Ok(())
 }
