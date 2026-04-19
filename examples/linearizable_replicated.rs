@@ -1,4 +1,8 @@
-//! Linearizable Replicated KVS (Paxos ordering → all replicas)
+//! Linearizable KVS (Paxos ordering) — SEQUENTIALLY CONSISTENT
+//!
+//! Paxos establishes a total order on all operations.
+//! The scan processes operations sequentially, producing a
+//! growing prefix. All replicas agree on the same sequence.
 
 use clap::Parser;
 use hydro_lang::viz::config::GraphConfig;

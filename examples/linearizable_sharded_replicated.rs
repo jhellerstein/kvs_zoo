@@ -1,4 +1,6 @@
-//! Linearizable Sharded+Replicated KVS (Paxos ordering → all replicas)
+//! Linearizable KVS (Paxos ordering, simplified) — SEQUENTIALLY CONSISTENT
+//!
+//! Same architecture as linearizable_replicated.
 //!
 //! NOTE: Simplified to use PaxosDispatcher directly (no sharding layer)
 //! because ShardedRouter erases TotalOrder in the type system.

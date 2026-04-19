@@ -1,4 +1,8 @@
-//! Replicated KVS (RoundRobin + Gossip)
+//! Replicated KVS (gossip + CausalWrapper lattice) — CONVERGENT
+//!
+//! Uses a commutative+idempotent lattice merge (CausalWrapper).
+//! All replicas converge to the same value regardless of message
+//! ordering. The coordination analysis proves this is coordination-free.
 
 use clap::{Parser, ValueEnum};
 use hydro_lang::viz::config::GraphConfig;

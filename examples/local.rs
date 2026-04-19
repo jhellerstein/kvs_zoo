@@ -1,4 +1,13 @@
-//! Local KVS (single node)
+//! Local KVS (single node) — INCONSISTENT
+//!
+//! This architecture uses a non-commutative overwrite fold: the final value
+//! of a key depends on the order operations are processed. If two clients
+//! concurrently write different values to the same key, the result depends
+//! on message ordering — different runs may produce different final states.
+//!
+//! The coordination analysis correctly identifies this as INCONSISTENT:
+//! the `foldkeyed` operator breaks the monotonicity proof because it lacks
+//! a commutativity+idempotency proof (it's last-writer-wins, not a lattice).
 
 use clap::Parser;
 use hydro_lang::viz::config::GraphConfig;

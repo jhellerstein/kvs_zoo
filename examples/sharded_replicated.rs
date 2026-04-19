@@ -1,4 +1,7 @@
-//! Sharded + Replicated KVS (shards × replicas)
+//! Sharded + Replicated KVS (gossip + CausalWrapper) — CONVERGENT
+//!
+//! Combines sharding with lattice-based gossip replication.
+//! Each shard uses CausalWrapper merge — convergent.
 
 use clap::Parser;
 use hydro_lang::viz::config::GraphConfig;

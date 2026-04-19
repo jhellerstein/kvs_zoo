@@ -1,4 +1,8 @@
-//! Sharded KVS (hash-partitioned)
+//! Sharded KVS — INCONSISTENT
+//!
+//! Same as local: overwrite fold is not commutative.
+//! Sharding distributes keys across nodes but each node
+//! still uses last-writer-wins, which is order-dependent.
 
 use clap::Parser;
 use hydro_lang::viz::config::GraphConfig;
