@@ -492,7 +492,7 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
         .map(q!(|(_checkpoint, log)| log))
         .flatten_unordered()
         .into_keyed()
-        .fold::<(usize, Option<LogValue<P>>), _, _, _, _, _, _>(
+        .fold::<(usize, Option<LogValue<P>>), _, _, _, _, _, _, _>(
             q!(|| (0, None)),
             q!(|curr_entry, new_entry| {
                 if let Some(curr_entry_payload) = &mut curr_entry.1 {
