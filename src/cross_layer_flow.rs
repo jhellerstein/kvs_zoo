@@ -22,16 +22,16 @@ use crate::protocol::KVSOperation;
 use hydro_lang::live_collections::stream::NoOrder;
 
 pub struct CrossLayerFlowResult<'a, K, V> {
-    pub responses: Stream<String, Cluster<'a, KVSNode>, Unbounded, NoOrder>,
-    pub data: Stream<DataEvent<K, V>, Cluster<'a, KVSNode>, Unbounded, NoOrder>,
-    pub meta: Stream<crate::background::MetaLattice<K>, Cluster<'a, KVSNode>, Unbounded, NoOrder>,
+    pub responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded, NoOrder>,
+    pub data: Stream<DataEvent<K, V>, StaticCluster<'a, KVSNode>, Unbounded, NoOrder>,
+    pub meta: Stream<crate::background::MetaLattice<K>, StaticCluster<'a, KVSNode>, Unbounded, NoOrder>,
 }
 
 /// Pipeline over arbitrary input items convertible into KVSOperation
 /// Works across ClusterKVS<ClusterKVS<...>> layers as well as
 /// ClusterKVS<KVSNode> (which is two different kinds of layers)
 pub fn cross_layer_flow<'a, K, V, DParent, After, DLeaf, In>(
-    parent_cluster: &Cluster<'a, KVSNode>,
+    parent_cluster: &StaticCluster<'a, KVSNode>,
     parent_before: &DParent,
     parent_after: &After,
     leaf_before: &DLeaf,

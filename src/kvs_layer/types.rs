@@ -1,4 +1,4 @@
-use hydro_lang::location::cluster::Cluster;
+use hydro_lang::location::cluster::StaticCluster;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -84,7 +84,7 @@ impl<Name, B: Default, A: Default, Child: Default, Bg: Default> Default
 pub struct KVSClusters<'a> {
     /// Mapping from (LayerName, Role) to Cluster handle.
     /// The default/no-role entries use `Role = ()`.
-    clusters: HashMap<(TypeId, TypeId), Cluster<'a, crate::kvs_core::KVSNode>>,
+    clusters: HashMap<(TypeId, TypeId), StaticCluster<'a, crate::kvs_core::KVSNode>>,
 }
 
 impl<'a> KVSClusters<'a> {
@@ -95,14 +95,14 @@ impl<'a> KVSClusters<'a> {
     }
 
     /// Insert a cluster handle for a named layer (no role).
-    pub fn insert<Name: 'static>(&mut self, cluster: Cluster<'a, crate::kvs_core::KVSNode>) {
+    pub fn insert<Name: 'static>(&mut self, cluster: StaticCluster<'a, crate::kvs_core::KVSNode>) {
         self.insert_role::<Name, ()>(cluster);
     }
 
     /// Insert a cluster handle for a named layer and role.
     pub fn insert_role<Name: 'static, Role: 'static>(
         &mut self,
-        cluster: Cluster<'a, crate::kvs_core::KVSNode>,
+        cluster: StaticCluster<'a, crate::kvs_core::KVSNode>,
     ) {
         let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
         self.clusters.insert(key, cluster);
@@ -111,14 +111,14 @@ impl<'a> KVSClusters<'a> {
     /// Get the cluster handle for a named layer (no role).
     ///
     /// Panics if the layer name was not registered during wiring.
-    pub fn get<Name: 'static>(&self) -> &Cluster<'a, crate::kvs_core::KVSNode> {
+    pub fn get<Name: 'static>(&self) -> &StaticCluster<'a, crate::kvs_core::KVSNode> {
         self.get_role::<Name, ()>()
     }
 
     /// Get the cluster handle for a named layer and role.
     ///
     /// Panics if the (name, role) pair was not registered during wiring.
-    pub fn get_role<Name: 'static, Role: 'static>(&self) -> &Cluster<'a, crate::kvs_core::KVSNode> {
+    pub fn get_role<Name: 'static, Role: 'static>(&self) -> &StaticCluster<'a, crate::kvs_core::KVSNode> {
         let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
         self.clusters.get(&key).unwrap_or_else(|| {
             panic!(
@@ -130,14 +130,14 @@ impl<'a> KVSClusters<'a> {
     }
 
     /// Try to get the cluster handle for a named layer (no role).
-    pub fn try_get<Name: 'static>(&self) -> Option<&Cluster<'a, crate::kvs_core::KVSNode>> {
+    pub fn try_get<Name: 'static>(&self) -> Option<&StaticCluster<'a, crate::kvs_core::KVSNode>> {
         self.try_get_role::<Name, ()>()
     }
 
     /// Try to get the cluster handle for a named layer and role.
     pub fn try_get_role<Name: 'static, Role: 'static>(
         &self,
-    ) -> Option<&Cluster<'a, crate::kvs_core::KVSNode>> {
+    ) -> Option<&StaticCluster<'a, crate::kvs_core::KVSNode>> {
         let key = (TypeId::of::<Name>(), TypeId::of::<Role>());
         self.clusters.get(&key)
     }

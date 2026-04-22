@@ -37,14 +37,14 @@ where
 {
     fn replicate_data<'a, O>(
         &self,
-        cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
-    ) -> Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
+        cluster: &StaticCluster<'a, KVSNode>,
+        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+    ) -> Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, hydro_lang::live_collections::stream::NoOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         local_data
-            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
+            .broadcast(cluster, TCP.fail_stop().bincode())
             .values()
             .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
@@ -53,9 +53,9 @@ where
 impl<K, V> AfterResponses for BroadcastOverwrite<K, V> {
     fn after_responses<'a>(
         &self,
-        _cluster: &Cluster<'a, KVSNode>,
-        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        _cluster: &StaticCluster<'a, KVSNode>,
+        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }

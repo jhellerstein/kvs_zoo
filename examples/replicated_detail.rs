@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Define KVS architecture
-    let replicas = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
+    let replicas = flow.static_cluster::<kvs_zoo::kvs_core::KVSNode>();
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy

@@ -54,10 +54,10 @@ where
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -74,18 +74,18 @@ where
                 (hydro_lang::location::MemberId::from_raw_id(shard_id), op)
             }))
             .into_keyed()
-            .demux(target_cluster, TCP.fail_stop().bincode())
+            .demux_static(target_cluster, TCP.fail_stop().bincode())
             .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        _source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >

@@ -12,9 +12,9 @@ pub type MetaLattice<K> = SetUnionHashSet<MetaEvent<K>>;
 use hydro_lang::live_collections::stream::NoOrder;
 
 pub type BackgroundDataStream<'a, K, V> =
-    Stream<DataEvent<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
+    Stream<DataEvent<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
 pub type BackgroundMetaStream<'a, K> =
-    Stream<MetaLattice<K>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
+    Stream<MetaLattice<K>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
 
 /// Trait implemented by background stages that wish to consume data/meta events.
 ///
@@ -40,7 +40,7 @@ pub type BackgroundMetaStream<'a, K> =
 pub trait MetaBackground<K, V> {
     fn attach<'a>(
         &mut self,
-        cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         data: BackgroundDataStream<'a, K, V>,
         meta: BackgroundMetaStream<'a, K>,
     ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>);
@@ -56,7 +56,7 @@ pub trait MetaBackground<K, V> {
 impl<K, V> MetaBackground<K, V> for () {
     fn attach<'a>(
         &mut self,
-        _cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        _cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         data: BackgroundDataStream<'a, K, V>,
         meta: BackgroundMetaStream<'a, K>,
     ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>) {

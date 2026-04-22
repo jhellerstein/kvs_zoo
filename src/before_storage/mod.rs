@@ -41,10 +41,10 @@ pub trait Before<K, V>: RequiresLinearizable {
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -76,10 +76,10 @@ pub trait Before<K, V>: RequiresLinearizable {
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -112,10 +112,10 @@ pub trait Before<K, V>: RequiresLinearizable {
     fn dispatch_slotted_from_process<'a, O>(
         &self,
         slotted_operations: Stream<(usize, KVSOperation<K, V>), Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         (usize, KVSOperation<K, V>),
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -148,12 +148,12 @@ pub trait Before<K, V>: RequiresLinearizable {
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        _source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -166,13 +166,13 @@ pub trait Before<K, V>: RequiresLinearizable {
     /// Default implementations fall back to `dispatch_from_cluster`.
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -205,10 +205,10 @@ impl<K, V> Before<K, V> for () {
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -223,18 +223,18 @@ impl<K, V> Before<K, V> for () {
                 op
             )))
             .into_keyed()
-            .demux(target_cluster, TCP.fail_stop().bincode())
+            .demux_static(target_cluster, TCP.fail_stop().bincode())
             .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        _source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -271,10 +271,10 @@ impl<K, V> Before<K, V> for IdentityDispatch {
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -284,18 +284,18 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
+            .broadcast_static(target_cluster, TCP.fail_stop().bincode())
             .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        _source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -305,7 +305,7 @@ impl<K, V> Before<K, V> for IdentityDispatch {
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
+            .broadcast(target_cluster, TCP.fail_stop().bincode())
             .values()
     }
 }
@@ -351,10 +351,10 @@ where
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -387,12 +387,12 @@ where
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -412,10 +412,10 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -456,13 +456,13 @@ where
 
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
         layers: &crate::kvs_layer::KVSClusters<'a>,
     ) -> Stream<
         KVSOperation<K, V>,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >

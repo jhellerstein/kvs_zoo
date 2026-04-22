@@ -10,7 +10,7 @@ pub trait KVSSpec<V> {
         &self,
         flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
-    ) -> Cluster<'a, crate::kvs_core::KVSNode>
+    ) -> StaticCluster<'a, crate::kvs_core::KVSNode>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
     
@@ -27,11 +27,11 @@ impl<V> KVSSpec<V> for () {
         &self,
         flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         _layers: &mut crate::kvs_layer::KVSClusters<'a>,
-    ) -> Cluster<'a, crate::kvs_core::KVSNode>
+    ) -> StaticCluster<'a, crate::kvs_core::KVSNode>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        flow.cluster::<crate::kvs_core::KVSNode>()
+        flow.static_cluster::<crate::kvs_core::KVSNode>()
     }
 }
 
@@ -48,11 +48,11 @@ where
         &self,
         flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
-    ) -> Cluster<'a, crate::kvs_core::KVSNode>
+    ) -> StaticCluster<'a, crate::kvs_core::KVSNode>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        let my_cluster = flow.cluster::<crate::kvs_core::KVSNode>();
+        let my_cluster = flow.static_cluster::<crate::kvs_core::KVSNode>();
         layers.insert::<Name>(my_cluster.clone());
         // Allow the dispatcher to register any role-specific sub-clusters for this layer.
         self.before.register_role_clusters::<Name>(flow, layers);
@@ -78,11 +78,11 @@ where
         &self,
         flow: &mut hydro_lang::compile::builder::FlowBuilder<'a>,
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
-    ) -> Cluster<'a, crate::kvs_core::KVSNode>
+    ) -> StaticCluster<'a, crate::kvs_core::KVSNode>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
-        let my_cluster = flow.cluster::<crate::kvs_core::KVSNode>();
+        let my_cluster = flow.static_cluster::<crate::kvs_core::KVSNode>();
         layers.insert::<Name>(my_cluster.clone());
         my_cluster
     }

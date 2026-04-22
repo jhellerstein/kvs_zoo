@@ -12,11 +12,11 @@ use serde::{Deserialize, Serialize};
 pub trait LeafAfterHook {
     fn respond<'a>(
         &self,
-        leaf_cluster: &Cluster<'a, KVSNode>,
-        tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
+        leaf_cluster: &StaticCluster<'a, KVSNode>,
+        tagged_responses: Stream<(bool, String), StaticCluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<
         String,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >;
@@ -35,11 +35,11 @@ impl Responder {
 impl LeafAfterHook for Responder {
     fn respond<'a>(
         &self,
-        _leaf_cluster: &Cluster<'a, KVSNode>,
-        tagged_responses: Stream<(bool, String), Cluster<'a, KVSNode>, Unbounded>,
+        _leaf_cluster: &StaticCluster<'a, KVSNode>,
+        tagged_responses: Stream<(bool, String), StaticCluster<'a, KVSNode>, Unbounded>,
     ) -> Stream<
         String,
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     > {
@@ -58,9 +58,9 @@ impl LeafAfterHook for Responder {
 impl AfterResponses for Responder {
     fn after_responses<'a>(
         &self,
-        _cluster: &Cluster<'a, KVSNode>,
-        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
+        _cluster: &StaticCluster<'a, KVSNode>,
+        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }
@@ -79,11 +79,11 @@ where
 
     fn replicate_data<'a, O>(
         &self,
-        _cluster: &Cluster<'a, KVSNode>,
-        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
+        _cluster: &StaticCluster<'a, KVSNode>,
+        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        Cluster<'a, KVSNode>,
+        StaticCluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >

@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Define KVS architecture
-    let shards = flow.cluster::<KVSNode>();
+    let shards = flow.static_cluster::<KVSNode>();
 
     // Build a Hydro graph for the ShardedKVS type, return layer handles and client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy

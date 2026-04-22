@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_external = flow.external::<()>();
 
     // Single-node cluster
-    let local = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
+    let local = flow.static_cluster::<kvs_zoo::kvs_core::KVSNode>();
 
     // Build client I/O ports
     let (port, operations_stream, _membership, complete_sink) = proxy

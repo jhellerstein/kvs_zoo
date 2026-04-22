@@ -21,15 +21,15 @@ impl<K, V> Before<K, V> for BroadcastRouter {
     fn dispatch_from_process<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
+        target_cluster: &StaticCluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** broadcast membership */))
+            .broadcast_static(target_cluster, TCP.fail_stop().bincode())
             .assume_ordering::<TotalOrder>(nondet!(
                 /// Broadcast over TCP fail-stop preserves ordering per member.
             ))
@@ -37,17 +37,17 @@ impl<K, V> Before<K, V> for BroadcastRouter {
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, O>,
-        _source_cluster: &Cluster<'a, KVSNode>,
-        target_cluster: &Cluster<'a, KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, Cluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
+        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _source_cluster: &StaticCluster<'a, KVSNode>,
+        target_cluster: &StaticCluster<'a, KVSNode>,
+    ) -> Stream<KVSOperation<K, V>, StaticCluster<'a, KVSNode>, Unbounded, Self::OutputOrder>
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
         operations
-            .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** broadcast membership */))
+            .broadcast(target_cluster, TCP.fail_stop().bincode())
             .values()
             .assume_ordering::<TotalOrder>(nondet!(
                 /// Broadcast over TCP fail-stop preserves ordering per member.

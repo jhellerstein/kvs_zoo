@@ -14,7 +14,7 @@ pub trait KVSPlumb<K, V> {
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -43,16 +43,16 @@ pub trait KVSPlumb<K, V> {
     fn plumb_from_cluster<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         operations: Stream<
             crate::protocol::KVSOperation<K, V>,
-            Cluster<'a, crate::kvs_core::KVSNode>,
+            StaticCluster<'a, crate::kvs_core::KVSNode>,
             Unbounded,
             O,
         >,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -86,7 +86,7 @@ pub trait KVSPlumb<K, V> {
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -119,7 +119,7 @@ impl<K, V> KVSPlumb<K, V> for () {
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
         _operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
     where
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
@@ -133,7 +133,7 @@ impl<K, V> KVSPlumb<K, V> for () {
         _operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -148,16 +148,16 @@ impl<K, V> KVSPlumb<K, V> for () {
     fn plumb_from_cluster<'a, O>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        _source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         operations: Stream<
             crate::protocol::KVSOperation<K, V>,
-            Cluster<'a, crate::kvs_core::KVSNode>,
+            StaticCluster<'a, crate::kvs_core::KVSNode>,
             Unbounded,
             O,
         >,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -185,7 +185,7 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
     where
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
@@ -200,7 +200,7 @@ where
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -236,16 +236,16 @@ where
     fn plumb_from_cluster<'a, O>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         operations: Stream<
             crate::protocol::KVSOperation<K, V>,
-            Cluster<'a, crate::kvs_core::KVSNode>,
+            StaticCluster<'a, crate::kvs_core::KVSNode>,
             Unbounded,
             O,
         >,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -312,7 +312,7 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-    ) -> Stream<crate::protocol::KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
+    ) -> Stream<crate::protocol::KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, Self::OutputOrder>
     where
         K: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync + 'static,
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + PartialEq + Eq + std::fmt::Debug + Send + Sync + 'static,
@@ -327,7 +327,7 @@ where
         operations: Stream<crate::protocol::KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -345,16 +345,16 @@ where
     fn plumb_from_cluster<'a, O>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
         operations: Stream<
             crate::protocol::KVSOperation<K, V>,
-            Cluster<'a, crate::kvs_core::KVSNode>,
+            StaticCluster<'a, crate::kvs_core::KVSNode>,
             Unbounded,
             O,
         >,
     ) -> Stream<
         crate::protocol::KVSOperation<K, V>,
-        Cluster<'a, crate::kvs_core::KVSNode>,
+        StaticCluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
