@@ -117,14 +117,16 @@ macro_rules! plumb_kvs_dataflow_impl {
         // Data and meta events are internal (not observable) — merge is fine.
 
         let data_events = client_data_events
-            .merge_unordered(replica_data_events);
+            .weaken_consistency().merge_unordered(replica_data_events.weaken_consistency());
 
         // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+            .weaken_consistency()
             .merge_unordered(
                 replica_meta_stream
                     .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+                    .weaken_consistency()
             );
 
         // Background plumbing (returns streams for potential chaining)
@@ -191,7 +193,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V>,
+        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
 {
     plumb_kvs_dataflow_impl!(
         KeyType,
@@ -252,7 +254,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V, OutputOrder = hydro_lang::live_collections::stream::TotalOrder>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V>,
+        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
 {
     use hydro_lang::live_collections::stream::TotalOrder;
 
@@ -300,12 +302,14 @@ where
 
     // Replica responses have no client_id — drop them to keep observable output clean.
     let _ = replica_responses;
-    let data_events = client_data_events.merge_unordered(replica_data_events);
+    let data_events = client_data_events.weaken_consistency().merge_unordered(replica_data_events.weaken_consistency());
     let meta_stream = client_meta_stream
         .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+        .weaken_consistency()
         .merge_unordered(
             replica_meta_stream
                 .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
+                .weaken_consistency()
         );
 
     let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
@@ -371,7 +375,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V>,
+        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
 {
     plumb_kvs_dataflow_impl!(
         KeyType,
@@ -424,7 +428,7 @@ where
         + crate::kvs_layer::KVSPlumb<String, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<String, V>
-        + crate::background::BackgroundPlumb<String, V>,
+        + crate::background::BackgroundPlumb<String, V, hydro_lang::location::cluster::Nondeterministic>,
 {
     plumb_kvs_dataflow_impl!(
         String,

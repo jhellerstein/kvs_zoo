@@ -181,7 +181,7 @@ where
             .into_keyed()
             .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
-            .assume_ordering(nondet!(
+            .assume_ordering_same_consistency(nondet!(
                 /// Paxos establishes total order via slot-based sequencing.
                 /// The demux preserves this order because operations are sent
                 /// one-by-one in slot order from the proposer.
@@ -237,7 +237,7 @@ where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.assume_ordering(nondet!(
+        operations.assume_ordering_same_consistency(nondet!(
             /// Paxos-ordered operations retain their order through inter-cluster routing.
         ))
     }

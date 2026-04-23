@@ -11,10 +11,10 @@ pub type MetaLattice<K> = SetUnionHashSet<MetaEvent<K>>;
 
 use hydro_lang::live_collections::stream::NoOrder;
 
-pub type BackgroundDataStream<'a, K, V> =
-    Stream<DataEvent<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
-pub type BackgroundMetaStream<'a, K> =
-    Stream<MetaLattice<K>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>;
+pub type BackgroundDataStream<'a, K, V, Con> =
+    Stream<DataEvent<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode, Con>, Unbounded, NoOrder>;
+pub type BackgroundMetaStream<'a, K, Con> =
+    Stream<MetaLattice<K>, StaticCluster<'a, crate::kvs_core::KVSNode, Con>, Unbounded, NoOrder>;
 
 /// Trait implemented by background stages that wish to consume data/meta events.
 ///
@@ -37,13 +37,13 @@ pub type BackgroundMetaStream<'a, K> =
 ///     }
 /// }
 /// ```
-pub trait MetaBackground<K, V> {
+pub trait MetaBackground<K, V, Con: hydro_lang::location::cluster::Consistency = hydro_lang::location::cluster::Deterministic> {
     fn attach<'a>(
         &mut self,
         cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>);
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>);
 }
 
 /// Placeholder implementation: no background processing.
@@ -53,13 +53,13 @@ pub trait MetaBackground<K, V> {
 ///
 /// To implement actual background processing, create a struct that implements
 /// `MetaBackground<K, V>` and use it as the `Bg` type parameter in `KVSCluster`.
-impl<K, V> MetaBackground<K, V> for () {
+impl<K, V, Con: hydro_lang::location::cluster::Consistency> MetaBackground<K, V, Con> for () {
     fn attach<'a>(
         &mut self,
         _cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>) {
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>) {
         (data, meta)
     }
 }
@@ -72,13 +72,13 @@ impl<K, V> MetaBackground<K, V> for () {
 /// Concrete background stages should implement `MetaBackground<K, V>` rather than
 /// this trait directly. This trait is automatically implemented for `KVSCluster`
 /// and coordinates the attachment of all background stages in the hierarchy.
-pub trait BackgroundPlumb<K, V> {
+pub trait BackgroundPlumb<K, V, Con: hydro_lang::location::cluster::Consistency = hydro_lang::location::cluster::Deterministic> {
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>)
     where
         K: Clone
             + serde::Serialize
@@ -107,13 +107,13 @@ pub trait BackgroundPlumb<K, V> {
 ///
 /// Used for terminal/leaf nodes in the KVS layer hierarchy or when
 /// no background processing is needed. Simply returns streams unchanged.
-impl<K, V> BackgroundPlumb<K, V> for () {
+impl<K, V, Con: hydro_lang::location::cluster::Consistency> BackgroundPlumb<K, V, Con> for () {
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>)
     where
         K: Clone
             + serde::Serialize
@@ -141,19 +141,19 @@ impl<K, V> BackgroundPlumb<K, V> for () {
     }
 }
 
-impl<K, V, Name, B, A, Child, Bg> BackgroundPlumb<K, V>
+impl<K, V, Con: hydro_lang::location::cluster::Consistency, Name, B, A, Child, Bg> BackgroundPlumb<K, V, Con>
     for crate::kvs_layer::KVSCluster<Name, B, A, Child, Bg>
 where
     Name: 'static,
-    Child: BackgroundPlumb<K, V>,
-    Bg: MetaBackground<K, V>,
+    Child: BackgroundPlumb<K, V, Con>,
+    Bg: MetaBackground<K, V, Con>,
 {
     fn plumb_background<'a>(
         &mut self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>)
     where
         K: Clone
             + serde::Serialize
@@ -183,13 +183,13 @@ where
     }
 }
 
-impl<K, V, Name, B, A> BackgroundPlumb<K, V> for crate::kvs_layer::KVSNode<Name, B, A> {
+impl<K, V, Con: hydro_lang::location::cluster::Consistency, Name, B, A> BackgroundPlumb<K, V, Con> for crate::kvs_layer::KVSNode<Name, B, A> {
     fn plumb_background<'a>(
         &mut self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        data: BackgroundDataStream<'a, K, V>,
-        meta: BackgroundMetaStream<'a, K>,
-    ) -> (BackgroundDataStream<'a, K, V>, BackgroundMetaStream<'a, K>)
+        data: BackgroundDataStream<'a, K, V, Con>,
+        meta: BackgroundMetaStream<'a, K, Con>,
+    ) -> (BackgroundDataStream<'a, K, V, Con>, BackgroundMetaStream<'a, K, Con>)
     where
         K: Clone
             + serde::Serialize

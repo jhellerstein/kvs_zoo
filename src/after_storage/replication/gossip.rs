@@ -254,7 +254,7 @@ where
                     T::default(),
                 )
             }))
-            .batch(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
+            .batch_same_consistency(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
 
         // Build hot set: new updates + tombstone deletes from previous tick
         let hot_set = new_puts.chain(hot_cycle).fold(

@@ -230,7 +230,7 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
 
     let (a_max_ballot, a_to_proposers_p1b) = acceptor_p1(
         acceptor_tick,
-        p_to_acceptors_p1a.batch(
+        p_to_acceptors_p1a.batch_same_consistency(
             acceptor_tick,
             nondet!(
                 /// Non-deterministic batching may result in different payloads being rejected by an acceptor if the payload is batched with another payload with larger ballot. But as documented, payloads may be non-deterministically dropped during leader election.
@@ -345,7 +345,7 @@ fn p_leader_heartbeat<'a>(
                 q!(Duration::from_secs(i_am_leader_check_timeout)),
                 nondet!(/** staggered election interval */),
             )
-            .batch(proposer_tick, nondet!(/** absorbed into interval */))
+            .batch_same_consistency(proposer_tick, nondet!(/** absorbed into interval */))
             .first()
             .is_some(),
     );
@@ -590,7 +590,7 @@ fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream
         proposer_tick,
         p_max_slot,
         c_to_proposers
-            .batch(
+            .batch_same_consistency(
                 proposer_tick,
                 nondet!(
                     /// We batch payloads so that we can compute the correct slot based on base slot. In the case of a leader re-election, the base slot is updated which affects the computed payload slots. This non-determinism can lead to non-determinism in which payloads are committed when the leader is changing, which is documented at the function level
@@ -653,7 +653,7 @@ pub fn index_payloads<'a, L: Location<'a>, P: PaxosPayload, O: hydro_lang::live_
     let p_next_slot_after_reconciling_p1bs = p_max_slot.map(q!(|max_slot| max_slot + 1));
     let base_slot = p_next_slot_after_reconciling_p1bs.unwrap_or(p_next_slot);
     let p_indexed_payloads = c_to_proposers
-        .assume_ordering(nondet!(
+        .assume_ordering_same_consistency(nondet!(
             /** Assign arbitrary but deterministic slot numbers via enumerate.
              * The specific order doesn't matter - Paxos consensus will ensure
              * all replicas agree on the same slot→payload mapping. */
@@ -694,7 +694,7 @@ pub fn acceptor_p2<'a, P: PaxosPayload>(
         NoOrder,
     >,
 ) {
-    let p_to_acceptors_p2a_batch = p_to_acceptors_p2a.batch(
+    let p_to_acceptors_p2a_batch = p_to_acceptors_p2a.batch_same_consistency(
         acceptor_tick,
         nondet!(
             /// We use batches to ensure that the log is updated before sending a confirmation to the proposer. Because we use `persist()` on these messages before folding into the log, non-deterministic batch boundaries will not affect the eventual log state.

@@ -30,7 +30,7 @@ impl<K, V> Before<K, V> for BroadcastRouter {
     {
         operations
             .broadcast_static(target_cluster, TCP.fail_stop().bincode())
-            .assume_ordering::<TotalOrder>(nondet!(
+            .assume_ordering_same_consistency::<TotalOrder>(nondet!(
                 /// Broadcast over TCP fail-stop preserves ordering per member.
             ))
     }
@@ -49,7 +49,7 @@ impl<K, V> Before<K, V> for BroadcastRouter {
         operations
             .broadcast(target_cluster, TCP.fail_stop().bincode())
             .values()
-            .assume_ordering::<TotalOrder>(nondet!(
+            .assume_ordering_same_consistency::<TotalOrder>(nondet!(
                 /// Broadcast over TCP fail-stop preserves ordering per member.
             ))
     }

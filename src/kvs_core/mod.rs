@@ -425,7 +425,7 @@ impl KVSCore {
     {
         // Batch gets into ticks and snapshot storage at the same tick
         let gets_batched = gets
-            .batch(tick, nondet!(/** batch gets for snapshot */))
+            .batch_same_consistency(tick, nondet!(/** batch gets for snapshot */))
             .map(q!(|(key, request_id, client_id)| (key, (request_id, client_id))))
             .into_keyed();
         let storage_snapshot = storage.snapshot(tick, nondet!(/** snapshot storage for gets */));
