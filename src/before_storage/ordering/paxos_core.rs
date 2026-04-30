@@ -77,18 +77,18 @@ pub struct P2a<P> {
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::Ordering>(
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    a_checkpoint: Optional<usize, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+    a_checkpoint: Optional<usize, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
     c_to_proposers: impl FnOnce(
-        Stream<Ballot, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<P, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
+        Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
     config: PaxosConfig,
     _nondet_leader: NonDet,
     _nondet_commit: NonDet,
 ) -> (
-    Stream<Ballot, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    Stream<(usize, Option<P>), StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
+    Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    Stream<(usize, Option<P>), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
 ) {
     let f = config.f;
 
@@ -161,27 +161,27 @@ pub fn paxos_core<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::
     reason = "internal paxos code // TODO"
 )]
 pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    proposer_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    acceptor_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+    proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    acceptor_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
     quorum_size: usize,
     num_quorum_participants: usize,
     paxos_config: PaxosConfig,
     p_received_p2b_ballots: Stream<
         Ballot,
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         NoOrder,
     >,
-    a_log: Singleton<(Option<usize>, L), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    a_log: Singleton<(Option<usize>, L), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
     _nondet_leader: NonDet,
     _nondet_acceptor_ballot: NonDet,
 ) -> (
-    Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    Stream<(Option<usize>, L), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded, NoOrder>,
-    Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Stream<(Option<usize>, L), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded, NoOrder>,
+    Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 ) {
     let (p1b_fail_complete, p1b_fail) =
         proposers.forward_ref::<Stream<Ballot, _, Unbounded, NoOrder>>();
@@ -225,12 +225,12 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
     let p_to_acceptors_p1a = p_ballot.clone()
         .filter_if(p_trigger_election.is_some())
         .all_ticks()
-        .broadcast(acceptors, TCP.fail_stop().bincode())
+        .broadcast(acceptors, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values();
 
     let (a_max_ballot, a_to_proposers_p1b) = acceptor_p1(
         acceptor_tick,
-        p_to_acceptors_p1a.batch_same_consistency(
+        p_to_acceptors_p1a.batch(
             acceptor_tick,
             nondet!(
                 /// Non-deterministic batching may result in different payloads being rejected by an acceptor if the payload is batched with another payload with larger ballot. But as documented, payloads may be non-deterministically dropped during leader election.
@@ -256,11 +256,11 @@ pub fn leader_election<'a, L: Clone + Debug + Serialize + DeserializeOwned>(
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 fn p_ballot_calc<'a>(
-    proposer_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    p_received_max_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    p_received_max_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 ) -> (
-    Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 ) {
     let (p_ballot_num_complete_cycle, p_ballot_num) =
         proposer_tick.cycle_with_initial(proposer_tick.singleton(q!(0)));
@@ -300,15 +300,15 @@ fn p_ballot_calc<'a>(
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 fn p_leader_heartbeat<'a>(
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    proposer_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    p_is_leader: Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    p_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    p_is_leader: Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
     paxos_config: PaxosConfig,
     _nondet_reelection: NonDet,
 ) -> (
-    Stream<Ballot, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder, AtLeastOnce>,
-    Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder, AtLeastOnce>,
+    Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 ) {
     let i_am_leader_send_timeout = paxos_config.i_am_leader_send_timeout;
     let i_am_leader_check_timeout = paxos_config.i_am_leader_check_timeout;
@@ -322,7 +322,7 @@ fn p_leader_heartbeat<'a>(
             q!(Duration::from_secs(i_am_leader_send_timeout)),
             nondet!(/** leader heartbeat interval */),
         )
-        .broadcast(proposers, TCP.fail_stop().bincode())
+        .broadcast(proposers, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values();
 
     let p_leader_expired = p_to_proposers_i_am_leader
@@ -345,7 +345,7 @@ fn p_leader_heartbeat<'a>(
                 q!(Duration::from_secs(i_am_leader_check_timeout)),
                 nondet!(/** staggered election interval */),
             )
-            .batch_same_consistency(proposer_tick, nondet!(/** absorbed into interval */))
+            .batch(proposer_tick, nondet!(/** absorbed into interval */))
             .first()
             .is_some(),
     );
@@ -354,20 +354,20 @@ fn p_leader_heartbeat<'a>(
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 fn acceptor_p1<'a, L: Serialize + DeserializeOwned + Clone>(
-    acceptor_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+    acceptor_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
     p_to_acceptors_p1a: Stream<
         Ballot,
-        Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
         Bounded,
         NoOrder,
     >,
-    a_log: Singleton<(Option<usize>, L), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+    a_log: Singleton<(Option<usize>, L), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
 ) -> (
-    Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
     Stream<
         (Ballot, Result<(Option<usize>, L), Ballot>),
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         NoOrder,
     >,
@@ -405,21 +405,21 @@ fn acceptor_p1<'a, L: Serialize + DeserializeOwned + Clone>(
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 fn p_p1b<'a, P: Clone + Serialize + DeserializeOwned>(
-    proposer_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+    proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
     a_to_proposers_p1b: Stream<
         (Ballot, Result<(Option<usize>, P), Ballot>),
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         NoOrder,
     >,
-    p_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    p_has_largest_ballot: Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_has_largest_ballot: Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
     quorum_size: usize,
     num_quorum_participants: usize,
 ) -> (
-    Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    Stream<(Option<usize>, P), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded, NoOrder>,
-    Stream<Ballot, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
+    Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Stream<(Option<usize>, P), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded, NoOrder>,
+    Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
 ) {
     let (quorums, fails) =
         collect_quorum_with_response(a_to_proposers_p1b, quorum_size, num_quorum_participants);
@@ -468,20 +468,20 @@ fn p_p1b<'a, P: Clone + Serialize + DeserializeOwned>(
 pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
     accepted_logs: Stream<
         (Option<usize>, HashMap<usize, LogValue<P>>),
-        Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
         Bounded,
         NoOrder,
     >,
-    p_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
     f: usize,
 ) -> (
     Stream<
         ((usize, Ballot), Option<P>),
-        Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
         Bounded,
         NoOrder,
     >,
-    Optional<usize, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    Optional<usize, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 ) {
     let p_p1b_max_checkpoint = accepted_logs
         .clone()
@@ -492,7 +492,7 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
         .map(q!(|(_checkpoint, log)| log))
         .flatten_unordered()
         .into_keyed()
-        .fold::<(usize, Option<LogValue<P>>), _, _, _, _, _, _, _>(
+        .fold::<(usize, Option<LogValue<P>>), _, _, _, _, _, _>(
             q!(|| (0, None)),
             q!(|curr_entry, new_entry| {
                 if let Some(curr_entry_payload) = &mut curr_entry.1 {
@@ -553,35 +553,35 @@ pub fn recommit_after_leader_election<'a, P: PaxosPayload>(
     reason = "internal paxos code // TODO"
 )]
 fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream::Ordering>(
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    proposer_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    acceptor_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    c_to_proposers: Stream<P, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
-    a_checkpoint: Optional<usize, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+    proposer_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    acceptor_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    c_to_proposers: Stream<P, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
+    a_checkpoint: Optional<usize, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
 
-    p_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    p_is_leader: Optional<(), Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_is_leader: Optional<(), Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 
     p_relevant_p1bs: Stream<
         (Option<usize>, HashMap<usize, LogValue<P>>),
-        Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
         Bounded,
         NoOrder,
     >,
     f: usize,
 
-    a_max_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    a_max_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
 
     _nondet_commit: NonDet,
 ) -> (
-    Stream<(usize, Option<P>), StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
+    Stream<(usize, Option<P>), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
     Singleton<
         (Option<usize>, HashMap<usize, LogValue<P>>),
-        Atomic<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Atomic<Cluster<'a, crate::kvs_core::KVSNode>>,
         Unbounded,
     >,
-    Stream<Ballot, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
+    Stream<Ballot, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
 ) {
     let (p_log_to_recommit, p_max_slot) =
         recommit_after_leader_election(p_relevant_p1bs, p_ballot.clone(), f);
@@ -590,7 +590,7 @@ fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream
         proposer_tick,
         p_max_slot,
         c_to_proposers
-            .batch_same_consistency(
+            .batch(
                 proposer_tick,
                 nondet!(
                     /// We batch payloads so that we can compute the correct slot based on base slot. In the case of a leader re-election, the base slot is updated which affects the computed payload slots. This non-determinism can lead to non-determinism in which payloads are committed when the leader is changing, which is documented at the function level
@@ -621,7 +621,7 @@ fn sequence_payload<'a, P: PaxosPayload, O: hydro_lang::live_collections::stream
                 slot,
                 value
             }))
-            .broadcast(acceptors, TCP.fail_stop().bincode())
+            .broadcast(acceptors, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values(),
         a_checkpoint,
         proposers,
@@ -653,7 +653,7 @@ pub fn index_payloads<'a, L: Location<'a>, P: PaxosPayload, O: hydro_lang::live_
     let p_next_slot_after_reconciling_p1bs = p_max_slot.map(q!(|max_slot| max_slot + 1));
     let base_slot = p_next_slot_after_reconciling_p1bs.unwrap_or(p_next_slot);
     let p_indexed_payloads = c_to_proposers
-        .assume_ordering_same_consistency(nondet!(
+        .assume_ordering(nondet!(
             /** Assign arbitrary but deterministic slot numbers via enumerate.
              * The specific order doesn't matter - Paxos consensus will ensure
              * all replicas agree on the same slot→payload mapping. */
@@ -676,25 +676,25 @@ pub fn index_payloads<'a, L: Location<'a>, P: PaxosPayload, O: hydro_lang::live_
 
 #[expect(clippy::type_complexity, reason = "internal paxos code // TODO")]
 pub fn acceptor_p2<'a, P: PaxosPayload>(
-    acceptor_tick: &Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>,
-    a_max_ballot: Singleton<Ballot, Tick<StaticCluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
-    p_to_acceptors_p2a: Stream<P2a<P>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
-    a_checkpoint: Optional<usize, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+    acceptor_tick: &Tick<Cluster<'a, crate::kvs_core::KVSNode>>,
+    a_max_ballot: Singleton<Ballot, Tick<Cluster<'a, crate::kvs_core::KVSNode>>, Bounded>,
+    p_to_acceptors_p2a: Stream<P2a<P>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, NoOrder>,
+    a_checkpoint: Optional<usize, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
 ) -> (
     Singleton<
         (Option<usize>, HashMap<usize, LogValue<P>>),
-        Atomic<StaticCluster<'a, crate::kvs_core::KVSNode>>,
+        Atomic<Cluster<'a, crate::kvs_core::KVSNode>>,
         Unbounded,
     >,
     Stream<
         ((usize, Ballot), Result<(), Ballot>),
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         NoOrder,
     >,
 ) {
-    let p_to_acceptors_p2a_batch = p_to_acceptors_p2a.batch_same_consistency(
+    let p_to_acceptors_p2a_batch = p_to_acceptors_p2a.batch(
         acceptor_tick,
         nondet!(
             /// We use batches to ensure that the log is updated before sending a confirmation to the proposer. Because we use `persist()` on these messages before folding into the log, non-deterministic batch boundaries will not affect the eventual log state.

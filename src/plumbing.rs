@@ -112,25 +112,23 @@ macro_rules! plumb_kvs_dataflow_impl {
 
         // Replica responses have no client_id and would be filtered out anyway.
         // Keep them separate from the observable output to preserve consistency labels.
-        let _ = replica_responses;
+        let _ = replica_responses.ir_node_named("replica_responses_internal");
 
         // Data and meta events are internal (not observable) — merge is fine.
 
         let data_events = client_data_events
-            .weaken_consistency().merge_unordered(replica_data_events.weaken_consistency());
+            .merge_unordered(replica_data_events);
 
         // Wrap meta events in lattice singletons for monotonic composition
         let meta_stream = client_meta_stream
             .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-            .weaken_consistency()
             .merge_unordered(
                 replica_meta_stream
                     .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-                    .weaken_consistency()
             );
 
         // Background plumbing (returns streams for potential chaining)
-        let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
+        let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.ir_node_named("data_events"), meta_stream.ir_node_named("meta_events"));
 
         // Send KVSResponse structs to proxy (they contain client_id)
         let proxy_responses = client_responses.send($proxy, TCP.fail_stop().bincode());
@@ -144,7 +142,7 @@ macro_rules! plumb_kvs_dataflow_impl {
             .into_keyed();
 
         // Complete the bidirectional connection
-        complete_sink.complete(to_complete);
+        complete_sink.complete(to_complete.ir_node_named("client_responses"));
 
         (layers, bidi_port)
     }};
@@ -193,7 +191,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
+        + crate::background::BackgroundPlumb<KeyType, V>,
 {
     plumb_kvs_dataflow_impl!(
         KeyType,
@@ -254,7 +252,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V, OutputOrder = hydro_lang::live_collections::stream::TotalOrder>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
+        + crate::background::BackgroundPlumb<KeyType, V>,
 {
     use hydro_lang::live_collections::stream::TotalOrder;
 
@@ -301,18 +299,16 @@ where
     );
 
     // Replica responses have no client_id — drop them to keep observable output clean.
-    let _ = replica_responses;
-    let data_events = client_data_events.weaken_consistency().merge_unordered(replica_data_events.weaken_consistency());
+    let _ = replica_responses.ir_node_named("replica_responses_internal");
+    let data_events = client_data_events.merge_unordered(replica_data_events);
     let meta_stream = client_meta_stream
         .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        .weaken_consistency()
         .merge_unordered(
             replica_meta_stream
                 .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-                .weaken_consistency()
         );
 
-    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events, meta_stream);
+    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.ir_node_named("data_events"), meta_stream.ir_node_named("meta_events"));
 
     let proxy_responses = client_responses.send(proxy, TCP.fail_stop().bincode());
     let to_complete = proxy_responses
@@ -321,7 +317,7 @@ where
             response.client_id().map(|cid| (cid, response.to_string()))
         }))
         .into_keyed();
-    complete_sink.complete(to_complete);
+    complete_sink.complete(to_complete.ir_node_named("client_responses"));
 
     (layers, bidi_port)
 }
@@ -375,7 +371,7 @@ where
         + crate::kvs_layer::KVSPlumb<KeyType, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<KeyType, V>
-        + crate::background::BackgroundPlumb<KeyType, V, hydro_lang::location::cluster::Nondeterministic>,
+        + crate::background::BackgroundPlumb<KeyType, V>,
 {
     plumb_kvs_dataflow_impl!(
         KeyType,
@@ -428,7 +424,7 @@ where
         + crate::kvs_layer::KVSPlumb<String, V>
         + crate::kvs_layer::AfterPlumb<V>
         + ReplicationPlumb<String, V>
-        + crate::background::BackgroundPlumb<String, V, hydro_lang::location::cluster::Nondeterministic>,
+        + crate::background::BackgroundPlumb<String, V>,
 {
     plumb_kvs_dataflow_impl!(
         String,

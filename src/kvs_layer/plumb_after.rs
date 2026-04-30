@@ -5,14 +5,14 @@ use crate::after_storage::{AfterResponses, ReplicationStrategy};
 use crate::protocol::KVSOperation;
 
 type ClusterStream<'a, T, O = NoOrder> =
-    Stream<T, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
+    Stream<T, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
 type ClusterKVSOpStream<'a, K, V, O = NoOrder> =
-    Stream<KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
+    Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>;
 
 /// Forward a delta stream to the parent cluster so cluster-scoped hooks can observe peer traffic.
 fn forward_to_cluster<'a, K, V, O>(
-    stream: Stream<(K, V), StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
-    target_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+    stream: Stream<(K, V), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
+    target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
 ) -> ClusterStream<'a, (K, V), NoOrder>
 where
     O: hydro_lang::live_collections::stream::Ordering,
@@ -31,7 +31,7 @@ where
 {
     // broadcast_bincode already introduces non-determinism, no need to re-assert ordering
     stream
-        .broadcast(target_cluster, TCP.fail_stop().bincode())
+        .broadcast(target_cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
         .values()
 }
 
@@ -40,8 +40,8 @@ pub trait AfterPlumb<V> {
     fn after_responses<'a>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        responses: Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        responses: Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static;
 }
@@ -50,8 +50,8 @@ impl<V> AfterPlumb<V> for () {
     fn after_responses<'a>(
         &self,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
-        responses: Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        responses: Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
@@ -70,8 +70,8 @@ where
     fn after_responses<'a>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        responses: Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        responses: Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {
@@ -91,8 +91,8 @@ where
     fn after_responses<'a>(
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
-        responses: Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        responses: Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         V: Clone + serde::Serialize + for<'de> serde::Deserialize<'de> + Send + Sync + 'static,
     {

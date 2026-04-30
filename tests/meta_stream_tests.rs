@@ -152,7 +152,7 @@ async fn background_plumb_routes_meta_events() {
 async fn tomb_index_background_emits_summary() {
     hydro_lang::test_util::multi_location_test(
         |flow, process| {
-            let cluster = flow.static_cluster::<kvs_zoo::kvs_core::KVSNode>();
+            let cluster = flow.cluster::<kvs_zoo::kvs_core::KVSNode>();
             let ops = cluster
                 .source_iter(q!(vec![kvs_zoo::protocol::KVSOperation::<
                     String,

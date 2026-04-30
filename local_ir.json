@@ -1,0 +1,2693 @@
+[
+  {
+    "SendExternal": {
+      "to_external_key": {
+        "idx": 2,
+        "version": 1
+      },
+      "to_port_id": 0,
+      "to_many": true,
+      "unpaired": false,
+      "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (u64 , std :: string :: String) , _ > (| (id , b) | (id , hydro_lang :: runtime_support :: bincode :: serialize (& b) . unwrap () . into ())))",
+      "instantiate_fn": "Building",
+      "input": {
+        "Cast": {
+          "inner": {
+            "CycleSource": {
+              "cycle_id": 0,
+              "metadata": {
+                "location_id": {
+                  "Process": {
+                    "idx": 1,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "KeyedStream": {
+                    "bound": "Unbounded",
+                    "value_order": "NoOrder",
+                    "value_retry": "ExactlyOnce",
+                    "key_type": "u64",
+                    "value_type": "std :: string :: String"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Process": {
+                "idx": 1,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "Stream": {
+                "bound": "Unbounded",
+                "order": "NoOrder",
+                "retry": "ExactlyOnce",
+                "element_type": "(u64 , std :: string :: String)"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
+    "CycleSink": {
+      "cycle_id": 0,
+      "input": {
+        "Cast": {
+          "inner": {
+            "FilterMap": {
+              "f": "q!(| (_member_id , response) | { response . client_id () . map (| cid | (cid , response . to_string ())) })",
+              "input": {
+                "Cast": {
+                  "inner": {
+                    "Cast": {
+                      "inner": {
+                        "Network": {
+                          "name": null,
+                          "networking_info": {
+                            "Tcp": {
+                              "fault": "FailStop"
+                            }
+                          },
+                          "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > , _ > (| data | { hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into () }))",
+                          "instantiate_fn": "Building",
+                          "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
+                          "input": {
+                            "Chain": {
+                              "first": {
+                                "Chain": {
+                                  "first": {
+                                    "FilterMap": {
+                                      "f": "q!(| (_ , _ , request_id , client_id) | { if client_id . is_some () { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } })",
+                                      "input": {
+                                        "Tee": {
+                                          "inner": {
+                                            "$shared": 0,
+                                            "node": {
+                                              "FilterMap": {
+                                                "f": "q!(| op | match op { KVSOperation :: Put (key , value , request_id , client_id) => { Some ((key , value , request_id , client_id)) } _ => None , })",
+                                                "input": {
+                                                  "Tee": {
+                                                    "inner": {
+                                                      "$shared": 1,
+                                                      "node": {
+                                                        "Network": {
+                                                          "name": null,
+                                                          "networking_info": {
+                                                            "Tcp": {
+                                                              "fault": "FailStop"
+                                                            }
+                                                          },
+                                                          "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (hydro_lang :: __staged :: location :: MemberId < _ > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >) , _ > (| (id , data) | { (id . into_tagless () , hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into ()) }))",
+                                                          "instantiate_fn": "Building",
+                                                          "deserialize_fn": "q!(| res | { hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& res . unwrap ()) . unwrap () })",
+                                                          "input": {
+                                                            "Cast": {
+                                                              "inner": {
+                                                                "Map": {
+                                                                  "f": "q!(| op | (hydro_lang :: location :: MemberId :: from_raw_id (0u32) , op))",
+                                                                  "input": {
+                                                                    "Map": {
+                                                                      "f": "q!(| (client_id , op) | op . with_client_id (Some (client_id)))",
+                                                                      "input": {
+                                                                        "Cast": {
+                                                                          "inner": {
+                                                                            "ExternalInput": {
+                                                                              "from_external_key": {
+                                                                                "idx": 2,
+                                                                                "version": 1
+                                                                              },
+                                                                              "from_port_id": 0,
+                                                                              "from_many": true,
+                                                                              "codec_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: __staged :: __deps :: tokio_util :: codec :: length_delimited :: LengthDelimitedCodec",
+                                                                              "instantiate_fn": "Building",
+                                                                              "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (id , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
+                                                                              "metadata": {
+                                                                                "location_id": {
+                                                                                  "Process": {
+                                                                                    "idx": 1,
+                                                                                    "version": 1
+                                                                                  }
+                                                                                },
+                                                                                "collection_kind": {
+                                                                                  "KeyedStream": {
+                                                                                    "bound": "Unbounded",
+                                                                                    "value_order": "TotalOrder",
+                                                                                    "value_retry": "ExactlyOnce",
+                                                                                    "key_type": "u64",
+                                                                                    "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                                  }
+                                                                                },
+                                                                                "cardinality": null,
+                                                                                "tag": null,
+                                                                                "op": {
+                                                                                  "cpu_usage": null,
+                                                                                  "network_recv_cpu_usage": null,
+                                                                                  "id": null
+                                                                                }
+                                                                              }
+                                                                            }
+                                                                          },
+                                                                          "metadata": {
+                                                                            "location_id": {
+                                                                              "Process": {
+                                                                                "idx": 1,
+                                                                                "version": 1
+                                                                              }
+                                                                            },
+                                                                            "collection_kind": {
+                                                                              "Stream": {
+                                                                                "bound": "Unbounded",
+                                                                                "order": "NoOrder",
+                                                                                "retry": "ExactlyOnce",
+                                                                                "element_type": "(u64 , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                                              }
+                                                                            },
+                                                                            "cardinality": null,
+                                                                            "tag": null,
+                                                                            "op": {
+                                                                              "cpu_usage": null,
+                                                                              "network_recv_cpu_usage": null,
+                                                                              "id": null
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "metadata": {
+                                                                        "location_id": {
+                                                                          "Process": {
+                                                                            "idx": 1,
+                                                                            "version": 1
+                                                                          }
+                                                                        },
+                                                                        "collection_kind": {
+                                                                          "Stream": {
+                                                                            "bound": "Unbounded",
+                                                                            "order": "NoOrder",
+                                                                            "retry": "ExactlyOnce",
+                                                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                          }
+                                                                        },
+                                                                        "cardinality": null,
+                                                                        "tag": null,
+                                                                        "op": {
+                                                                          "cpu_usage": null,
+                                                                          "network_recv_cpu_usage": null,
+                                                                          "id": null
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "metadata": {
+                                                                    "location_id": {
+                                                                      "Process": {
+                                                                        "idx": 1,
+                                                                        "version": 1
+                                                                      }
+                                                                    },
+                                                                    "collection_kind": {
+                                                                      "Stream": {
+                                                                        "bound": "Unbounded",
+                                                                        "order": "NoOrder",
+                                                                        "retry": "ExactlyOnce",
+                                                                        "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                                      }
+                                                                    },
+                                                                    "cardinality": null,
+                                                                    "tag": null,
+                                                                    "op": {
+                                                                      "cpu_usage": null,
+                                                                      "network_recv_cpu_usage": null,
+                                                                      "id": null
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "metadata": {
+                                                                "location_id": {
+                                                                  "Process": {
+                                                                    "idx": 1,
+                                                                    "version": 1
+                                                                  }
+                                                                },
+                                                                "collection_kind": {
+                                                                  "KeyedStream": {
+                                                                    "bound": "Unbounded",
+                                                                    "value_order": "NoOrder",
+                                                                    "value_retry": "ExactlyOnce",
+                                                                    "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                                                                    "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                  }
+                                                                },
+                                                                "cardinality": null,
+                                                                "tag": null,
+                                                                "op": {
+                                                                  "cpu_usage": null,
+                                                                  "network_recv_cpu_usage": null,
+                                                                  "id": null
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "metadata": {
+                                                            "location_id": {
+                                                              "Cluster": {
+                                                                "idx": 3,
+                                                                "version": 1
+                                                              }
+                                                            },
+                                                            "collection_kind": {
+                                                              "Stream": {
+                                                                "bound": "Unbounded",
+                                                                "order": "NoOrder",
+                                                                "retry": "ExactlyOnce",
+                                                                "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                              }
+                                                            },
+                                                            "cardinality": null,
+                                                            "tag": null,
+                                                            "op": {
+                                                              "cpu_usage": null,
+                                                              "network_recv_cpu_usage": null,
+                                                              "id": null
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "metadata": {
+                                                      "location_id": {
+                                                        "Cluster": {
+                                                          "idx": 3,
+                                                          "version": 1
+                                                        }
+                                                      },
+                                                      "collection_kind": {
+                                                        "Stream": {
+                                                          "bound": "Unbounded",
+                                                          "order": "NoOrder",
+                                                          "retry": "ExactlyOnce",
+                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                        }
+                                                      },
+                                                      "cardinality": null,
+                                                      "tag": null,
+                                                      "op": {
+                                                        "cpu_usage": null,
+                                                        "network_recv_cpu_usage": null,
+                                                        "id": null
+                                                      }
+                                                    }
+                                                  }
+                                                },
+                                                "metadata": {
+                                                  "location_id": {
+                                                    "Cluster": {
+                                                      "idx": 3,
+                                                      "version": 1
+                                                    }
+                                                  },
+                                                  "collection_kind": {
+                                                    "Stream": {
+                                                      "bound": "Unbounded",
+                                                      "order": "NoOrder",
+                                                      "retry": "ExactlyOnce",
+                                                      "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                    }
+                                                  },
+                                                  "cardinality": null,
+                                                  "tag": null,
+                                                  "op": {
+                                                    "cpu_usage": null,
+                                                    "network_recv_cpu_usage": null,
+                                                    "id": null
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Unbounded",
+                                                "order": "NoOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "metadata": {
+                                        "location_id": {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        },
+                                        "collection_kind": {
+                                          "Stream": {
+                                            "bound": "Unbounded",
+                                            "order": "NoOrder",
+                                            "retry": "ExactlyOnce",
+                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "second": {
+                                    "FilterMap": {
+                                      "f": "q!(| (_ , request_id , client_id) | { if client_id . is_some () { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } })",
+                                      "input": {
+                                        "Tee": {
+                                          "inner": {
+                                            "$shared": 2,
+                                            "node": {
+                                              "FilterMap": {
+                                                "f": "q!(| op | match op { KVSOperation :: Delete (key , request_id , client_id) => Some ((key , request_id , client_id)) , _ => None , })",
+                                                "input": {
+                                                  "Tee": {
+                                                    "inner": {
+                                                      "$shared_ref": 1
+                                                    },
+                                                    "metadata": {
+                                                      "location_id": {
+                                                        "Cluster": {
+                                                          "idx": 3,
+                                                          "version": 1
+                                                        }
+                                                      },
+                                                      "collection_kind": {
+                                                        "Stream": {
+                                                          "bound": "Unbounded",
+                                                          "order": "NoOrder",
+                                                          "retry": "ExactlyOnce",
+                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                        }
+                                                      },
+                                                      "cardinality": null,
+                                                      "tag": null,
+                                                      "op": {
+                                                        "cpu_usage": null,
+                                                        "network_recv_cpu_usage": null,
+                                                        "id": null
+                                                      }
+                                                    }
+                                                  }
+                                                },
+                                                "metadata": {
+                                                  "location_id": {
+                                                    "Cluster": {
+                                                      "idx": 3,
+                                                      "version": 1
+                                                    }
+                                                  },
+                                                  "collection_kind": {
+                                                    "Stream": {
+                                                      "bound": "Unbounded",
+                                                      "order": "NoOrder",
+                                                      "retry": "ExactlyOnce",
+                                                      "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                    }
+                                                  },
+                                                  "cardinality": null,
+                                                  "tag": null,
+                                                  "op": {
+                                                    "cpu_usage": null,
+                                                    "network_recv_cpu_usage": null,
+                                                    "id": null
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Unbounded",
+                                                "order": "NoOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "metadata": {
+                                        "location_id": {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        },
+                                        "collection_kind": {
+                                          "Stream": {
+                                            "bound": "Unbounded",
+                                            "order": "NoOrder",
+                                            "retry": "ExactlyOnce",
+                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "metadata": {
+                                    "location_id": {
+                                      "Cluster": {
+                                        "idx": 3,
+                                        "version": 1
+                                      }
+                                    },
+                                    "collection_kind": {
+                                      "Stream": {
+                                        "bound": "Unbounded",
+                                        "order": "NoOrder",
+                                        "retry": "ExactlyOnce",
+                                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                      }
+                                    },
+                                    "cardinality": null,
+                                    "tag": null,
+                                    "op": {
+                                      "cpu_usage": null,
+                                      "network_recv_cpu_usage": null,
+                                      "id": null
+                                    }
+                                  }
+                                }
+                              },
+                              "second": {
+                                "YieldConcat": {
+                                  "inner": {
+                                    "FilterMap": {
+                                      "f": "q!(| (storage_value , (request_id , client_id)) | { if client_id . is_some () { Some (KVSResponse :: GetResult { request_id , client_id , value : Some (storage_value) , }) } else { None } })",
+                                      "input": {
+                                        "Map": {
+                                          "f": "q!(| (_ , v) | v)",
+                                          "input": {
+                                            "Cast": {
+                                              "inner": {
+                                                "Join": {
+                                                  "left": {
+                                                    "Batch": {
+                                                      "inner": {
+                                                        "FoldKeyed": {
+                                                          "init": "q!(| | V :: default ())",
+                                                          "acc": "q!(| old , new | { * old = new ; })",
+                                                          "input": {
+                                                            "Cast": {
+                                                              "inner": {
+                                                                "ObserveNonDet": {
+                                                                  "inner": {
+                                                                    "Map": {
+                                                                      "f": "q!(| (key , value , _ , _) | (key , value))",
+                                                                      "input": {
+                                                                        "Tee": {
+                                                                          "inner": {
+                                                                            "$shared_ref": 0
+                                                                          },
+                                                                          "metadata": {
+                                                                            "location_id": {
+                                                                              "Cluster": {
+                                                                                "idx": 3,
+                                                                                "version": 1
+                                                                              }
+                                                                            },
+                                                                            "collection_kind": {
+                                                                              "Stream": {
+                                                                                "bound": "Unbounded",
+                                                                                "order": "NoOrder",
+                                                                                "retry": "ExactlyOnce",
+                                                                                "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                                              }
+                                                                            },
+                                                                            "cardinality": null,
+                                                                            "tag": null,
+                                                                            "op": {
+                                                                              "cpu_usage": null,
+                                                                              "network_recv_cpu_usage": null,
+                                                                              "id": null
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "metadata": {
+                                                                        "location_id": {
+                                                                          "Cluster": {
+                                                                            "idx": 3,
+                                                                            "version": 1
+                                                                          }
+                                                                        },
+                                                                        "collection_kind": {
+                                                                          "Stream": {
+                                                                            "bound": "Unbounded",
+                                                                            "order": "NoOrder",
+                                                                            "retry": "ExactlyOnce",
+                                                                            "element_type": "(std :: string :: String , std :: string :: String)"
+                                                                          }
+                                                                        },
+                                                                        "cardinality": null,
+                                                                        "tag": null,
+                                                                        "op": {
+                                                                          "cpu_usage": null,
+                                                                          "network_recv_cpu_usage": null,
+                                                                          "id": null
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "trusted": false,
+                                                                  "metadata": {
+                                                                    "location_id": {
+                                                                      "Cluster": {
+                                                                        "idx": 3,
+                                                                        "version": 1
+                                                                      }
+                                                                    },
+                                                                    "collection_kind": {
+                                                                      "Stream": {
+                                                                        "bound": "Unbounded",
+                                                                        "order": "TotalOrder",
+                                                                        "retry": "ExactlyOnce",
+                                                                        "element_type": "(std :: string :: String , std :: string :: String)"
+                                                                      }
+                                                                    },
+                                                                    "cardinality": null,
+                                                                    "tag": null,
+                                                                    "op": {
+                                                                      "cpu_usage": null,
+                                                                      "network_recv_cpu_usage": null,
+                                                                      "id": null
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "metadata": {
+                                                                "location_id": {
+                                                                  "Cluster": {
+                                                                    "idx": 3,
+                                                                    "version": 1
+                                                                  }
+                                                                },
+                                                                "collection_kind": {
+                                                                  "KeyedStream": {
+                                                                    "bound": "Unbounded",
+                                                                    "value_order": "TotalOrder",
+                                                                    "value_retry": "ExactlyOnce",
+                                                                    "key_type": "std :: string :: String",
+                                                                    "value_type": "std :: string :: String"
+                                                                  }
+                                                                },
+                                                                "cardinality": null,
+                                                                "tag": null,
+                                                                "op": {
+                                                                  "cpu_usage": null,
+                                                                  "network_recv_cpu_usage": null,
+                                                                  "id": null
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "is_commutative": false,
+                                                          "is_idempotent": false,
+                                                          "is_associative": false,
+                                                          "metadata": {
+                                                            "location_id": {
+                                                              "Cluster": {
+                                                                "idx": 3,
+                                                                "version": 1
+                                                              }
+                                                            },
+                                                            "collection_kind": {
+                                                              "KeyedSingleton": {
+                                                                "bound": "Unbounded",
+                                                                "key_type": "std :: string :: String",
+                                                                "value_type": "std :: string :: String"
+                                                              }
+                                                            },
+                                                            "cardinality": null,
+                                                            "tag": null,
+                                                            "op": {
+                                                              "cpu_usage": null,
+                                                              "network_recv_cpu_usage": null,
+                                                              "id": null
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "metadata": {
+                                                        "location_id": {
+                                                          "Tick": [
+                                                            0,
+                                                            {
+                                                              "Cluster": {
+                                                                "idx": 3,
+                                                                "version": 1
+                                                              }
+                                                            }
+                                                          ]
+                                                        },
+                                                        "collection_kind": {
+                                                          "KeyedSingleton": {
+                                                            "bound": "Bounded",
+                                                            "key_type": "std :: string :: String",
+                                                            "value_type": "std :: string :: String"
+                                                          }
+                                                        },
+                                                        "cardinality": null,
+                                                        "tag": null,
+                                                        "op": {
+                                                          "cpu_usage": null,
+                                                          "network_recv_cpu_usage": null,
+                                                          "id": null
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "right": {
+                                                    "Cast": {
+                                                      "inner": {
+                                                        "Map": {
+                                                          "f": "q!(| (key , request_id , client_id) | (key , (request_id , client_id)))",
+                                                          "input": {
+                                                            "Batch": {
+                                                              "inner": {
+                                                                "FilterMap": {
+                                                                  "f": "q!(| op | match op { KVSOperation :: Get (key , request_id , client_id) => Some ((key , request_id , client_id)) , _ => None , })",
+                                                                  "input": {
+                                                                    "Tee": {
+                                                                      "inner": {
+                                                                        "$shared_ref": 1
+                                                                      },
+                                                                      "metadata": {
+                                                                        "location_id": {
+                                                                          "Cluster": {
+                                                                            "idx": 3,
+                                                                            "version": 1
+                                                                          }
+                                                                        },
+                                                                        "collection_kind": {
+                                                                          "Stream": {
+                                                                            "bound": "Unbounded",
+                                                                            "order": "NoOrder",
+                                                                            "retry": "ExactlyOnce",
+                                                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                          }
+                                                                        },
+                                                                        "cardinality": null,
+                                                                        "tag": null,
+                                                                        "op": {
+                                                                          "cpu_usage": null,
+                                                                          "network_recv_cpu_usage": null,
+                                                                          "id": null
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "metadata": {
+                                                                    "location_id": {
+                                                                      "Cluster": {
+                                                                        "idx": 3,
+                                                                        "version": 1
+                                                                      }
+                                                                    },
+                                                                    "collection_kind": {
+                                                                      "Stream": {
+                                                                        "bound": "Unbounded",
+                                                                        "order": "NoOrder",
+                                                                        "retry": "ExactlyOnce",
+                                                                        "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                                      }
+                                                                    },
+                                                                    "cardinality": null,
+                                                                    "tag": null,
+                                                                    "op": {
+                                                                      "cpu_usage": null,
+                                                                      "network_recv_cpu_usage": null,
+                                                                      "id": null
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "metadata": {
+                                                                "location_id": {
+                                                                  "Tick": [
+                                                                    0,
+                                                                    {
+                                                                      "Cluster": {
+                                                                        "idx": 3,
+                                                                        "version": 1
+                                                                      }
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                "collection_kind": {
+                                                                  "Stream": {
+                                                                    "bound": "Bounded",
+                                                                    "order": "NoOrder",
+                                                                    "retry": "ExactlyOnce",
+                                                                    "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                                  }
+                                                                },
+                                                                "cardinality": null,
+                                                                "tag": null,
+                                                                "op": {
+                                                                  "cpu_usage": null,
+                                                                  "network_recv_cpu_usage": null,
+                                                                  "id": null
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "metadata": {
+                                                            "location_id": {
+                                                              "Tick": [
+                                                                0,
+                                                                {
+                                                                  "Cluster": {
+                                                                    "idx": 3,
+                                                                    "version": 1
+                                                                  }
+                                                                }
+                                                              ]
+                                                            },
+                                                            "collection_kind": {
+                                                              "Stream": {
+                                                                "bound": "Bounded",
+                                                                "order": "NoOrder",
+                                                                "retry": "ExactlyOnce",
+                                                                "element_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                                                              }
+                                                            },
+                                                            "cardinality": null,
+                                                            "tag": null,
+                                                            "op": {
+                                                              "cpu_usage": null,
+                                                              "network_recv_cpu_usage": null,
+                                                              "id": null
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "metadata": {
+                                                        "location_id": {
+                                                          "Tick": [
+                                                            0,
+                                                            {
+                                                              "Cluster": {
+                                                                "idx": 3,
+                                                                "version": 1
+                                                              }
+                                                            }
+                                                          ]
+                                                        },
+                                                        "collection_kind": {
+                                                          "KeyedStream": {
+                                                            "bound": "Bounded",
+                                                            "value_order": "NoOrder",
+                                                            "value_retry": "ExactlyOnce",
+                                                            "key_type": "std :: string :: String",
+                                                            "value_type": "(u64 , core :: option :: Option < u64 >)"
+                                                          }
+                                                        },
+                                                        "cardinality": null,
+                                                        "tag": null,
+                                                        "op": {
+                                                          "cpu_usage": null,
+                                                          "network_recv_cpu_usage": null,
+                                                          "id": null
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "metadata": {
+                                                    "location_id": {
+                                                      "Tick": [
+                                                        0,
+                                                        {
+                                                          "Cluster": {
+                                                            "idx": 3,
+                                                            "version": 1
+                                                          }
+                                                        }
+                                                      ]
+                                                    },
+                                                    "collection_kind": {
+                                                      "KeyedStream": {
+                                                        "bound": "Bounded",
+                                                        "value_order": "NoOrder",
+                                                        "value_retry": "ExactlyOnce",
+                                                        "key_type": "std :: string :: String",
+                                                        "value_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                                                      }
+                                                    },
+                                                    "cardinality": null,
+                                                    "tag": null,
+                                                    "op": {
+                                                      "cpu_usage": null,
+                                                      "network_recv_cpu_usage": null,
+                                                      "id": null
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "metadata": {
+                                                "location_id": {
+                                                  "Tick": [
+                                                    0,
+                                                    {
+                                                      "Cluster": {
+                                                        "idx": 3,
+                                                        "version": 1
+                                                      }
+                                                    }
+                                                  ]
+                                                },
+                                                "collection_kind": {
+                                                  "Stream": {
+                                                    "bound": "Bounded",
+                                                    "order": "NoOrder",
+                                                    "retry": "ExactlyOnce",
+                                                    "element_type": "(std :: string :: String , (std :: string :: String , (u64 , core :: option :: Option < u64 >)))"
+                                                  }
+                                                },
+                                                "cardinality": null,
+                                                "tag": null,
+                                                "op": {
+                                                  "cpu_usage": null,
+                                                  "network_recv_cpu_usage": null,
+                                                  "id": null
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Tick": [
+                                                0,
+                                                {
+                                                  "Cluster": {
+                                                    "idx": 3,
+                                                    "version": 1
+                                                  }
+                                                }
+                                              ]
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Bounded",
+                                                "order": "NoOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "metadata": {
+                                        "location_id": {
+                                          "Tick": [
+                                            0,
+                                            {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "collection_kind": {
+                                          "Stream": {
+                                            "bound": "Bounded",
+                                            "order": "NoOrder",
+                                            "retry": "ExactlyOnce",
+                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "metadata": {
+                                    "location_id": {
+                                      "Cluster": {
+                                        "idx": 3,
+                                        "version": 1
+                                      }
+                                    },
+                                    "collection_kind": {
+                                      "Stream": {
+                                        "bound": "Unbounded",
+                                        "order": "NoOrder",
+                                        "retry": "ExactlyOnce",
+                                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                      }
+                                    },
+                                    "cardinality": null,
+                                    "tag": null,
+                                    "op": {
+                                      "cpu_usage": null,
+                                      "network_recv_cpu_usage": null,
+                                      "id": null
+                                    }
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "location_id": {
+                                  "Cluster": {
+                                    "idx": 3,
+                                    "version": 1
+                                  }
+                                },
+                                "collection_kind": {
+                                  "Stream": {
+                                    "bound": "Unbounded",
+                                    "order": "NoOrder",
+                                    "retry": "ExactlyOnce",
+                                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                  }
+                                },
+                                "cardinality": null,
+                                "tag": null,
+                                "op": {
+                                  "cpu_usage": null,
+                                  "network_recv_cpu_usage": null,
+                                  "id": null
+                                }
+                              }
+                            }
+                          },
+                          "metadata": {
+                            "location_id": {
+                              "Process": {
+                                "idx": 1,
+                                "version": 1
+                              }
+                            },
+                            "collection_kind": {
+                              "Stream": {
+                                "bound": "Unbounded",
+                                "order": "NoOrder",
+                                "retry": "ExactlyOnce",
+                                "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
+                              }
+                            },
+                            "cardinality": null,
+                            "tag": null,
+                            "op": {
+                              "cpu_usage": null,
+                              "network_recv_cpu_usage": null,
+                              "id": null
+                            }
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Process": {
+                            "idx": 1,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "KeyedStream": {
+                            "bound": "Unbounded",
+                            "value_order": "NoOrder",
+                            "value_retry": "ExactlyOnce",
+                            "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                            "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Process": {
+                        "idx": 1,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Process": {
+                    "idx": 1,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "(u64 , std :: string :: String)"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Process": {
+                "idx": 1,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "KeyedStream": {
+                "bound": "Unbounded",
+                "value_order": "NoOrder",
+                "value_retry": "ExactlyOnce",
+                "key_type": "u64",
+                "value_type": "std :: string :: String"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
+    "Null": {
+      "input": {
+        "Chain": {
+          "first": {
+            "Map": {
+              "f": "q!(| ev | lattices :: set_union :: SetUnionHashSet :: new_from ([ev]))",
+              "input": {
+                "Map": {
+                  "f": "q!(| (key , _ , _) | MetaEvent :: Tomb { key })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 2
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: __deps :: lattices :: set_union :: SetUnion < std :: collections :: hash_set :: HashSet < kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String > > >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "second": {
+            "Map": {
+              "f": "q!(| ev | lattices :: set_union :: SetUnionHashSet :: new_from ([ev]))",
+              "input": {
+                "Map": {
+                  "f": "q!(| (key , _ , _) | MetaEvent :: Tomb { key })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared": 3,
+                        "node": {
+                          "FilterMap": {
+                            "f": "q!(| op | match op { KVSOperation :: Delete (key , request_id , client_id) => Some ((key , request_id , client_id)) , _ => None , })",
+                            "input": {
+                              "Tee": {
+                                "inner": {
+                                  "$shared": 4,
+                                  "node": {
+                                    "FilterMap": {
+                                      "f": "q!(| _kv | None)",
+                                      "input": {
+                                        "Tee": {
+                                          "inner": {
+                                            "$shared": 5,
+                                            "node": {
+                                              "FilterMap": {
+                                                "f": "q!(| op | match op { crate :: __staged :: protocol :: KVSOperation :: Put (k , v , _ , _) => Some ((k , v)) , crate :: __staged :: protocol :: KVSOperation :: Get (_ , _ , _) => None , crate :: __staged :: protocol :: KVSOperation :: Delete (_ , _ , _) => None , })",
+                                                "input": {
+                                                  "Tee": {
+                                                    "inner": {
+                                                      "$shared_ref": 1
+                                                    },
+                                                    "metadata": {
+                                                      "location_id": {
+                                                        "Cluster": {
+                                                          "idx": 3,
+                                                          "version": 1
+                                                        }
+                                                      },
+                                                      "collection_kind": {
+                                                        "Stream": {
+                                                          "bound": "Unbounded",
+                                                          "order": "NoOrder",
+                                                          "retry": "ExactlyOnce",
+                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                        }
+                                                      },
+                                                      "cardinality": null,
+                                                      "tag": null,
+                                                      "op": {
+                                                        "cpu_usage": null,
+                                                        "network_recv_cpu_usage": null,
+                                                        "id": null
+                                                      }
+                                                    }
+                                                  }
+                                                },
+                                                "metadata": {
+                                                  "location_id": {
+                                                    "Cluster": {
+                                                      "idx": 3,
+                                                      "version": 1
+                                                    }
+                                                  },
+                                                  "collection_kind": {
+                                                    "Stream": {
+                                                      "bound": "Unbounded",
+                                                      "order": "NoOrder",
+                                                      "retry": "ExactlyOnce",
+                                                      "element_type": "(std :: string :: String , std :: string :: String)"
+                                                    }
+                                                  },
+                                                  "cardinality": null,
+                                                  "tag": null,
+                                                  "op": {
+                                                    "cpu_usage": null,
+                                                    "network_recv_cpu_usage": null,
+                                                    "id": null
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Unbounded",
+                                                "order": "NoOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "(std :: string :: String , std :: string :: String)"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "metadata": {
+                                        "location_id": {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        },
+                                        "collection_kind": {
+                                          "Stream": {
+                                            "bound": "Unbounded",
+                                            "order": "NoOrder",
+                                            "retry": "ExactlyOnce",
+                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                "metadata": {
+                                  "location_id": {
+                                    "Cluster": {
+                                      "idx": 3,
+                                      "version": 1
+                                    }
+                                  },
+                                  "collection_kind": {
+                                    "Stream": {
+                                      "bound": "Unbounded",
+                                      "order": "NoOrder",
+                                      "retry": "ExactlyOnce",
+                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                    }
+                                  },
+                                  "cardinality": null,
+                                  "tag": null,
+                                  "op": {
+                                    "cpu_usage": null,
+                                    "network_recv_cpu_usage": null,
+                                    "id": null
+                                  }
+                                }
+                              }
+                            },
+                            "metadata": {
+                              "location_id": {
+                                "Cluster": {
+                                  "idx": 3,
+                                  "version": 1
+                                }
+                              },
+                              "collection_kind": {
+                                "Stream": {
+                                  "bound": "Unbounded",
+                                  "order": "NoOrder",
+                                  "retry": "ExactlyOnce",
+                                  "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                }
+                              },
+                              "cardinality": null,
+                              "tag": null,
+                              "op": {
+                                "cpu_usage": null,
+                                "network_recv_cpu_usage": null,
+                                "id": null
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: __deps :: lattices :: set_union :: SetUnion < std :: collections :: hash_set :: HashSet < kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String > > >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Cluster": {
+                "idx": 3,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "Stream": {
+                "bound": "Unbounded",
+                "order": "NoOrder",
+                "retry": "ExactlyOnce",
+                "element_type": "kvs_zoo :: __staged :: __deps :: lattices :: set_union :: SetUnion < std :: collections :: hash_set :: HashSet < kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String > > >"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
+    "Null": {
+      "input": {
+        "Chain": {
+          "first": {
+            "Chain": {
+              "first": {
+                "Map": {
+                  "f": "q!(| (key , value , _ , _) | DataEvent :: Put { key , value })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 0
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "second": {
+                "Map": {
+                  "f": "q!(| (key , _ , _) | DataEvent :: Delete { key })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 2
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "second": {
+            "Chain": {
+              "first": {
+                "Map": {
+                  "f": "q!(| (key , value , _ , _) | DataEvent :: Put { key , value })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared": 6,
+                        "node": {
+                          "FilterMap": {
+                            "f": "q!(| op | match op { KVSOperation :: Put (key , value , request_id , client_id) => { Some ((key , value , request_id , client_id)) } _ => None , })",
+                            "input": {
+                              "Tee": {
+                                "inner": {
+                                  "$shared_ref": 4
+                                },
+                                "metadata": {
+                                  "location_id": {
+                                    "Cluster": {
+                                      "idx": 3,
+                                      "version": 1
+                                    }
+                                  },
+                                  "collection_kind": {
+                                    "Stream": {
+                                      "bound": "Unbounded",
+                                      "order": "NoOrder",
+                                      "retry": "ExactlyOnce",
+                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                    }
+                                  },
+                                  "cardinality": null,
+                                  "tag": null,
+                                  "op": {
+                                    "cpu_usage": null,
+                                    "network_recv_cpu_usage": null,
+                                    "id": null
+                                  }
+                                }
+                              }
+                            },
+                            "metadata": {
+                              "location_id": {
+                                "Cluster": {
+                                  "idx": 3,
+                                  "version": 1
+                                }
+                              },
+                              "collection_kind": {
+                                "Stream": {
+                                  "bound": "Unbounded",
+                                  "order": "NoOrder",
+                                  "retry": "ExactlyOnce",
+                                  "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                }
+                              },
+                              "cardinality": null,
+                              "tag": null,
+                              "op": {
+                                "cpu_usage": null,
+                                "network_recv_cpu_usage": null,
+                                "id": null
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "second": {
+                "Map": {
+                  "f": "q!(| (key , _ , _) | DataEvent :: Delete { key })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 3
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Cluster": {
+                "idx": 3,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "Stream": {
+                "bound": "Unbounded",
+                "order": "NoOrder",
+                "retry": "ExactlyOnce",
+                "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
+    "Null": {
+      "input": {
+        "Chain": {
+          "first": {
+            "Chain": {
+              "first": {
+                "FilterMap": {
+                  "f": "q!(| (_ , _ , request_id , client_id) | { if client_id . is_some () { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 6
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "second": {
+                "FilterMap": {
+                  "f": "q!(| (_ , request_id , client_id) | { if client_id . is_some () { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } })",
+                  "input": {
+                    "Tee": {
+                      "inner": {
+                        "$shared_ref": 3
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Unbounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Cluster": {
+                        "idx": 3,
+                        "version": 1
+                      }
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Unbounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "second": {
+            "YieldConcat": {
+              "inner": {
+                "FilterMap": {
+                  "f": "q!(| (storage_value , (request_id , client_id)) | { if client_id . is_some () { Some (KVSResponse :: GetResult { request_id , client_id , value : Some (storage_value) , }) } else { None } })",
+                  "input": {
+                    "Map": {
+                      "f": "q!(| (_ , v) | v)",
+                      "input": {
+                        "Cast": {
+                          "inner": {
+                            "Join": {
+                              "left": {
+                                "Batch": {
+                                  "inner": {
+                                    "FoldKeyed": {
+                                      "init": "q!(| | V :: default ())",
+                                      "acc": "q!(| old , new | { * old = new ; })",
+                                      "input": {
+                                        "Cast": {
+                                          "inner": {
+                                            "ObserveNonDet": {
+                                              "inner": {
+                                                "Map": {
+                                                  "f": "q!(| (key , value , _ , _) | (key , value))",
+                                                  "input": {
+                                                    "Tee": {
+                                                      "inner": {
+                                                        "$shared_ref": 6
+                                                      },
+                                                      "metadata": {
+                                                        "location_id": {
+                                                          "Cluster": {
+                                                            "idx": 3,
+                                                            "version": 1
+                                                          }
+                                                        },
+                                                        "collection_kind": {
+                                                          "Stream": {
+                                                            "bound": "Unbounded",
+                                                            "order": "NoOrder",
+                                                            "retry": "ExactlyOnce",
+                                                            "element_type": "(std :: string :: String , std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                          }
+                                                        },
+                                                        "cardinality": null,
+                                                        "tag": null,
+                                                        "op": {
+                                                          "cpu_usage": null,
+                                                          "network_recv_cpu_usage": null,
+                                                          "id": null
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "metadata": {
+                                                    "location_id": {
+                                                      "Cluster": {
+                                                        "idx": 3,
+                                                        "version": 1
+                                                      }
+                                                    },
+                                                    "collection_kind": {
+                                                      "Stream": {
+                                                        "bound": "Unbounded",
+                                                        "order": "NoOrder",
+                                                        "retry": "ExactlyOnce",
+                                                        "element_type": "(std :: string :: String , std :: string :: String)"
+                                                      }
+                                                    },
+                                                    "cardinality": null,
+                                                    "tag": null,
+                                                    "op": {
+                                                      "cpu_usage": null,
+                                                      "network_recv_cpu_usage": null,
+                                                      "id": null
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "trusted": false,
+                                              "metadata": {
+                                                "location_id": {
+                                                  "Cluster": {
+                                                    "idx": 3,
+                                                    "version": 1
+                                                  }
+                                                },
+                                                "collection_kind": {
+                                                  "Stream": {
+                                                    "bound": "Unbounded",
+                                                    "order": "TotalOrder",
+                                                    "retry": "ExactlyOnce",
+                                                    "element_type": "(std :: string :: String , std :: string :: String)"
+                                                  }
+                                                },
+                                                "cardinality": null,
+                                                "tag": null,
+                                                "op": {
+                                                  "cpu_usage": null,
+                                                  "network_recv_cpu_usage": null,
+                                                  "id": null
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            },
+                                            "collection_kind": {
+                                              "KeyedStream": {
+                                                "bound": "Unbounded",
+                                                "value_order": "TotalOrder",
+                                                "value_retry": "ExactlyOnce",
+                                                "key_type": "std :: string :: String",
+                                                "value_type": "std :: string :: String"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "is_commutative": false,
+                                      "is_idempotent": false,
+                                      "is_associative": false,
+                                      "metadata": {
+                                        "location_id": {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        },
+                                        "collection_kind": {
+                                          "KeyedSingleton": {
+                                            "bound": "Unbounded",
+                                            "key_type": "std :: string :: String",
+                                            "value_type": "std :: string :: String"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "metadata": {
+                                    "location_id": {
+                                      "Tick": [
+                                        1,
+                                        {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    "collection_kind": {
+                                      "KeyedSingleton": {
+                                        "bound": "Bounded",
+                                        "key_type": "std :: string :: String",
+                                        "value_type": "std :: string :: String"
+                                      }
+                                    },
+                                    "cardinality": null,
+                                    "tag": null,
+                                    "op": {
+                                      "cpu_usage": null,
+                                      "network_recv_cpu_usage": null,
+                                      "id": null
+                                    }
+                                  }
+                                }
+                              },
+                              "right": {
+                                "Cast": {
+                                  "inner": {
+                                    "Map": {
+                                      "f": "q!(| (key , request_id , client_id) | (key , (request_id , client_id)))",
+                                      "input": {
+                                        "Batch": {
+                                          "inner": {
+                                            "FilterMap": {
+                                              "f": "q!(| op | match op { KVSOperation :: Get (key , request_id , client_id) => Some ((key , request_id , client_id)) , _ => None , })",
+                                              "input": {
+                                                "Tee": {
+                                                  "inner": {
+                                                    "$shared_ref": 4
+                                                  },
+                                                  "metadata": {
+                                                    "location_id": {
+                                                      "Cluster": {
+                                                        "idx": 3,
+                                                        "version": 1
+                                                      }
+                                                    },
+                                                    "collection_kind": {
+                                                      "Stream": {
+                                                        "bound": "Unbounded",
+                                                        "order": "NoOrder",
+                                                        "retry": "ExactlyOnce",
+                                                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                      }
+                                                    },
+                                                    "cardinality": null,
+                                                    "tag": null,
+                                                    "op": {
+                                                      "cpu_usage": null,
+                                                      "network_recv_cpu_usage": null,
+                                                      "id": null
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "metadata": {
+                                                "location_id": {
+                                                  "Cluster": {
+                                                    "idx": 3,
+                                                    "version": 1
+                                                  }
+                                                },
+                                                "collection_kind": {
+                                                  "Stream": {
+                                                    "bound": "Unbounded",
+                                                    "order": "NoOrder",
+                                                    "retry": "ExactlyOnce",
+                                                    "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                                  }
+                                                },
+                                                "cardinality": null,
+                                                "tag": null,
+                                                "op": {
+                                                  "cpu_usage": null,
+                                                  "network_recv_cpu_usage": null,
+                                                  "id": null
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Tick": [
+                                                1,
+                                                {
+                                                  "Cluster": {
+                                                    "idx": 3,
+                                                    "version": 1
+                                                  }
+                                                }
+                                              ]
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Bounded",
+                                                "order": "NoOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "(std :: string :: String , u64 , core :: option :: Option < u64 >)"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "metadata": {
+                                        "location_id": {
+                                          "Tick": [
+                                            1,
+                                            {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        "collection_kind": {
+                                          "Stream": {
+                                            "bound": "Bounded",
+                                            "order": "NoOrder",
+                                            "retry": "ExactlyOnce",
+                                            "element_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                                          }
+                                        },
+                                        "cardinality": null,
+                                        "tag": null,
+                                        "op": {
+                                          "cpu_usage": null,
+                                          "network_recv_cpu_usage": null,
+                                          "id": null
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "metadata": {
+                                    "location_id": {
+                                      "Tick": [
+                                        1,
+                                        {
+                                          "Cluster": {
+                                            "idx": 3,
+                                            "version": 1
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    "collection_kind": {
+                                      "KeyedStream": {
+                                        "bound": "Bounded",
+                                        "value_order": "NoOrder",
+                                        "value_retry": "ExactlyOnce",
+                                        "key_type": "std :: string :: String",
+                                        "value_type": "(u64 , core :: option :: Option < u64 >)"
+                                      }
+                                    },
+                                    "cardinality": null,
+                                    "tag": null,
+                                    "op": {
+                                      "cpu_usage": null,
+                                      "network_recv_cpu_usage": null,
+                                      "id": null
+                                    }
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "location_id": {
+                                  "Tick": [
+                                    1,
+                                    {
+                                      "Cluster": {
+                                        "idx": 3,
+                                        "version": 1
+                                      }
+                                    }
+                                  ]
+                                },
+                                "collection_kind": {
+                                  "KeyedStream": {
+                                    "bound": "Bounded",
+                                    "value_order": "NoOrder",
+                                    "value_retry": "ExactlyOnce",
+                                    "key_type": "std :: string :: String",
+                                    "value_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                                  }
+                                },
+                                "cardinality": null,
+                                "tag": null,
+                                "op": {
+                                  "cpu_usage": null,
+                                  "network_recv_cpu_usage": null,
+                                  "id": null
+                                }
+                              }
+                            }
+                          },
+                          "metadata": {
+                            "location_id": {
+                              "Tick": [
+                                1,
+                                {
+                                  "Cluster": {
+                                    "idx": 3,
+                                    "version": 1
+                                  }
+                                }
+                              ]
+                            },
+                            "collection_kind": {
+                              "Stream": {
+                                "bound": "Bounded",
+                                "order": "NoOrder",
+                                "retry": "ExactlyOnce",
+                                "element_type": "(std :: string :: String , (std :: string :: String , (u64 , core :: option :: Option < u64 >)))"
+                              }
+                            },
+                            "cardinality": null,
+                            "tag": null,
+                            "op": {
+                              "cpu_usage": null,
+                              "network_recv_cpu_usage": null,
+                              "id": null
+                            }
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "location_id": {
+                          "Tick": [
+                            1,
+                            {
+                              "Cluster": {
+                                "idx": 3,
+                                "version": 1
+                              }
+                            }
+                          ]
+                        },
+                        "collection_kind": {
+                          "Stream": {
+                            "bound": "Bounded",
+                            "order": "NoOrder",
+                            "retry": "ExactlyOnce",
+                            "element_type": "(std :: string :: String , (u64 , core :: option :: Option < u64 >))"
+                          }
+                        },
+                        "cardinality": null,
+                        "tag": null,
+                        "op": {
+                          "cpu_usage": null,
+                          "network_recv_cpu_usage": null,
+                          "id": null
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "location_id": {
+                      "Tick": [
+                        1,
+                        {
+                          "Cluster": {
+                            "idx": 3,
+                            "version": 1
+                          }
+                        }
+                      ]
+                    },
+                    "collection_kind": {
+                      "Stream": {
+                        "bound": "Bounded",
+                        "order": "NoOrder",
+                        "retry": "ExactlyOnce",
+                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                      }
+                    },
+                    "cardinality": null,
+                    "tag": null,
+                    "op": {
+                      "cpu_usage": null,
+                      "network_recv_cpu_usage": null,
+                      "id": null
+                    }
+                  }
+                }
+              },
+              "metadata": {
+                "location_id": {
+                  "Cluster": {
+                    "idx": 3,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "Stream": {
+                    "bound": "Unbounded",
+                    "order": "NoOrder",
+                    "retry": "ExactlyOnce",
+                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Cluster": {
+                "idx": 3,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "Stream": {
+                "bound": "Unbounded",
+                "order": "NoOrder",
+                "retry": "ExactlyOnce",
+                "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
+    "Null": {
+      "input": {
+        "Map": {
+          "f": "q!({ let orig = f__free ; move | (k , v) | (k , orig (v)) })",
+          "input": {
+            "Source": {
+              "source": {
+                "Stream": "q!(__hydro_deploy_many_loc2v1_0_membership)"
+              },
+              "metadata": {
+                "location_id": {
+                  "Process": {
+                    "idx": 1,
+                    "version": 1
+                  }
+                },
+                "collection_kind": {
+                  "KeyedStream": {
+                    "bound": "Unbounded",
+                    "value_order": "TotalOrder",
+                    "value_retry": "ExactlyOnce",
+                    "key_type": "u64",
+                    "value_type": "bool"
+                  }
+                },
+                "cardinality": null,
+                "tag": null,
+                "op": {
+                  "cpu_usage": null,
+                  "network_recv_cpu_usage": null,
+                  "id": null
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Process": {
+                "idx": 1,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "KeyedStream": {
+                "bound": "Unbounded",
+                "value_order": "TotalOrder",
+                "value_retry": "ExactlyOnce",
+                "key_type": "u64",
+                "value_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: MembershipEvent"
+              }
+            },
+            "cardinality": null,
+            "tag": null,
+            "op": {
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  }
+]

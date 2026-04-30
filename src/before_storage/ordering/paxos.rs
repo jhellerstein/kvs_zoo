@@ -33,9 +33,9 @@ impl<K, V> PaxosDispatcher<K, V> {
     pub fn paxos_run<'a, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-        acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    ) -> Stream<KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded>
+        proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+        acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+    ) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded>
     where
         O: hydro_lang::live_collections::stream::Ordering,
         K: Clone
@@ -55,7 +55,7 @@ impl<K, V> PaxosDispatcher<K, V> {
         checkpoint_complete.complete(checkpoint_opt);
 
         let ops_at_proposers = operations
-            .broadcast_static(proposers, TCP.fail_stop().bincode());
+            .broadcast(proposers, TCP.fail_stop().bincode(), nondet!(/** membership */));
 
         let (_ballot_stream, ordered_slots) = paxos_core(
             proposers,
@@ -113,10 +113,10 @@ where
     fn dispatch_from_process<'a, O>(
         &self,
         _operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        _target_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+        _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -135,10 +135,10 @@ where
         &self,
         layers: &crate::kvs_layer::KVSClusters<'a>,
         operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded, O>,
-        target_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -181,7 +181,7 @@ where
             .into_keyed()
             .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
-            .assume_ordering_same_consistency(nondet!(
+            .assume_ordering(nondet!(
                 /// Paxos establishes total order via slot-based sequencing.
                 /// The demux preserves this order because operations are sent
                 /// one-by-one in slot order from the proposer.
@@ -190,13 +190,13 @@ where
 
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
-        source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-        target_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
+        source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
         _layers: &crate::kvs_layer::KVSClusters<'a>,
     ) -> Stream<
         KVSOperation<K, V>,
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -215,20 +215,20 @@ where
         layers: &mut crate::kvs_layer::KVSClusters<'a>,
     ) {
         // Create role clusters as KVSNode-tagged so they can be stored in KVSClusters
-        let proposers = flow.static_cluster::<crate::kvs_core::KVSNode>();
-        let acceptors = flow.static_cluster::<crate::kvs_core::KVSNode>();
+        let proposers = flow.cluster::<crate::kvs_core::KVSNode>();
+        let acceptors = flow.cluster::<crate::kvs_core::KVSNode>();
         layers.insert_role::<Name, crate::before_storage::ordering::Proposer>(proposers);
         layers.insert_role::<Name, crate::before_storage::ordering::Acceptor>(acceptors);
     }
 
     fn dispatch_from_cluster<'a, O>(
         &self,
-        operations: Stream<KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
-        _source_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-        _target_cluster: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+        operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
+        _source_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
+        _target_cluster: &Cluster<'a, crate::kvs_core::KVSNode>,
     ) -> Stream<
         KVSOperation<K, V>,
-        StaticCluster<'a, crate::kvs_core::KVSNode>,
+        Cluster<'a, crate::kvs_core::KVSNode>,
         Unbounded,
         Self::OutputOrder,
     >
@@ -237,7 +237,7 @@ where
         K: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
         V: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     {
-        operations.assume_ordering_same_consistency(nondet!(
+        operations.assume_ordering(nondet!(
             /// Paxos-ordered operations retain their order through inter-cluster routing.
         ))
     }
@@ -259,9 +259,9 @@ pub fn paxos_order<
 >(
     dispatcher: &PaxosDispatcher<K, V>,
     operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-) -> Stream<KVSOperation<K, V>, StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+) -> Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
     dispatcher.paxos_run(operations, proposers, acceptors)
 }
 
@@ -281,8 +281,8 @@ pub fn paxos_order_to_proxy<
 >(
     dispatcher: &PaxosDispatcher<K, V>,
     operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
     proxy: &Process<'a, ()>,
 ) -> Stream<
     KVSOperation<K, V>,
@@ -314,9 +314,9 @@ pub fn paxos_order_slotted<
 >(
     dispatcher: &PaxosDispatcher<K, V>,
     operations: Stream<KVSOperation<K, V>, Process<'a, ()>, Unbounded>,
-    proposers: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-    acceptors: &StaticCluster<'a, crate::kvs_core::KVSNode>,
-) -> Stream<(usize, KVSOperation<K, V>), StaticCluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
+    proposers: &Cluster<'a, crate::kvs_core::KVSNode>,
+    acceptors: &Cluster<'a, crate::kvs_core::KVSNode>,
+) -> Stream<(usize, KVSOperation<K, V>), Cluster<'a, crate::kvs_core::KVSNode>, Unbounded> {
     dispatcher
         .paxos_run(operations, proposers, acceptors)
         .enumerate()

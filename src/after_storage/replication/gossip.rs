@@ -150,11 +150,11 @@ where
 {
     fn replicate_data<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -223,11 +223,11 @@ where
     /// updates are probabilistically tombstoned via cyclic deletion.
     pub fn handle_gossip_simple<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -254,7 +254,7 @@ where
                     T::default(),
                 )
             }))
-            .batch_same_consistency(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
+            .batch(&gossip_tick, nondet!(/** new puts can arrive on any tick */));
 
         // Build hot set: new updates + tombstone deletes from previous tick
         let hot_set = new_puts.chain(hot_cycle).fold(
@@ -302,7 +302,7 @@ where
         
         // Get all cluster members
         let all_members = cluster
-            .source_cluster_members_static(cluster)
+            .source_cluster_members(cluster)
             .map_with_key(q!(|(member_id, _event)| member_id))
             .values();
         
@@ -325,9 +325,9 @@ where
 impl<K, V, M, T> AfterResponses for SimpleGossip<K, V, M, T> {
     fn after_responses<'a>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }

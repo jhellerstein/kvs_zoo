@@ -104,11 +104,11 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
     /// Note: Replication produces NoOrder streams due to network operations.
     fn replicate_data<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -125,18 +125,18 @@ pub trait ReplicationStrategy<K, V>: ClusterCommunication {
 pub trait AfterResponses {
     fn after_responses<'a>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded>;
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded>;
 }
 
 // Default pass-through impl for unit type () so examples can use () as After-stage and still participate.
 impl AfterResponses for () {
     fn after_responses<'a>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }
@@ -175,11 +175,11 @@ where
 
     fn replicate_data<'a, O>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -196,9 +196,9 @@ where
 impl AfterResponses for NoReplication {
     fn after_responses<'a>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }
@@ -217,11 +217,11 @@ where
 
     fn replicate_data<'a, O>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        _cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -256,11 +256,11 @@ where
 
     fn replicate_data<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >

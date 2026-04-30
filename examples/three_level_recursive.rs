@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let built = flow.finalize();
-    built.generate_graph_with_config(&args.graph, None)?;
+    built.generate_graph(&args.graph)?;
     if args.graph.should_exit_after_graph_generation() {
         return Ok(());
     }

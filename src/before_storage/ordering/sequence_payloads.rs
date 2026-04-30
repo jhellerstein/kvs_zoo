@@ -41,7 +41,7 @@ where
         tick.cycle::<Stream<SequencedPayload<T>, Tick<L>, Bounded>>();
 
     let r_sorted_payloads = incoming
-        .batch_same_consistency(
+        .batch(
             tick,
             nondet!(
                 /// because we fill slots one-by-one, we can safely batch

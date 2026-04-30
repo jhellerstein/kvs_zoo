@@ -120,11 +120,11 @@ where
 {
     fn replicate_data<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_data: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_data: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -167,11 +167,11 @@ where
     /// Immediate synchronous broadcast replication
     pub fn handle_replication_immediate<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -179,7 +179,7 @@ where
         O: hydro_lang::live_collections::stream::Ordering,
     {
         local_put_tuples
-            .broadcast(cluster, TCP.fail_stop().bincode())
+            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */))
             .values()
             .weaken_ordering::<hydro_lang::live_collections::stream::NoOrder>()
     }
@@ -187,11 +187,11 @@ where
     /// Periodic background broadcast replication
     pub fn handle_replication_periodic<'a, O>(
         &self,
-        cluster: &StaticCluster<'a, KVSNode>,
-        local_put_tuples: Stream<(K, V), StaticCluster<'a, KVSNode>, Unbounded, O>,
+        cluster: &Cluster<'a, KVSNode>,
+        local_put_tuples: Stream<(K, V), Cluster<'a, KVSNode>, Unbounded, O>,
     ) -> Stream<
         (K, V),
-        StaticCluster<'a, KVSNode>,
+        Cluster<'a, KVSNode>,
         Unbounded,
         hydro_lang::live_collections::stream::NoOrder,
     >
@@ -216,7 +216,7 @@ where
                 q!(std::time::Duration::from_millis(batch_timeout_ms)),
                 nondet!(/** periodic broadcast interval */),
             )
-            .broadcast(cluster, TCP.fail_stop().bincode());
+            .broadcast(cluster, TCP.fail_stop().bincode(), nondet!(/** membership */));
 
         periodic_broadcast
             .values()
@@ -229,9 +229,9 @@ where
 impl<K, V> AfterResponses for BroadcastReplication<K, V> {
     fn after_responses<'a>(
         &self,
-        _cluster: &StaticCluster<'a, KVSNode>,
-        responses: Stream<String, StaticCluster<'a, KVSNode>, Unbounded>,
-    ) -> Stream<String, StaticCluster<'a, KVSNode>, Unbounded> {
+        _cluster: &Cluster<'a, KVSNode>,
+        responses: Stream<String, Cluster<'a, KVSNode>, Unbounded>,
+    ) -> Stream<String, Cluster<'a, KVSNode>, Unbounded> {
         responses
     }
 }

@@ -39,8 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         plumb_kvs_dataflow_lattice::<String, CausalString, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
-    let report = built.check_coordination();
-    println!("{report}");
-    built.generate_graph_with_config(&args.graph, None)?;
+    
+    
+    built.generate_graph(&args.graph)?;
     Ok(())
 }
