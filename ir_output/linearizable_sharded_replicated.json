@@ -18210,563 +18210,6 @@
     }
   },
   {
-    "Null": {
-      "input": {
-        "FilterMap": {
-          "f": "q!(| emission | emission . response)",
-          "input": {
-            "Tee": {
-              "inner": {
-                "$shared": 36,
-                "node": {
-                  "Scan": {
-                    "init": "q!(| | crate :: __staged :: kvs_core :: OverwriteMap :: < KeyType , V > :: default ())",
-                    "acc": "q!(| state , operation | { let request_id = operation . request_id () ; let client_id = operation . client_id () ; let should_emit_response = client_id . is_some () ; let (response , data , meta) = match operation { KVSOperation :: Put (key , value , _ , _) => { let value_for_event = value . clone () ; state . apply_put (key . clone () , value) ; let response = if should_emit_response { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Put { key : key . clone () , value : value_for_event , }) ; (response , data , None) } KVSOperation :: Get (key , _ , _) => { let value = state . apply_get (& key) . cloned () ; let response = if should_emit_response { Some (KVSResponse :: GetResult { request_id , client_id , value : value . clone () , }) } else { None } ; let data = Some (DataEvent :: Get { key : key . clone () , value , }) ; (response , data , None) } KVSOperation :: Delete (key , _ , _) => { state . apply_delete (key . clone ()) ; let response = if should_emit_response { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Delete { key : key . clone () }) ; let meta = Some (MetaEvent :: Tomb { key : key . clone () }) ; (response , data , meta) } } ; Some (CoreEmission { response , data , meta , }) })",
-                    "input": {
-                      "ObserveNonDet": {
-                        "inner": {
-                          "FilterMap": {
-                            "f": "q!(| _kv | None)",
-                            "input": {
-                              "Tee": {
-                                "inner": {
-                                  "$shared": 37,
-                                  "node": {
-                                    "Cast": {
-                                      "inner": {
-                                        "FilterMap": {
-                                          "f": "q!(| op | match op { crate :: __staged :: protocol :: KVSOperation :: Put (k , v , _ , _) => Some ((k , v)) , crate :: __staged :: protocol :: KVSOperation :: Get (_ , _ , _) => None , crate :: __staged :: protocol :: KVSOperation :: Delete (_ , _ , _) => None , })",
-                                          "input": {
-                                            "Tee": {
-                                              "inner": {
-                                                "$shared": 38,
-                                                "node": {
-                                                  "ObserveNonDet": {
-                                                    "inner": {
-                                                      "Map": {
-                                                        "f": "q!(| (_ , v) | v)",
-                                                        "input": {
-                                                          "Cast": {
-                                                            "inner": {
-                                                              "Network": {
-                                                                "name": null,
-                                                                "networking_info": {
-                                                                  "Tcp": {
-                                                                    "fault": "FailStop"
-                                                                  }
-                                                                },
-                                                                "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (hydro_lang :: __staged :: location :: MemberId < _ > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >) , _ > (| (id , data) | { (id . into_tagless () , hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into ()) }))",
-                                                                "instantiate_fn": "Building",
-                                                                "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
-                                                                "input": {
-                                                                  "Cast": {
-                                                                    "inner": {
-                                                                      "Map": {
-                                                                        "f": "q!(| op | (hydro_lang :: location :: MemberId :: from_raw_id (0u32) , op))",
-                                                                        "input": {
-                                                                          "YieldConcat": {
-                                                                            "inner": {
-                                                                              "FilterMap": {
-                                                                                "f": "q!(| sequenced | sequenced . payload)",
-                                                                                "input": {
-                                                                                  "Tee": {
-                                                                                    "inner": {
-                                                                                      "$shared_ref": 35
-                                                                                    },
-                                                                                    "metadata": {
-                                                                                      "location_id": {
-                                                                                        "Tick": [
-                                                                                          14,
-                                                                                          {
-                                                                                            "Cluster": {
-                                                                                              "idx": 4,
-                                                                                              "version": 1
-                                                                                            }
-                                                                                          }
-                                                                                        ]
-                                                                                      },
-                                                                                      "collection_kind": {
-                                                                                        "Stream": {
-                                                                                          "bound": "Bounded",
-                                                                                          "order": "TotalOrder",
-                                                                                          "retry": "ExactlyOnce",
-                                                                                          "element_type": "kvs_zoo :: __staged :: before_storage :: ordering :: sequence_payloads :: SequencedPayload < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > >"
-                                                                                        }
-                                                                                      },
-                                                                                      "cardinality": null,
-                                                                                      "tag": null,
-                                                                                      "op": {
-                                                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:80:58",
-                                                                                        "cpu_usage": null,
-                                                                                        "network_recv_cpu_usage": null,
-                                                                                        "id": null
-                                                                                      }
-                                                                                    }
-                                                                                  }
-                                                                                },
-                                                                                "metadata": {
-                                                                                  "location_id": {
-                                                                                    "Tick": [
-                                                                                      14,
-                                                                                      {
-                                                                                        "Cluster": {
-                                                                                          "idx": 4,
-                                                                                          "version": 1
-                                                                                        }
-                                                                                      }
-                                                                                    ]
-                                                                                  },
-                                                                                  "collection_kind": {
-                                                                                    "Stream": {
-                                                                                      "bound": "Bounded",
-                                                                                      "order": "TotalOrder",
-                                                                                      "retry": "ExactlyOnce",
-                                                                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                                    }
-                                                                                  },
-                                                                                  "cardinality": null,
-                                                                                  "tag": null,
-                                                                                  "op": {
-                                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:88:14",
-                                                                                    "cpu_usage": null,
-                                                                                    "network_recv_cpu_usage": null,
-                                                                                    "id": null
-                                                                                  }
-                                                                                }
-                                                                              }
-                                                                            },
-                                                                            "metadata": {
-                                                                              "location_id": {
-                                                                                "Cluster": {
-                                                                                  "idx": 4,
-                                                                                  "version": 1
-                                                                                }
-                                                                              },
-                                                                              "collection_kind": {
-                                                                                "Stream": {
-                                                                                  "bound": "Unbounded",
-                                                                                  "order": "TotalOrder",
-                                                                                  "retry": "ExactlyOnce",
-                                                                                  "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                                }
-                                                                              },
-                                                                              "cardinality": null,
-                                                                              "tag": null,
-                                                                              "op": {
-                                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:89:14",
-                                                                                "cpu_usage": null,
-                                                                                "network_recv_cpu_usage": null,
-                                                                                "id": null
-                                                                              }
-                                                                            }
-                                                                          }
-                                                                        },
-                                                                        "metadata": {
-                                                                          "location_id": {
-                                                                            "Cluster": {
-                                                                              "idx": 4,
-                                                                              "version": 1
-                                                                            }
-                                                                          },
-                                                                          "collection_kind": {
-                                                                            "Stream": {
-                                                                              "bound": "Unbounded",
-                                                                              "order": "TotalOrder",
-                                                                              "retry": "ExactlyOnce",
-                                                                              "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
-                                                                            }
-                                                                          },
-                                                                          "cardinality": null,
-                                                                          "tag": null,
-                                                                          "op": {
-                                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:177:14",
-                                                                            "cpu_usage": null,
-                                                                            "network_recv_cpu_usage": null,
-                                                                            "id": null
-                                                                          }
-                                                                        }
-                                                                      }
-                                                                    },
-                                                                    "metadata": {
-                                                                      "location_id": {
-                                                                        "Cluster": {
-                                                                          "idx": 4,
-                                                                          "version": 1
-                                                                        }
-                                                                      },
-                                                                      "collection_kind": {
-                                                                        "KeyedStream": {
-                                                                          "bound": "Unbounded",
-                                                                          "value_order": "TotalOrder",
-                                                                          "value_retry": "ExactlyOnce",
-                                                                          "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
-                                                                          "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                        }
-                                                                      },
-                                                                      "cardinality": null,
-                                                                      "tag": null,
-                                                                      "op": {
-                                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
-                                                                        "cpu_usage": null,
-                                                                        "network_recv_cpu_usage": null,
-                                                                        "id": null
-                                                                      }
-                                                                    }
-                                                                  }
-                                                                },
-                                                                "metadata": {
-                                                                  "location_id": {
-                                                                    "Cluster": {
-                                                                      "idx": 3,
-                                                                      "version": 1
-                                                                    }
-                                                                  },
-                                                                  "collection_kind": {
-                                                                    "KeyedStream": {
-                                                                      "bound": "Unbounded",
-                                                                      "value_order": "TotalOrder",
-                                                                      "value_retry": "ExactlyOnce",
-                                                                      "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
-                                                                      "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                    }
-                                                                  },
-                                                                  "cardinality": null,
-                                                                  "tag": null,
-                                                                  "op": {
-                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:182:14",
-                                                                    "cpu_usage": null,
-                                                                    "network_recv_cpu_usage": null,
-                                                                    "id": null
-                                                                  }
-                                                                }
-                                                              }
-                                                            },
-                                                            "metadata": {
-                                                              "location_id": {
-                                                                "Cluster": {
-                                                                  "idx": 3,
-                                                                  "version": 1
-                                                                }
-                                                              },
-                                                              "collection_kind": {
-                                                                "Stream": {
-                                                                  "bound": "Unbounded",
-                                                                  "order": "NoOrder",
-                                                                  "retry": "ExactlyOnce",
-                                                                  "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
-                                                                }
-                                                              },
-                                                              "cardinality": null,
-                                                              "tag": null,
-                                                              "op": {
-                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:14",
-                                                                "cpu_usage": null,
-                                                                "network_recv_cpu_usage": null,
-                                                                "id": null
-                                                              }
-                                                            }
-                                                          }
-                                                        },
-                                                        "metadata": {
-                                                          "location_id": {
-                                                            "Cluster": {
-                                                              "idx": 3,
-                                                              "version": 1
-                                                            }
-                                                          },
-                                                          "collection_kind": {
-                                                            "Stream": {
-                                                              "bound": "Unbounded",
-                                                              "order": "NoOrder",
-                                                              "retry": "ExactlyOnce",
-                                                              "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                            }
-                                                          },
-                                                          "cardinality": null,
-                                                          "tag": null,
-                                                          "op": {
-                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:24",
-                                                            "cpu_usage": null,
-                                                            "network_recv_cpu_usage": null,
-                                                            "id": null
-                                                          }
-                                                        }
-                                                      }
-                                                    },
-                                                    "trusted": false,
-                                                    "metadata": {
-                                                      "location_id": {
-                                                        "Cluster": {
-                                                          "idx": 3,
-                                                          "version": 1
-                                                        }
-                                                      },
-                                                      "collection_kind": {
-                                                        "Stream": {
-                                                          "bound": "Unbounded",
-                                                          "order": "TotalOrder",
-                                                          "retry": "ExactlyOnce",
-                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                        }
-                                                      },
-                                                      "cardinality": null,
-                                                      "tag": null,
-                                                      "op": {
-                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:184:14",
-                                                        "cpu_usage": null,
-                                                        "network_recv_cpu_usage": null,
-                                                        "id": null
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              },
-                                              "metadata": {
-                                                "location_id": {
-                                                  "Cluster": {
-                                                    "idx": 3,
-                                                    "version": 1
-                                                  }
-                                                },
-                                                "collection_kind": {
-                                                  "Stream": {
-                                                    "bound": "Unbounded",
-                                                    "order": "TotalOrder",
-                                                    "retry": "ExactlyOnce",
-                                                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                  }
-                                                },
-                                                "cardinality": null,
-                                                "tag": null,
-                                                "op": {
-                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
-                                                  "cpu_usage": null,
-                                                  "network_recv_cpu_usage": null,
-                                                  "id": null
-                                                }
-                                              }
-                                            }
-                                          },
-                                          "metadata": {
-                                            "location_id": {
-                                              "Cluster": {
-                                                "idx": 3,
-                                                "version": 1
-                                              }
-                                            },
-                                            "collection_kind": {
-                                              "Stream": {
-                                                "bound": "Unbounded",
-                                                "order": "TotalOrder",
-                                                "retry": "ExactlyOnce",
-                                                "element_type": "(std :: string :: String , std :: string :: String)"
-                                              }
-                                            },
-                                            "cardinality": null,
-                                            "tag": null,
-                                            "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:51:29",
-                                              "cpu_usage": null,
-                                              "network_recv_cpu_usage": null,
-                                              "id": null
-                                            }
-                                          }
-                                        }
-                                      },
-                                      "metadata": {
-                                        "location_id": {
-                                          "Cluster": {
-                                            "idx": 3,
-                                            "version": 1
-                                          }
-                                        },
-                                        "collection_kind": {
-                                          "Stream": {
-                                            "bound": "Unbounded",
-                                            "order": "NoOrder",
-                                            "retry": "ExactlyOnce",
-                                            "element_type": "(std :: string :: String , std :: string :: String)"
-                                          }
-                                        },
-                                        "cardinality": null,
-                                        "tag": null,
-                                        "op": {
-                                          "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2034:14",
-                                          "cpu_usage": null,
-                                          "network_recv_cpu_usage": null,
-                                          "id": null
-                                        }
-                                      }
-                                    }
-                                  }
-                                },
-                                "metadata": {
-                                  "location_id": {
-                                    "Cluster": {
-                                      "idx": 3,
-                                      "version": 1
-                                    }
-                                  },
-                                  "collection_kind": {
-                                    "Stream": {
-                                      "bound": "Unbounded",
-                                      "order": "NoOrder",
-                                      "retry": "ExactlyOnce",
-                                      "element_type": "(std :: string :: String , std :: string :: String)"
-                                    }
-                                  },
-                                  "cardinality": null,
-                                  "tag": null,
-                                  "op": {
-                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_layer/plumb_after.rs:310:63",
-                                    "cpu_usage": null,
-                                    "network_recv_cpu_usage": null,
-                                    "id": null
-                                  }
-                                }
-                              }
-                            },
-                            "metadata": {
-                              "location_id": {
-                                "Cluster": {
-                                  "idx": 3,
-                                  "version": 1
-                                }
-                              },
-                              "collection_kind": {
-                                "Stream": {
-                                  "bound": "Unbounded",
-                                  "order": "NoOrder",
-                                  "retry": "ExactlyOnce",
-                                  "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                }
-                              },
-                              "cardinality": null,
-                              "tag": null,
-                              "op": {
-                                "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_layer/plumb_after.rs:310:71",
-                                "cpu_usage": null,
-                                "network_recv_cpu_usage": null,
-                                "id": null
-                              }
-                            }
-                          }
-                        },
-                        "trusted": false,
-                        "metadata": {
-                          "location_id": {
-                            "Cluster": {
-                              "idx": 3,
-                              "version": 1
-                            }
-                          },
-                          "collection_kind": {
-                            "Stream": {
-                              "bound": "Unbounded",
-                              "order": "TotalOrder",
-                              "retry": "ExactlyOnce",
-                              "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                            }
-                          },
-                          "cardinality": null,
-                          "tag": null,
-                          "op": {
-                            "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:289:10",
-                            "cpu_usage": null,
-                            "network_recv_cpu_usage": null,
-                            "id": null
-                          }
-                        }
-                      }
-                    },
-                    "metadata": {
-                      "location_id": {
-                        "Cluster": {
-                          "idx": 3,
-                          "version": 1
-                        }
-                      },
-                      "collection_kind": {
-                        "Stream": {
-                          "bound": "Unbounded",
-                          "order": "TotalOrder",
-                          "retry": "ExactlyOnce",
-                          "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                        }
-                      },
-                      "cardinality": null,
-                      "tag": null,
-                      "op": {
-                        "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:265:35",
-                        "cpu_usage": null,
-                        "network_recv_cpu_usage": null,
-                        "id": null
-                      }
-                    }
-                  }
-                }
-              },
-              "metadata": {
-                "location_id": {
-                  "Cluster": {
-                    "idx": 3,
-                    "version": 1
-                  }
-                },
-                "collection_kind": {
-                  "Stream": {
-                    "bound": "Unbounded",
-                    "order": "TotalOrder",
-                    "retry": "ExactlyOnce",
-                    "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                  }
-                },
-                "cardinality": null,
-                "tag": null,
-                "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
-                  "cpu_usage": null,
-                  "network_recv_cpu_usage": null,
-                  "id": null
-                }
-              }
-            }
-          },
-          "metadata": {
-            "location_id": {
-              "Cluster": {
-                "idx": 3,
-                "version": 1
-              }
-            },
-            "collection_kind": {
-              "Stream": {
-                "bound": "Unbounded",
-                "order": "TotalOrder",
-                "retry": "ExactlyOnce",
-                "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
-              }
-            },
-            "cardinality": null,
-            "tag": "replica_responses_internal",
-            "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:330:14",
-              "cpu_usage": null,
-              "network_recv_cpu_usage": null,
-              "id": null
-            }
-          }
-        }
-      },
-      "op_metadata": {
-        "span": "/Users/jmhwork/.rustup/toolchains/1.95.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:805:1",
-        "cpu_usage": null,
-        "network_recv_cpu_usage": null,
-        "id": null
-      }
-    }
-  },
-  {
     "CycleSink": {
       "cycle_id": 0,
       "input": {
@@ -18795,16 +18238,265 @@
                               "input": {
                                 "Tee": {
                                   "inner": {
-                                    "$shared": 39,
+                                    "$shared": 36,
                                     "node": {
                                       "Scan": {
                                         "init": "q!(| | crate :: __staged :: kvs_core :: OverwriteMap :: < KeyType , V > :: default ())",
                                         "acc": "q!(| state , operation | { let request_id = operation . request_id () ; let client_id = operation . client_id () ; let should_emit_response = client_id . is_some () ; let (response , data , meta) = match operation { KVSOperation :: Put (key , value , _ , _) => { let value_for_event = value . clone () ; state . apply_put (key . clone () , value) ; let response = if should_emit_response { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Put { key : key . clone () , value : value_for_event , }) ; (response , data , None) } KVSOperation :: Get (key , _ , _) => { let value = state . apply_get (& key) . cloned () ; let response = if should_emit_response { Some (KVSResponse :: GetResult { request_id , client_id , value : value . clone () , }) } else { None } ; let data = Some (DataEvent :: Get { key : key . clone () , value , }) ; (response , data , None) } KVSOperation :: Delete (key , _ , _) => { state . apply_delete (key . clone ()) ; let response = if should_emit_response { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Delete { key : key . clone () }) ; let meta = Some (MetaEvent :: Tomb { key : key . clone () }) ; (response , data , meta) } } ; Some (CoreEmission { response , data , meta , }) })",
                                         "input": {
-                                          "Tee": {
+                                          "ObserveNonDet": {
                                             "inner": {
-                                              "$shared_ref": 38
+                                              "Map": {
+                                                "f": "q!(| (_ , v) | v)",
+                                                "input": {
+                                                  "Cast": {
+                                                    "inner": {
+                                                      "Network": {
+                                                        "name": null,
+                                                        "networking_info": {
+                                                          "Tcp": {
+                                                            "fault": "FailStop"
+                                                          }
+                                                        },
+                                                        "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (hydro_lang :: __staged :: location :: MemberId < _ > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >) , _ > (| (id , data) | { (id . into_tagless () , hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into ()) }))",
+                                                        "instantiate_fn": "Building",
+                                                        "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
+                                                        "input": {
+                                                          "Cast": {
+                                                            "inner": {
+                                                              "Map": {
+                                                                "f": "q!(| op | (hydro_lang :: location :: MemberId :: from_raw_id (0u32) , op))",
+                                                                "input": {
+                                                                  "YieldConcat": {
+                                                                    "inner": {
+                                                                      "FilterMap": {
+                                                                        "f": "q!(| sequenced | sequenced . payload)",
+                                                                        "input": {
+                                                                          "Tee": {
+                                                                            "inner": {
+                                                                              "$shared_ref": 35
+                                                                            },
+                                                                            "metadata": {
+                                                                              "location_id": {
+                                                                                "Tick": [
+                                                                                  14,
+                                                                                  {
+                                                                                    "Cluster": {
+                                                                                      "idx": 4,
+                                                                                      "version": 1
+                                                                                    }
+                                                                                  }
+                                                                                ]
+                                                                              },
+                                                                              "collection_kind": {
+                                                                                "Stream": {
+                                                                                  "bound": "Bounded",
+                                                                                  "order": "TotalOrder",
+                                                                                  "retry": "ExactlyOnce",
+                                                                                  "element_type": "kvs_zoo :: __staged :: before_storage :: ordering :: sequence_payloads :: SequencedPayload < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > >"
+                                                                                }
+                                                                              },
+                                                                              "cardinality": null,
+                                                                              "tag": null,
+                                                                              "op": {
+                                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:80:58",
+                                                                                "cpu_usage": null,
+                                                                                "network_recv_cpu_usage": null,
+                                                                                "id": null
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        },
+                                                                        "metadata": {
+                                                                          "location_id": {
+                                                                            "Tick": [
+                                                                              14,
+                                                                              {
+                                                                                "Cluster": {
+                                                                                  "idx": 4,
+                                                                                  "version": 1
+                                                                                }
+                                                                              }
+                                                                            ]
+                                                                          },
+                                                                          "collection_kind": {
+                                                                            "Stream": {
+                                                                              "bound": "Bounded",
+                                                                              "order": "TotalOrder",
+                                                                              "retry": "ExactlyOnce",
+                                                                              "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                            }
+                                                                          },
+                                                                          "cardinality": null,
+                                                                          "tag": null,
+                                                                          "op": {
+                                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:88:14",
+                                                                            "cpu_usage": null,
+                                                                            "network_recv_cpu_usage": null,
+                                                                            "id": null
+                                                                          }
+                                                                        }
+                                                                      }
+                                                                    },
+                                                                    "metadata": {
+                                                                      "location_id": {
+                                                                        "Cluster": {
+                                                                          "idx": 4,
+                                                                          "version": 1
+                                                                        }
+                                                                      },
+                                                                      "collection_kind": {
+                                                                        "Stream": {
+                                                                          "bound": "Unbounded",
+                                                                          "order": "TotalOrder",
+                                                                          "retry": "ExactlyOnce",
+                                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                        }
+                                                                      },
+                                                                      "cardinality": null,
+                                                                      "tag": null,
+                                                                      "op": {
+                                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:89:14",
+                                                                        "cpu_usage": null,
+                                                                        "network_recv_cpu_usage": null,
+                                                                        "id": null
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "metadata": {
+                                                                  "location_id": {
+                                                                    "Cluster": {
+                                                                      "idx": 4,
+                                                                      "version": 1
+                                                                    }
+                                                                  },
+                                                                  "collection_kind": {
+                                                                    "Stream": {
+                                                                      "bound": "Unbounded",
+                                                                      "order": "TotalOrder",
+                                                                      "retry": "ExactlyOnce",
+                                                                      "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                                    }
+                                                                  },
+                                                                  "cardinality": null,
+                                                                  "tag": null,
+                                                                  "op": {
+                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
+                                                                    "cpu_usage": null,
+                                                                    "network_recv_cpu_usage": null,
+                                                                    "id": null
+                                                                  }
+                                                                }
+                                                              }
+                                                            },
+                                                            "metadata": {
+                                                              "location_id": {
+                                                                "Cluster": {
+                                                                  "idx": 4,
+                                                                  "version": 1
+                                                                }
+                                                              },
+                                                              "collection_kind": {
+                                                                "KeyedStream": {
+                                                                  "bound": "Unbounded",
+                                                                  "value_order": "TotalOrder",
+                                                                  "value_retry": "ExactlyOnce",
+                                                                  "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                                                                  "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                }
+                                                              },
+                                                              "cardinality": null,
+                                                              "tag": null,
+                                                              "op": {
+                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:185:14",
+                                                                "cpu_usage": null,
+                                                                "network_recv_cpu_usage": null,
+                                                                "id": null
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        "metadata": {
+                                                          "location_id": {
+                                                            "Cluster": {
+                                                              "idx": 3,
+                                                              "version": 1
+                                                            }
+                                                          },
+                                                          "collection_kind": {
+                                                            "KeyedStream": {
+                                                              "bound": "Unbounded",
+                                                              "value_order": "TotalOrder",
+                                                              "value_retry": "ExactlyOnce",
+                                                              "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                                                              "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                            }
+                                                          },
+                                                          "cardinality": null,
+                                                          "tag": null,
+                                                          "op": {
+                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:186:14",
+                                                            "cpu_usage": null,
+                                                            "network_recv_cpu_usage": null,
+                                                            "id": null
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "metadata": {
+                                                      "location_id": {
+                                                        "Cluster": {
+                                                          "idx": 3,
+                                                          "version": 1
+                                                        }
+                                                      },
+                                                      "collection_kind": {
+                                                        "Stream": {
+                                                          "bound": "Unbounded",
+                                                          "order": "NoOrder",
+                                                          "retry": "ExactlyOnce",
+                                                          "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                        }
+                                                      },
+                                                      "cardinality": null,
+                                                      "tag": null,
+                                                      "op": {
+                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:14",
+                                                        "cpu_usage": null,
+                                                        "network_recv_cpu_usage": null,
+                                                        "id": null
+                                                      }
+                                                    }
+                                                  }
+                                                },
+                                                "metadata": {
+                                                  "location_id": {
+                                                    "Cluster": {
+                                                      "idx": 3,
+                                                      "version": 1
+                                                    }
+                                                  },
+                                                  "collection_kind": {
+                                                    "Stream": {
+                                                      "bound": "Unbounded",
+                                                      "order": "NoOrder",
+                                                      "retry": "ExactlyOnce",
+                                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                    }
+                                                  },
+                                                  "cardinality": null,
+                                                  "tag": null,
+                                                  "op": {
+                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:24",
+                                                    "cpu_usage": null,
+                                                    "network_recv_cpu_usage": null,
+                                                    "id": null
+                                                  }
+                                                }
+                                              }
                                             },
+                                            "trusted": false,
                                             "metadata": {
                                               "location_id": {
                                                 "Cluster": {
@@ -18823,7 +18515,7 @@
                                               "cardinality": null,
                                               "tag": null,
                                               "op": {
-                                                "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
+                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:188:14",
                                                 "cpu_usage": null,
                                                 "network_recv_cpu_usage": null,
                                                 "id": null
@@ -18928,7 +18620,7 @@
                             "cardinality": null,
                             "tag": null,
                             "op": {
-                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:313:44",
+                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:288:44",
                               "cpu_usage": null,
                               "network_recv_cpu_usage": null,
                               "id": null
@@ -18981,7 +18673,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:315:10",
+                      "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:290:10",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -19007,7 +18699,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:316:10",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:291:10",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -19034,7 +18726,7 @@
             "cardinality": null,
             "tag": "client_responses",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:319:10",
+              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:294:10",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -19053,97 +18745,8 @@
   {
     "Null": {
       "input": {
-        "Chain": {
-          "first": {
-            "Map": {
-              "f": "q!(| ev | lattices :: set_union :: SetUnionHashSet :: new_from ([ev]))",
-              "input": {
-                "FilterMap": {
-                  "f": "q!(| emission | emission . meta)",
-                  "input": {
-                    "Tee": {
-                      "inner": {
-                        "$shared_ref": 39
-                      },
-                      "metadata": {
-                        "location_id": {
-                          "Cluster": {
-                            "idx": 3,
-                            "version": 1
-                          }
-                        },
-                        "collection_kind": {
-                          "Stream": {
-                            "bound": "Unbounded",
-                            "order": "TotalOrder",
-                            "retry": "ExactlyOnce",
-                            "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                          }
-                        },
-                        "cardinality": null,
-                        "tag": null,
-                        "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
-                          "cpu_usage": null,
-                          "network_recv_cpu_usage": null,
-                          "id": null
-                        }
-                      }
-                    }
-                  },
-                  "metadata": {
-                    "location_id": {
-                      "Cluster": {
-                        "idx": 3,
-                        "version": 1
-                      }
-                    },
-                    "collection_kind": {
-                      "Stream": {
-                        "bound": "Unbounded",
-                        "order": "TotalOrder",
-                        "retry": "ExactlyOnce",
-                        "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String >"
-                      }
-                    },
-                    "cardinality": null,
-                    "tag": null,
-                    "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:332:29",
-                      "cpu_usage": null,
-                      "network_recv_cpu_usage": null,
-                      "id": null
-                    }
-                  }
-                }
-              },
-              "metadata": {
-                "location_id": {
-                  "Cluster": {
-                    "idx": 3,
-                    "version": 1
-                  }
-                },
-                "collection_kind": {
-                  "Stream": {
-                    "bound": "Unbounded",
-                    "order": "TotalOrder",
-                    "retry": "ExactlyOnce",
-                    "element_type": "kvs_zoo :: __staged :: __deps :: lattices :: set_union :: SetUnion < std :: collections :: hash_set :: HashSet < kvs_zoo :: __staged :: kvs_core :: events :: MetaEvent < std :: string :: String > > >"
-                  }
-                },
-                "cardinality": null,
-                "tag": null,
-                "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:305:10",
-                  "cpu_usage": null,
-                  "network_recv_cpu_usage": null,
-                  "id": null
-                }
-              }
-            }
-          },
-          "second": {
+        "Cast": {
+          "inner": {
             "Map": {
               "f": "q!(| ev | lattices :: set_union :: SetUnionHashSet :: new_from ([ev]))",
               "input": {
@@ -19224,7 +18827,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:308:18",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:284:10",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -19250,7 +18853,7 @@
             "cardinality": null,
             "tag": "meta_events",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:306:10",
+              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2034:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -19269,68 +18872,8 @@
   {
     "Null": {
       "input": {
-        "Chain": {
-          "first": {
-            "FilterMap": {
-              "f": "q!(| emission | emission . data)",
-              "input": {
-                "Tee": {
-                  "inner": {
-                    "$shared_ref": 39
-                  },
-                  "metadata": {
-                    "location_id": {
-                      "Cluster": {
-                        "idx": 3,
-                        "version": 1
-                      }
-                    },
-                    "collection_kind": {
-                      "Stream": {
-                        "bound": "Unbounded",
-                        "order": "TotalOrder",
-                        "retry": "ExactlyOnce",
-                        "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                      }
-                    },
-                    "cardinality": null,
-                    "tag": null,
-                    "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
-                      "cpu_usage": null,
-                      "network_recv_cpu_usage": null,
-                      "id": null
-                    }
-                  }
-                }
-              },
-              "metadata": {
-                "location_id": {
-                  "Cluster": {
-                    "idx": 3,
-                    "version": 1
-                  }
-                },
-                "collection_kind": {
-                  "Stream": {
-                    "bound": "Unbounded",
-                    "order": "TotalOrder",
-                    "retry": "ExactlyOnce",
-                    "element_type": "kvs_zoo :: __staged :: kvs_core :: events :: DataEvent < std :: string :: String , std :: string :: String >"
-                  }
-                },
-                "cardinality": null,
-                "tag": null,
-                "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:331:37",
-                  "cpu_usage": null,
-                  "network_recv_cpu_usage": null,
-                  "id": null
-                }
-              }
-            }
-          },
-          "second": {
+        "Cast": {
+          "inner": {
             "FilterMap": {
               "f": "q!(| emission | emission . data)",
               "input": {
@@ -19408,7 +18951,7 @@
             "cardinality": null,
             "tag": "data_events",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:303:42",
+              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2034:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null

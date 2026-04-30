@@ -18382,7 +18382,7 @@
                                                                   "cardinality": null,
                                                                   "tag": null,
                                                                   "op": {
-                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:177:14",
+                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
                                                                     "cpu_usage": null,
                                                                     "network_recv_cpu_usage": null,
                                                                     "id": null
@@ -18409,7 +18409,7 @@
                                                               "cardinality": null,
                                                               "tag": null,
                                                               "op": {
-                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
+                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:185:14",
                                                                 "cpu_usage": null,
                                                                 "network_recv_cpu_usage": null,
                                                                 "id": null
@@ -18436,7 +18436,7 @@
                                                           "cardinality": null,
                                                           "tag": null,
                                                           "op": {
-                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:182:14",
+                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:186:14",
                                                             "cpu_usage": null,
                                                             "network_recv_cpu_usage": null,
                                                             "id": null
@@ -18515,7 +18515,7 @@
                                               "cardinality": null,
                                               "tag": null,
                                               "op": {
-                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:184:14",
+                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:188:14",
                                                 "cpu_usage": null,
                                                 "network_recv_cpu_usage": null,
                                                 "id": null
