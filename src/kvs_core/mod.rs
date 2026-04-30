@@ -160,77 +160,26 @@ impl KVSCore {
     {
         let operations = operations.into();
         let tick = operations.location().tick();
+        let (puts, deletes, gets) = Self::split_operations(operations);
 
-        // Single fold processes all operations per tick.
-        // Accumulator: (store, pending_responses, data_events, meta_events)
-        // The fold is commutative+idempotent on the store (lattice merge).
-        // Gets are buffered and resolved at emit time against the final store.
-        let tick_result = operations
-            .batch(&tick, nondet!(/** batch operations */))
+        // Monotone fold: lattice merge. The monotone annotation tells Hydro
+        // (and our analysis tool) that the accumulated value only grows.
+        let put_updates = puts.clone().map(q!(|(key, value, _, _)| (key, value)));
+        let storage = put_updates
+            .into_keyed()
             .fold(
-                q!(|| (
-                    std::collections::HashMap::<K, V>::new(),
-                    Vec::<KVSOperation<K, V>>::new(),
-                )),
-                q!(|(store, ops_buffer), op| {
-                    // Apply writes immediately to store (commutative lattice merge)
-                    match &op {
-                        KVSOperation::Put(key, value, _, _) => {
-                            let entry = store.entry(key.clone()).or_insert_with(V::default);
-                            lattices::Merge::merge(entry, value.clone());
-                        }
-                        KVSOperation::Delete(key, _, _) => {
-                            store.remove(key);
-                        }
-                        _ => {}
-                    }
-                    // Buffer all ops for response generation at emit
-                    ops_buffer.push(op);
+                q!(|| V::default()),
+                q!(|old, new| {
+                    lattices::Merge::merge(old, new);
                 },
-                    commutative = manual_proof!(/** lattice merge is commutative; buffering is commutative */),
-                    idempotent = manual_proof!(/** lattice merge is idempotent; duplicate ops produce same state */))
-            )
-            .all_ticks();
+                    commutative = manual_proof!(/** V: Merge — lattice merge is commutative */),
+                    idempotent = manual_proof!(/** V: Merge — lattice merge is idempotent */),
+                    monotone = manual_proof!(/** V: Merge — lattice value only grows */))
+            );
 
-        // Unpack: generate responses, data events, meta events from the fold output
-        let responses = tick_result.clone().flat_map_ordered(q!(|(store, ops)| {
-            ops.into_iter().filter_map(move |op| match op {
-                KVSOperation::Get(key, request_id, client_id) => {
-                    if client_id.is_some() {
-                        let value = store.get(&key).cloned();
-                        Some(KVSResponse::GetResult { request_id, client_id, value })
-                    } else { None }
-                }
-                KVSOperation::Put(_, _, request_id, client_id) => {
-                    if client_id.is_some() {
-                        Some(KVSResponse::PutOk { request_id, client_id })
-                    } else { None }
-                }
-                KVSOperation::Delete(_, request_id, client_id) => {
-                    if client_id.is_some() {
-                        Some(KVSResponse::DeleteOk { request_id, client_id })
-                    } else { None }
-                }
-            })
-        }));
-
-        let data = tick_result.clone().flat_map_ordered(q!(|(_, ops)| {
-            ops.into_iter().filter_map(|op| match op {
-                KVSOperation::Put(key, value, _, _) => Some(DataEvent::Put { key, value }),
-                KVSOperation::Get(key, _, _) => Some(DataEvent::Get { key, value: None }),
-                KVSOperation::Delete(key, _, _) => Some(DataEvent::Delete { key }),
-            })
-        }));
-
-        let meta = tick_result.flat_map_ordered(q!(|(_, ops)| {
-            ops.into_iter().filter_map(|op| match op {
-                KVSOperation::Delete(key, _, _) => Some(MetaEvent::Tomb { key }),
-                _ => None,
-            })
-        }));
-
-        CoreOutput { responses: responses.weaken_ordering(), data: data.weaken_ordering(), meta: meta.weaken_ordering() }
+        Self::build_output(puts, deletes, gets, storage, &tick)
     }
+
     /// Overwrite path: last-writer-wins processing for plain value types.
     ///
     /// No `Merge` bound. Storage uses plain assignment fold.
@@ -449,11 +398,11 @@ impl KVSCore {
         (puts, deletes, gets)
     }
 
-    fn build_output<'a, K, V, L>(
+    fn build_output<'a, K, V, L, SB: hydro_lang::live_collections::keyed_singleton::KeyedSingletonBound<ValueBound = hydro_lang::live_collections::boundedness::Unbounded>>(
         puts: Stream<(K, V, u64, Option<u64>), L, Unbounded, NoOrder>,
         deletes: Stream<(K, u64, Option<u64>), L, Unbounded, NoOrder>,
         gets: Stream<(K, u64, Option<u64>), L, Unbounded, NoOrder>,
-        storage: hydro_lang::live_collections::keyed_singleton::KeyedSingleton<K, V, L, Unbounded>,
+        storage: hydro_lang::live_collections::keyed_singleton::KeyedSingleton<K, V, L, SB>,
         tick: &hydro_lang::location::tick::Tick<L>,
     ) -> CoreOutput<K, V, L, NoOrder>
     where
