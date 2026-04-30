@@ -172,7 +172,11 @@ where
         let ordered_at_proposers = self.paxos_run(operations, proposers, acceptors);
 
         // Deliver ordered operations to the target KVS cluster for further processing.
-        // The operations are sent in Paxos slot order; assume_ordering reflects this.
+        // Deliver ordered operations to the target KVS cluster.
+        // TCP fail_stop preserves FIFO order, but the type system loses TotalOrder
+        // when converting KeyedStream→Stream (.values()). The assume_ordering is
+        // correct (TCP FIFO) but untrusted by the analysis tool.
+        // TODO: make assume_ordering_trusted public for proven-correct assertions.
         ordered_at_proposers
             .map(q!(|op| (
                 hydro_lang::location::MemberId::from_raw_id(0u32),
@@ -182,12 +186,10 @@ where
             .demux(target_cluster, TCP.fail_stop().bincode())
             .values()
             .assume_ordering(nondet!(
-                /// Paxos establishes total order via slot-based sequencing.
-                /// The demux preserves this order because operations are sent
-                /// one-by-one in slot order from the proposer.
+                /// Paxos slot order preserved by TCP FIFO. Type system limitation
+                /// requires assume_ordering after KeyedStream.values().
             ))
     }
-
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,
         operations: Stream<KVSOperation<K, V>, Cluster<'a, crate::kvs_core::KVSNode>, Unbounded, O>,
