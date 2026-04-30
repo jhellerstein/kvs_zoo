@@ -128,7 +128,7 @@ macro_rules! plumb_kvs_dataflow_impl {
             );
 
         // Background plumbing (returns streams for potential chaining)
-        let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.ir_node_named("data_events"), meta_stream.ir_node_named("meta_events"));
+        let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.weaken_ordering().ir_node_named("data_events"), meta_stream.weaken_ordering().ir_node_named("meta_events"));
 
         // Send KVSResponse structs to proxy (they contain client_id)
         let proxy_responses = client_responses.send($proxy, TCP.fail_stop().bincode());
@@ -268,47 +268,22 @@ where
         .map(q!(|(client_id, op)| op.with_client_id(Some(client_id))));
 
     let routed_ops = kvs.plumb_from_process_ordered(&layers, initial_ops);
-    let (client_ops, local_put_deltas) = extract_put_deltas(routed_ops);
-    let (_pass_up, replication_ops) = kvs.replicate_puts(&layers, local_put_deltas.weaken_ordering());
 
-    // Client ops arrive with the Before layer's OutputOrder.
-    // The KVSPlumb<..., OutputOrder = TotalOrder> bound guarantees this is TotalOrder.
-    // No assume_ordering needed — the type system carries the guarantee.
-    let client_ops_ordered = client_ops;
+    // Single scan processes ALL operations in Paxos order.
+    // No replication layer needed — Paxos broadcast delivers to all replicas.
     let crate::kvs_core::CoreOutput {
         responses: client_responses,
-        data: client_data_events,
-        meta: client_meta_stream,
+        data: data_events,
+        meta: meta_stream,
     } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
-        client_ops_ordered,
+        routed_ops,
         q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
     );
 
-    // Replica ops: replication output is NoOrder; assume ordering for process_ordered.
-    let replica_ops_ordered = replication_ops
-        .assume_ordering::<TotalOrder>(nondet!(
-            /// Replica operations inherit order from the Paxos-sequenced client path.
-        ));
-    let crate::kvs_core::CoreOutput {
-        responses: replica_responses,
-        data: replica_data_events,
-        meta: replica_meta_stream,
-    } = crate::kvs_core::KVSCore::process_ordered::<KeyType, V, _, crate::kvs_core::OverwriteMap<KeyType, V>, _, _>(
-        replica_ops_ordered,
-        q!(|| crate::kvs_core::OverwriteMap::<KeyType, V>::default()),
-    );
+    let meta_stream = meta_stream
+        .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])));
 
-    // Replica responses have no client_id — drop them to keep observable output clean.
-    let _ = replica_responses.ir_node_named("replica_responses_internal");
-    let data_events = client_data_events.merge_unordered(replica_data_events);
-    let meta_stream = client_meta_stream
-        .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        .merge_unordered(
-            replica_meta_stream
-                .map(q!(|ev| lattices::set_union::SetUnionHashSet::new_from([ev])))
-        );
-
-    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.ir_node_named("data_events"), meta_stream.ir_node_named("meta_events"));
+    let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.weaken_ordering().ir_node_named("data_events"), meta_stream.weaken_ordering().ir_node_named("meta_events"));
 
     let proxy_responses = client_responses.send(proxy, TCP.fail_stop().bincode());
     let to_complete = proxy_responses
