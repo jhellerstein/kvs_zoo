@@ -184,10 +184,10 @@ where
             )))
             .into_keyed()
             .demux(target_cluster, TCP.fail_stop().bincode())
-            .values()
-            .assume_ordering(nondet!(
-                /// Paxos slot order preserved by TCP FIFO.
+            .entries_partially_ordered(nondet!(
+                /// Single proposer: per-sender FIFO = global total order.
             ))
+            .map(q!(|(_sender, op)| op))
     }
     fn dispatch_from_cluster_with_layers<'a, Name: 'static, O>(
         &self,

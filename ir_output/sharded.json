@@ -69,7 +69,7 @@
         }
       },
       "op_metadata": {
-        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:73:20",
+        "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:73:20",
         "cpu_usage": null,
         "network_recv_cpu_usage": null,
         "id": null
@@ -161,7 +161,7 @@
                                                                                 "cardinality": null,
                                                                                 "tag": null,
                                                                                 "op": {
-                                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:73:20",
+                                                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:73:20",
                                                                                   "cpu_usage": null,
                                                                                   "network_recv_cpu_usage": null,
                                                                                   "id": null
@@ -187,7 +187,7 @@
                                                                             "cardinality": null,
                                                                             "tag": null,
                                                                             "op": {
-                                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:77:14",
+                                                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:77:14",
                                                                               "cpu_usage": null,
                                                                               "network_recv_cpu_usage": null,
                                                                               "id": null
@@ -213,7 +213,7 @@
                                                                         "cardinality": null,
                                                                         "tag": null,
                                                                         "op": {
-                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:78:14",
+                                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:78:14",
                                                                           "cpu_usage": null,
                                                                           "network_recv_cpu_usage": null,
                                                                           "id": null
@@ -239,7 +239,7 @@
                                                                     "cardinality": null,
                                                                     "tag": null,
                                                                     "op": {
-                                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/routing/sharded.rs:71:14",
+                                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/before_storage/routing/sharded.rs:71:14",
                                                                       "cpu_usage": null,
                                                                       "network_recv_cpu_usage": null,
                                                                       "id": null
@@ -266,7 +266,7 @@
                                                                 "cardinality": null,
                                                                 "tag": null,
                                                                 "op": {
-                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/routing/sharded.rs:76:14",
+                                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/before_storage/routing/sharded.rs:76:14",
                                                                   "cpu_usage": null,
                                                                   "network_recv_cpu_usage": null,
                                                                   "id": null
@@ -292,7 +292,7 @@
                                                             "cardinality": null,
                                                             "tag": null,
                                                             "op": {
-                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/routing/sharded.rs:77:14",
+                                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/before_storage/routing/sharded.rs:77:14",
                                                               "cpu_usage": null,
                                                               "network_recv_cpu_usage": null,
                                                               "id": null
@@ -319,7 +319,7 @@
                                                       "cardinality": null,
                                                       "tag": null,
                                                       "op": {
-                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
+                                                        "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:50:29",
                                                         "cpu_usage": null,
                                                         "network_recv_cpu_usage": null,
                                                         "id": null
@@ -345,7 +345,7 @@
                                                   "cardinality": null,
                                                   "tag": null,
                                                   "op": {
-                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:51:29",
+                                                    "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:51:29",
                                                     "cpu_usage": null,
                                                     "network_recv_cpu_usage": null,
                                                     "id": null
@@ -372,7 +372,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_layer/plumb_after.rs:152:59",
+                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_layer/plumb_after.rs:152:59",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -398,7 +398,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_layer/plumb_after.rs:152:67",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_layer/plumb_after.rs:152:67",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -425,7 +425,7 @@
                                   "cardinality": null,
                                   "tag": null,
                                   "op": {
-                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:375:31",
+                                    "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:445:31",
                                     "cpu_usage": null,
                                     "network_recv_cpu_usage": null,
                                     "id": null
@@ -451,7 +451,7 @@
                               "cardinality": null,
                               "tag": null,
                               "op": {
-                                "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:375:39",
+                                "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:445:39",
                                 "cpu_usage": null,
                                 "network_recv_cpu_usage": null,
                                 "id": null
@@ -478,7 +478,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -504,7 +504,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:454:14",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:524:14",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -545,7 +545,7 @@
                                   "cardinality": null,
                                   "tag": null,
                                   "op": {
-                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:375:31",
+                                    "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:445:31",
                                     "cpu_usage": null,
                                     "network_recv_cpu_usage": null,
                                     "id": null
@@ -571,7 +571,7 @@
                               "cardinality": null,
                               "tag": null,
                               "op": {
-                                "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:382:42",
+                                "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:452:42",
                                 "cpu_usage": null,
                                 "network_recv_cpu_usage": null,
                                 "id": null
@@ -598,7 +598,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -624,7 +624,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:48",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:48",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -650,7 +650,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:477:14",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:547:14",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -706,7 +706,7 @@
                                                         "cardinality": null,
                                                         "tag": null,
                                                         "op": {
-                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                                                           "cpu_usage": null,
                                                           "network_recv_cpu_usage": null,
                                                           "id": null
@@ -732,7 +732,7 @@
                                                     "cardinality": null,
                                                     "tag": null,
                                                     "op": {
-                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:40",
+                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:40",
                                                       "cpu_usage": null,
                                                       "network_recv_cpu_usage": null,
                                                       "id": null
@@ -759,7 +759,7 @@
                                                 "cardinality": null,
                                                 "tag": null,
                                                 "op": {
-                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:215:14",
+                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:285:14",
                                                   "cpu_usage": null,
                                                   "network_recv_cpu_usage": null,
                                                   "id": null
@@ -786,7 +786,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:221:14",
+                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:291:14",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -811,7 +811,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:222:14",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:292:14",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -841,7 +841,7 @@
                                     "cardinality": null,
                                     "tag": null,
                                     "op": {
-                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:431:40",
+                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:501:40",
                                       "cpu_usage": null,
                                       "network_recv_cpu_usage": null,
                                       "id": null
@@ -882,7 +882,7 @@
                                                     "cardinality": null,
                                                     "tag": null,
                                                     "op": {
-                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:375:31",
+                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:445:31",
                                                       "cpu_usage": null,
                                                       "network_recv_cpu_usage": null,
                                                       "id": null
@@ -908,7 +908,7 @@
                                                 "cardinality": null,
                                                 "tag": null,
                                                 "op": {
-                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:387:31",
+                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:457:31",
                                                   "cpu_usage": null,
                                                   "network_recv_cpu_usage": null,
                                                   "id": null
@@ -939,7 +939,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:428:14",
+                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:498:14",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -970,7 +970,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:429:14",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:499:14",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -1002,7 +1002,7 @@
                                     "cardinality": null,
                                     "tag": null,
                                     "op": {
-                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:430:14",
+                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:500:14",
                                       "cpu_usage": null,
                                       "network_recv_cpu_usage": null,
                                       "id": null
@@ -1034,7 +1034,7 @@
                                 "cardinality": null,
                                 "tag": null,
                                 "op": {
-                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:434:44",
+                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:504:44",
                                   "cpu_usage": null,
                                   "network_recv_cpu_usage": null,
                                   "id": null
@@ -1127,7 +1127,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:438:14",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:508:14",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -1153,7 +1153,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:449:14",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:519:14",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -1179,7 +1179,7 @@
             "cardinality": null,
             "tag": "replica_responses_internal",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:478:14",
+              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:548:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -1255,7 +1255,7 @@
                                                       "cardinality": null,
                                                       "tag": null,
                                                       "op": {
-                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
+                                                        "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:50:29",
                                                         "cpu_usage": null,
                                                         "network_recv_cpu_usage": null,
                                                         "id": null
@@ -1281,7 +1281,7 @@
                                                   "cardinality": null,
                                                   "tag": null,
                                                   "op": {
-                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:375:39",
+                                                    "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:445:39",
                                                     "cpu_usage": null,
                                                     "network_recv_cpu_usage": null,
                                                     "id": null
@@ -1308,7 +1308,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -1334,7 +1334,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:454:14",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:524:14",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -1375,7 +1375,7 @@
                                                       "cardinality": null,
                                                       "tag": null,
                                                       "op": {
-                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
+                                                        "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:50:29",
                                                         "cpu_usage": null,
                                                         "network_recv_cpu_usage": null,
                                                         "id": null
@@ -1401,7 +1401,7 @@
                                                   "cardinality": null,
                                                   "tag": null,
                                                   "op": {
-                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:382:42",
+                                                    "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:452:42",
                                                     "cpu_usage": null,
                                                     "network_recv_cpu_usage": null,
                                                     "id": null
@@ -1428,7 +1428,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -1454,7 +1454,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:48",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:48",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -1480,7 +1480,7 @@
                                     "cardinality": null,
                                     "tag": null,
                                     "op": {
-                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:477:14",
+                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:547:14",
                                       "cpu_usage": null,
                                       "network_recv_cpu_usage": null,
                                       "id": null
@@ -1536,7 +1536,7 @@
                                                                             "cardinality": null,
                                                                             "tag": null,
                                                                             "op": {
-                                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                                                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                                                                               "cpu_usage": null,
                                                                               "network_recv_cpu_usage": null,
                                                                               "id": null
@@ -1562,7 +1562,7 @@
                                                                         "cardinality": null,
                                                                         "tag": null,
                                                                         "op": {
-                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:40",
+                                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:40",
                                                                           "cpu_usage": null,
                                                                           "network_recv_cpu_usage": null,
                                                                           "id": null
@@ -1589,7 +1589,7 @@
                                                                     "cardinality": null,
                                                                     "tag": null,
                                                                     "op": {
-                                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:215:14",
+                                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:285:14",
                                                                       "cpu_usage": null,
                                                                       "network_recv_cpu_usage": null,
                                                                       "id": null
@@ -1616,7 +1616,7 @@
                                                                 "cardinality": null,
                                                                 "tag": null,
                                                                 "op": {
-                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:221:14",
+                                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:291:14",
                                                                   "cpu_usage": null,
                                                                   "network_recv_cpu_usage": null,
                                                                   "id": null
@@ -1641,7 +1641,7 @@
                                                             "cardinality": null,
                                                             "tag": null,
                                                             "op": {
-                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:222:14",
+                                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:292:14",
                                                               "cpu_usage": null,
                                                               "network_recv_cpu_usage": null,
                                                               "id": null
@@ -1671,7 +1671,7 @@
                                                         "cardinality": null,
                                                         "tag": null,
                                                         "op": {
-                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:431:40",
+                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:501:40",
                                                           "cpu_usage": null,
                                                           "network_recv_cpu_usage": null,
                                                           "id": null
@@ -1712,7 +1712,7 @@
                                                                         "cardinality": null,
                                                                         "tag": null,
                                                                         "op": {
-                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:50:29",
+                                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:50:29",
                                                                           "cpu_usage": null,
                                                                           "network_recv_cpu_usage": null,
                                                                           "id": null
@@ -1738,7 +1738,7 @@
                                                                     "cardinality": null,
                                                                     "tag": null,
                                                                     "op": {
-                                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:387:31",
+                                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:457:31",
                                                                       "cpu_usage": null,
                                                                       "network_recv_cpu_usage": null,
                                                                       "id": null
@@ -1769,7 +1769,7 @@
                                                                 "cardinality": null,
                                                                 "tag": null,
                                                                 "op": {
-                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:428:14",
+                                                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:498:14",
                                                                   "cpu_usage": null,
                                                                   "network_recv_cpu_usage": null,
                                                                   "id": null
@@ -1800,7 +1800,7 @@
                                                             "cardinality": null,
                                                             "tag": null,
                                                             "op": {
-                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:429:14",
+                                                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:499:14",
                                                               "cpu_usage": null,
                                                               "network_recv_cpu_usage": null,
                                                               "id": null
@@ -1832,7 +1832,7 @@
                                                         "cardinality": null,
                                                         "tag": null,
                                                         "op": {
-                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:430:14",
+                                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:500:14",
                                                           "cpu_usage": null,
                                                           "network_recv_cpu_usage": null,
                                                           "id": null
@@ -1864,7 +1864,7 @@
                                                     "cardinality": null,
                                                     "tag": null,
                                                     "op": {
-                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:434:44",
+                                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:504:44",
                                                       "cpu_usage": null,
                                                       "network_recv_cpu_usage": null,
                                                       "id": null
@@ -1957,7 +1957,7 @@
                                         "cardinality": null,
                                         "tag": null,
                                         "op": {
-                                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:438:14",
+                                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:508:14",
                                           "cpu_usage": null,
                                           "network_recv_cpu_usage": null,
                                           "id": null
@@ -1983,7 +1983,7 @@
                                     "cardinality": null,
                                     "tag": null,
                                     "op": {
-                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:449:14",
+                                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:519:14",
                                       "cpu_usage": null,
                                       "network_recv_cpu_usage": null,
                                       "id": null
@@ -2009,7 +2009,7 @@
                                 "cardinality": null,
                                 "tag": null,
                                 "op": {
-                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:478:14",
+                                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:548:14",
                                   "cpu_usage": null,
                                   "network_recv_cpu_usage": null,
                                   "id": null
@@ -2035,7 +2035,7 @@
                             "cardinality": null,
                             "tag": null,
                             "op": {
-                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:134:48",
+                              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:134:48",
                               "cpu_usage": null,
                               "network_recv_cpu_usage": null,
                               "id": null
@@ -2062,7 +2062,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:958:20",
+                          "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:964:20",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2088,7 +2088,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:138:14",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:138:14",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2114,7 +2114,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:139:14",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:139:14",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -2141,7 +2141,7 @@
             "cardinality": null,
             "tag": "client_responses",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:142:14",
+              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:142:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -2190,7 +2190,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2216,7 +2216,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:484:28",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:554:28",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2242,7 +2242,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:124:14",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:124:14",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -2279,7 +2279,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2305,7 +2305,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:484:28",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:554:28",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2331,7 +2331,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:127:22",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:127:22",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -2357,7 +2357,7 @@
             "cardinality": null,
             "tag": "meta_events",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:125:14",
+              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:125:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -2405,7 +2405,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2431,7 +2431,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:480:29",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:550:29",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2465,7 +2465,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2491,7 +2491,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:481:43",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:551:43",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2517,7 +2517,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:482:29",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:552:29",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -2553,7 +2553,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:213:32",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:283:32",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2579,7 +2579,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:480:29",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:550:29",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2613,7 +2613,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:465:40",
+                          "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:535:40",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -2639,7 +2639,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:481:43",
+                      "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:551:43",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -2665,7 +2665,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:482:29",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/kvs_core/mod.rs:552:29",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -2691,7 +2691,7 @@
             "cardinality": null,
             "tag": "data_events",
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:120:14",
+              "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:120:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -2736,7 +2736,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:73:20",
+                  "span": "/Users/jmhwork/code/kvs_zoo/.infinity/.sandboxes/.tmpIujA62/src/plumbing.rs:73:20",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null

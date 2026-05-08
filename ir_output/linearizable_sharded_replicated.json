@@ -69,7 +69,7 @@
         }
       },
       "op_metadata": {
-        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:264:15",
+        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:263:15",
         "cpu_usage": null,
         "network_recv_cpu_usage": null,
         "id": null
@@ -391,7 +391,7 @@
                                                           "cardinality": null,
                                                           "tag": null,
                                                           "op": {
-                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1328:14",
+                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1323:14",
                                                             "cpu_usage": null,
                                                             "network_recv_cpu_usage": null,
                                                             "id": null
@@ -418,7 +418,7 @@
                                                       "cardinality": null,
                                                       "tag": null,
                                                       "op": {
-                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1983:18",
+                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1978:18",
                                                         "cpu_usage": null,
                                                         "network_recv_cpu_usage": null,
                                                         "id": null
@@ -442,7 +442,7 @@
                                                   "cardinality": null,
                                                   "tag": null,
                                                   "op": {
-                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1332:14",
+                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1327:14",
                                                     "cpu_usage": null,
                                                     "network_recv_cpu_usage": null,
                                                     "id": null
@@ -1160,7 +1160,7 @@
                                                                                   "cardinality": null,
                                                                                   "tag": null,
                                                                                   "op": {
-                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1085:50",
+                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1091:50",
                                                                                     "cpu_usage": null,
                                                                                     "network_recv_cpu_usage": null,
                                                                                     "id": null
@@ -1268,7 +1268,7 @@
                                                                   "cardinality": null,
                                                                   "tag": null,
                                                                   "op": {
-                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1087:39",
+                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:39",
                                                                     "cpu_usage": null,
                                                                     "network_recv_cpu_usage": null,
                                                                     "id": null
@@ -1298,7 +1298,7 @@
                                                               "cardinality": null,
                                                               "tag": null,
                                                               "op": {
-                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1090:52",
+                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1096:52",
                                                                 "cpu_usage": null,
                                                                 "network_recv_cpu_usage": null,
                                                                 "id": null
@@ -1423,7 +1423,7 @@
                                               "cardinality": null,
                                               "tag": null,
                                               "op": {
-                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2129:14",
+                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2124:14",
                                                 "cpu_usage": null,
                                                 "network_recv_cpu_usage": null,
                                                 "id": null
@@ -1455,7 +1455,7 @@
                                           "cardinality": null,
                                           "tag": null,
                                           "op": {
-                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2523:14",
+                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2518:14",
                                             "cpu_usage": null,
                                             "network_recv_cpu_usage": null,
                                             "id": null
@@ -2129,7 +2129,7 @@
                                                                                                   "cardinality": null,
                                                                                                   "tag": null,
                                                                                                   "op": {
-                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1401:14",
+                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1396:14",
                                                                                                     "cpu_usage": null,
                                                                                                     "network_recv_cpu_usage": null,
                                                                                                     "id": null
@@ -2160,7 +2160,7 @@
                                                                                               "cardinality": null,
                                                                                               "tag": null,
                                                                                               "op": {
-                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1401:14",
+                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1396:14",
                                                                                                 "cpu_usage": null,
                                                                                                 "network_recv_cpu_usage": null,
                                                                                                 "id": null
@@ -2189,7 +2189,7 @@
                                                                                           "cardinality": null,
                                                                                           "tag": null,
                                                                                           "op": {
-                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1402:14",
+                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1397:14",
                                                                                             "cpu_usage": null,
                                                                                             "network_recv_cpu_usage": null,
                                                                                             "id": null
@@ -2568,7 +2568,7 @@
                                               "cardinality": null,
                                               "tag": null,
                                               "op": {
-                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2129:14",
+                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2124:14",
                                                 "cpu_usage": null,
                                                 "network_recv_cpu_usage": null,
                                                 "id": null
@@ -2599,7 +2599,7 @@
                                           "cardinality": null,
                                           "tag": null,
                                           "op": {
-                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1088:31",
+                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1094:31",
                                             "cpu_usage": null,
                                             "network_recv_cpu_usage": null,
                                             "id": null
@@ -2630,7 +2630,7 @@
                                       "cardinality": null,
                                       "tag": null,
                                       "op": {
-                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2526:14",
+                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2521:14",
                                         "cpu_usage": null,
                                         "network_recv_cpu_usage": null,
                                         "id": null
@@ -2662,7 +2662,7 @@
                                   "cardinality": null,
                                   "tag": null,
                                   "op": {
-                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2527:14",
+                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2522:14",
                                     "cpu_usage": null,
                                     "network_recv_cpu_usage": null,
                                     "id": null
@@ -2716,7 +2716,7 @@
                           "cardinality": null,
                           "tag": null,
                           "op": {
-                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:10",
+                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1099:10",
                             "cpu_usage": null,
                             "network_recv_cpu_usage": null,
                             "id": null
@@ -3004,7 +3004,7 @@
                                                                                                                                           "cardinality": null,
                                                                                                                                           "tag": null,
                                                                                                                                           "op": {
-                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1085:50",
+                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1091:50",
                                                                                                                                             "cpu_usage": null,
                                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                                             "id": null
@@ -3112,7 +3112,7 @@
                                                                                                                           "cardinality": null,
                                                                                                                           "tag": null,
                                                                                                                           "op": {
-                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1087:39",
+                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:39",
                                                                                                                             "cpu_usage": null,
                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                             "id": null
@@ -3142,7 +3142,7 @@
                                                                                                                       "cardinality": null,
                                                                                                                       "tag": null,
                                                                                                                       "op": {
-                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1090:52",
+                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1096:52",
                                                                                                                         "cpu_usage": null,
                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                         "id": null
@@ -3268,7 +3268,7 @@
                                                                                                       "cardinality": null,
                                                                                                       "tag": null,
                                                                                                       "op": {
-                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2523:14",
+                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2518:14",
                                                                                                         "cpu_usage": null,
                                                                                                         "network_recv_cpu_usage": null,
                                                                                                         "id": null
@@ -3414,7 +3414,7 @@
                                                                                                                                                                                           "cardinality": null,
                                                                                                                                                                                           "tag": null,
                                                                                                                                                                                           "op": {
-                                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1826:36",
+                                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1821:36",
                                                                                                                                                                                             "cpu_usage": null,
                                                                                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                                                                                             "id": null
@@ -3441,7 +3441,7 @@
                                                                                                                                                                                       "cardinality": null,
                                                                                                                                                                                       "tag": null,
                                                                                                                                                                                       "op": {
-                                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1243:72",
+                                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1238:72",
                                                                                                                                                                                         "cpu_usage": null,
                                                                                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                                                                                         "id": null
@@ -3465,7 +3465,7 @@
                                                                                                                                                                                   "cardinality": null,
                                                                                                                                                                                   "tag": null,
                                                                                                                                                                                   "op": {
-                                                                                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1826:74",
+                                                                                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1821:74",
                                                                                                                                                                                     "cpu_usage": null,
                                                                                                                                                                                     "network_recv_cpu_usage": null,
                                                                                                                                                                                     "id": null
@@ -3494,7 +3494,7 @@
                                                                                                                                                                               "cardinality": null,
                                                                                                                                                                               "tag": null,
                                                                                                                                                                               "op": {
-                                                                                                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1837:14",
+                                                                                                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1832:14",
                                                                                                                                                                                 "cpu_usage": null,
                                                                                                                                                                                 "network_recv_cpu_usage": null,
                                                                                                                                                                                 "id": null
@@ -3523,7 +3523,7 @@
                                                                                                                                                                           "cardinality": null,
                                                                                                                                                                           "tag": null,
                                                                                                                                                                           "op": {
-                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1838:14",
+                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1833:14",
                                                                                                                                                                             "cpu_usage": null,
                                                                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                                                                             "id": null
@@ -3547,7 +3547,7 @@
                                                                                                                                                                       "cardinality": null,
                                                                                                                                                                       "tag": null,
                                                                                                                                                                       "op": {
-                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1849:14",
+                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1844:14",
                                                                                                                                                                         "cpu_usage": null,
                                                                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                                                                         "id": null
@@ -4075,7 +4075,7 @@
                                                                                                                                                                                           "cardinality": null,
                                                                                                                                                                                           "tag": null,
                                                                                                                                                                                           "op": {
-                                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1401:14",
+                                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1396:14",
                                                                                                                                                                                             "cpu_usage": null,
                                                                                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                                                                                             "id": null
@@ -4106,7 +4106,7 @@
                                                                                                                                                                                       "cardinality": null,
                                                                                                                                                                                       "tag": null,
                                                                                                                                                                                       "op": {
-                                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1401:14",
+                                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1396:14",
                                                                                                                                                                                         "cpu_usage": null,
                                                                                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                                                                                         "id": null
@@ -4135,7 +4135,7 @@
                                                                                                                                                                                   "cardinality": null,
                                                                                                                                                                                   "tag": null,
                                                                                                                                                                                   "op": {
-                                                                                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1402:14",
+                                                                                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1397:14",
                                                                                                                                                                                     "cpu_usage": null,
                                                                                                                                                                                     "network_recv_cpu_usage": null,
                                                                                                                                                                                     "id": null
@@ -4815,7 +4815,7 @@
                                                                                                       "cardinality": null,
                                                                                                       "tag": null,
                                                                                                       "op": {
-                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1088:31",
+                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1094:31",
                                                                                                         "cpu_usage": null,
                                                                                                         "network_recv_cpu_usage": null,
                                                                                                         "id": null
@@ -4846,7 +4846,7 @@
                                                                                                   "cardinality": null,
                                                                                                   "tag": null,
                                                                                                   "op": {
-                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2526:14",
+                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2521:14",
                                                                                                     "cpu_usage": null,
                                                                                                     "network_recv_cpu_usage": null,
                                                                                                     "id": null
@@ -4878,7 +4878,7 @@
                                                                                               "cardinality": null,
                                                                                               "tag": null,
                                                                                               "op": {
-                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2527:14",
+                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2522:14",
                                                                                                 "cpu_usage": null,
                                                                                                 "network_recv_cpu_usage": null,
                                                                                                 "id": null
@@ -4932,7 +4932,7 @@
                                                                                       "cardinality": null,
                                                                                       "tag": null,
                                                                                       "op": {
-                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:10",
+                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1099:10",
                                                                                         "cpu_usage": null,
                                                                                         "network_recv_cpu_usage": null,
                                                                                         "id": null
@@ -5135,7 +5135,7 @@
                                                                                                   "cardinality": null,
                                                                                                   "tag": null,
                                                                                                   "op": {
-                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3004:20",
+                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3016:20",
                                                                                                     "cpu_usage": null,
                                                                                                     "network_recv_cpu_usage": null,
                                                                                                     "id": null
@@ -5169,7 +5169,7 @@
                                                                                               "cardinality": null,
                                                                                               "tag": null,
                                                                                               "op": {
-                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1983:18",
+                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1978:18",
                                                                                                 "cpu_usage": null,
                                                                                                 "network_recv_cpu_usage": null,
                                                                                                 "id": null
@@ -5200,7 +5200,7 @@
                                                                                           "cardinality": null,
                                                                                           "tag": null,
                                                                                           "op": {
-                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1332:14",
+                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1327:14",
                                                                                             "cpu_usage": null,
                                                                                             "network_recv_cpu_usage": null,
                                                                                             "id": null
@@ -5619,7 +5619,7 @@
                                                 "cardinality": null,
                                                 "tag": null,
                                                 "op": {
-                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1267:14",
+                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1273:14",
                                                   "cpu_usage": null,
                                                   "network_recv_cpu_usage": null,
                                                   "id": null
@@ -5646,7 +5646,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1267:27",
+                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1273:27",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -9310,7 +9310,7 @@
                                                                                     "cardinality": null,
                                                                                     "tag": null,
                                                                                     "op": {
-                                                                                      "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2523:14",
+                                                                                      "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2518:14",
                                                                                       "cpu_usage": null,
                                                                                       "network_recv_cpu_usage": null,
                                                                                       "id": null
@@ -9355,7 +9355,7 @@
                                                                                                 "cardinality": null,
                                                                                                 "tag": null,
                                                                                                 "op": {
-                                                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:264:15",
+                                                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:263:15",
                                                                                                   "cpu_usage": null,
                                                                                                   "network_recv_cpu_usage": null,
                                                                                                   "id": null
@@ -9381,7 +9381,7 @@
                                                                                             "cardinality": null,
                                                                                             "tag": null,
                                                                                             "op": {
-                                                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:267:10",
+                                                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:266:10",
                                                                                               "cpu_usage": null,
                                                                                               "network_recv_cpu_usage": null,
                                                                                               "id": null
@@ -9407,7 +9407,7 @@
                                                                                         "cardinality": null,
                                                                                         "tag": null,
                                                                                         "op": {
-                                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:268:10",
+                                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:267:10",
                                                                                           "cpu_usage": null,
                                                                                           "network_recv_cpu_usage": null,
                                                                                           "id": null
@@ -9469,7 +9469,7 @@
                                                                                 "cardinality": null,
                                                                                 "tag": null,
                                                                                 "op": {
-                                                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2526:14",
+                                                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2521:14",
                                                                                   "cpu_usage": null,
                                                                                   "network_recv_cpu_usage": null,
                                                                                   "id": null
@@ -9501,7 +9501,7 @@
                                                                             "cardinality": null,
                                                                             "tag": null,
                                                                             "op": {
-                                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2527:14",
+                                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2522:14",
                                                                               "cpu_usage": null,
                                                                               "network_recv_cpu_usage": null,
                                                                               "id": null
@@ -10529,7 +10529,7 @@
                                                                                 "cardinality": null,
                                                                                 "tag": null,
                                                                                 "op": {
-                                                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1981:18",
+                                                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1976:18",
                                                                                   "cpu_usage": null,
                                                                                   "network_recv_cpu_usage": null,
                                                                                   "id": null
@@ -10558,7 +10558,7 @@
                                                                             "cardinality": null,
                                                                             "tag": null,
                                                                             "op": {
-                                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1332:14",
+                                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1327:14",
                                                                               "cpu_usage": null,
                                                                               "network_recv_cpu_usage": null,
                                                                               "id": null
@@ -11077,7 +11077,7 @@
                               "cardinality": null,
                               "tag": null,
                               "op": {
-                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2228:10",
+                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2223:10",
                                 "cpu_usage": null,
                                 "network_recv_cpu_usage": null,
                                 "id": null
@@ -11435,7 +11435,7 @@
                                                                                                                                       "cardinality": null,
                                                                                                                                       "tag": null,
                                                                                                                                       "op": {
-                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1085:50",
+                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1091:50",
                                                                                                                                         "cpu_usage": null,
                                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                                         "id": null
@@ -11543,7 +11543,7 @@
                                                                                                                       "cardinality": null,
                                                                                                                       "tag": null,
                                                                                                                       "op": {
-                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1087:39",
+                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:39",
                                                                                                                         "cpu_usage": null,
                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                         "id": null
@@ -11573,7 +11573,7 @@
                                                                                                                   "cardinality": null,
                                                                                                                   "tag": null,
                                                                                                                   "op": {
-                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1090:52",
+                                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1096:52",
                                                                                                                     "cpu_usage": null,
                                                                                                                     "network_recv_cpu_usage": null,
                                                                                                                     "id": null
@@ -11699,7 +11699,7 @@
                                                                                                   "cardinality": null,
                                                                                                   "tag": null,
                                                                                                   "op": {
-                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2523:14",
+                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2518:14",
                                                                                                     "cpu_usage": null,
                                                                                                     "network_recv_cpu_usage": null,
                                                                                                     "id": null
@@ -12214,7 +12214,7 @@
                                                                                                                                                                           "cardinality": null,
                                                                                                                                                                           "tag": null,
                                                                                                                                                                           "op": {
-                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1981:18",
+                                                                                                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1976:18",
                                                                                                                                                                             "cpu_usage": null,
                                                                                                                                                                             "network_recv_cpu_usage": null,
                                                                                                                                                                             "id": null
@@ -12243,7 +12243,7 @@
                                                                                                                                                                       "cardinality": null,
                                                                                                                                                                       "tag": null,
                                                                                                                                                                       "op": {
-                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1332:14",
+                                                                                                                                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1327:14",
                                                                                                                                                                         "cpu_usage": null,
                                                                                                                                                                         "network_recv_cpu_usage": null,
                                                                                                                                                                         "id": null
@@ -13575,7 +13575,7 @@
                                                                                                   "cardinality": null,
                                                                                                   "tag": null,
                                                                                                   "op": {
-                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1088:31",
+                                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1094:31",
                                                                                                     "cpu_usage": null,
                                                                                                     "network_recv_cpu_usage": null,
                                                                                                     "id": null
@@ -13606,7 +13606,7 @@
                                                                                               "cardinality": null,
                                                                                               "tag": null,
                                                                                               "op": {
-                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2526:14",
+                                                                                                "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2521:14",
                                                                                                 "cpu_usage": null,
                                                                                                 "network_recv_cpu_usage": null,
                                                                                                 "id": null
@@ -13638,7 +13638,7 @@
                                                                                           "cardinality": null,
                                                                                           "tag": null,
                                                                                           "op": {
-                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2527:14",
+                                                                                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2522:14",
                                                                                             "cpu_usage": null,
                                                                                             "network_recv_cpu_usage": null,
                                                                                             "id": null
@@ -13692,7 +13692,7 @@
                                                                                   "cardinality": null,
                                                                                   "tag": null,
                                                                                   "op": {
-                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1093:10",
+                                                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1099:10",
                                                                                     "cpu_usage": null,
                                                                                     "network_recv_cpu_usage": null,
                                                                                     "id": null
@@ -13987,7 +13987,7 @@
                                                 "cardinality": null,
                                                 "tag": null,
                                                 "op": {
-                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1267:14",
+                                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1273:14",
                                                   "cpu_usage": null,
                                                   "network_recv_cpu_usage": null,
                                                   "id": null
@@ -14014,7 +14014,7 @@
                                             "cardinality": null,
                                             "tag": null,
                                             "op": {
-                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1267:27",
+                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:1273:27",
                                               "cpu_usage": null,
                                               "network_recv_cpu_usage": null,
                                               "id": null
@@ -15920,7 +15920,7 @@
                                                             "cardinality": null,
                                                             "tag": null,
                                                             "op": {
-                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3004:20",
+                                                              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3016:20",
                                                               "cpu_usage": null,
                                                               "network_recv_cpu_usage": null,
                                                               "id": null
@@ -16180,7 +16180,7 @@
                                 "cardinality": null,
                                 "tag": null,
                                 "op": {
-                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1243:72",
+                                  "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:1238:72",
                                   "cpu_usage": null,
                                   "network_recv_cpu_usage": null,
                                   "id": null
@@ -16476,7 +16476,7 @@
                                                   "Map": {
                                                     "f": "q!(| (key , (meta , resp)) | (key , (meta , resp)))",
                                                     "input": {
-                                                      "Join": {
+                                                      "JoinHalf": {
                                                         "left": {
                                                           "Tee": {
                                                             "inner": {
@@ -17677,7 +17677,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3004:20",
+                      "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:3016:20",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -18210,450 +18210,524 @@
     }
   },
   {
+    "ForEach": {
+      "f": "q!(| _ | { })",
+      "input": {
+        "Tee": {
+          "inner": {
+            "$shared": 36,
+            "node": {
+              "FilterMap": {
+                "f": "q!(| (_member_id , response) | { response . client_id () . map (| cid | (cid , response . to_string ())) })",
+                "input": {
+                  "ObserveNonDet": {
+                    "inner": {
+                      "Cast": {
+                        "inner": {
+                          "Network": {
+                            "name": null,
+                            "networking_info": {
+                              "Tcp": {
+                                "fault": "FailStop"
+                              }
+                            },
+                            "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > , _ > (| data | { hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into () }))",
+                            "instantiate_fn": "Building",
+                            "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
+                            "input": {
+                              "FilterMap": {
+                                "f": "q!(| emission | emission . response)",
+                                "input": {
+                                  "Tee": {
+                                    "inner": {
+                                      "$shared": 37,
+                                      "node": {
+                                        "Scan": {
+                                          "init": "q!(| | crate :: __staged :: kvs_core :: OverwriteMap :: < KeyType , V > :: default ())",
+                                          "acc": "q!(| state , operation | { let request_id = operation . request_id () ; let client_id = operation . client_id () ; let should_emit_response = client_id . is_some () ; let (response , data , meta) = match operation { KVSOperation :: Put (key , value , _ , _) => { let value_for_event = value . clone () ; state . apply_put (key . clone () , value) ; let response = if should_emit_response { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Put { key : key . clone () , value : value_for_event , }) ; (response , data , None) } KVSOperation :: Get (key , _ , _) => { let value = state . apply_get (& key) . cloned () ; let response = if should_emit_response { Some (KVSResponse :: GetResult { request_id , client_id , value : value . clone () , }) } else { None } ; let data = Some (DataEvent :: Get { key : key . clone () , value , }) ; (response , data , None) } KVSOperation :: Delete (key , _ , _) => { state . apply_delete (key . clone ()) ; let response = if should_emit_response { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Delete { key : key . clone () }) ; let meta = Some (MetaEvent :: Tomb { key : key . clone () }) ; (response , data , meta) } } ; Some (CoreEmission { response , data , meta , }) })",
+                                          "input": {
+                                            "Map": {
+                                              "f": "q!(| (_sender , op) | op)",
+                                              "input": {
+                                                "ObserveNonDet": {
+                                                  "inner": {
+                                                    "Network": {
+                                                      "name": null,
+                                                      "networking_info": {
+                                                        "Tcp": {
+                                                          "fault": "FailStop"
+                                                        }
+                                                      },
+                                                      "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (hydro_lang :: __staged :: location :: MemberId < _ > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >) , _ > (| (id , data) | { (id . into_tagless () , hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into ()) }))",
+                                                      "instantiate_fn": "Building",
+                                                      "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
+                                                      "input": {
+                                                        "Cast": {
+                                                          "inner": {
+                                                            "Map": {
+                                                              "f": "q!(| op | (hydro_lang :: location :: MemberId :: from_raw_id (0u32) , op))",
+                                                              "input": {
+                                                                "YieldConcat": {
+                                                                  "inner": {
+                                                                    "FilterMap": {
+                                                                      "f": "q!(| sequenced | sequenced . payload)",
+                                                                      "input": {
+                                                                        "Tee": {
+                                                                          "inner": {
+                                                                            "$shared_ref": 35
+                                                                          },
+                                                                          "metadata": {
+                                                                            "location_id": {
+                                                                              "Tick": [
+                                                                                14,
+                                                                                {
+                                                                                  "Cluster": {
+                                                                                    "idx": 4,
+                                                                                    "version": 1
+                                                                                  }
+                                                                                }
+                                                                              ]
+                                                                            },
+                                                                            "collection_kind": {
+                                                                              "Stream": {
+                                                                                "bound": "Bounded",
+                                                                                "order": "TotalOrder",
+                                                                                "retry": "ExactlyOnce",
+                                                                                "element_type": "kvs_zoo :: __staged :: before_storage :: ordering :: sequence_payloads :: SequencedPayload < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > >"
+                                                                              }
+                                                                            },
+                                                                            "cardinality": null,
+                                                                            "tag": null,
+                                                                            "op": {
+                                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:80:58",
+                                                                              "cpu_usage": null,
+                                                                              "network_recv_cpu_usage": null,
+                                                                              "id": null
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "metadata": {
+                                                                        "location_id": {
+                                                                          "Tick": [
+                                                                            14,
+                                                                            {
+                                                                              "Cluster": {
+                                                                                "idx": 4,
+                                                                                "version": 1
+                                                                              }
+                                                                            }
+                                                                          ]
+                                                                        },
+                                                                        "collection_kind": {
+                                                                          "Stream": {
+                                                                            "bound": "Bounded",
+                                                                            "order": "TotalOrder",
+                                                                            "retry": "ExactlyOnce",
+                                                                            "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                          }
+                                                                        },
+                                                                        "cardinality": null,
+                                                                        "tag": null,
+                                                                        "op": {
+                                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:88:14",
+                                                                          "cpu_usage": null,
+                                                                          "network_recv_cpu_usage": null,
+                                                                          "id": null
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "metadata": {
+                                                                    "location_id": {
+                                                                      "Cluster": {
+                                                                        "idx": 4,
+                                                                        "version": 1
+                                                                      }
+                                                                    },
+                                                                    "collection_kind": {
+                                                                      "Stream": {
+                                                                        "bound": "Unbounded",
+                                                                        "order": "TotalOrder",
+                                                                        "retry": "ExactlyOnce",
+                                                                        "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                                      }
+                                                                    },
+                                                                    "cardinality": null,
+                                                                    "tag": null,
+                                                                    "op": {
+                                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:89:14",
+                                                                      "cpu_usage": null,
+                                                                      "network_recv_cpu_usage": null,
+                                                                      "id": null
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "metadata": {
+                                                                "location_id": {
+                                                                  "Cluster": {
+                                                                    "idx": 4,
+                                                                    "version": 1
+                                                                  }
+                                                                },
+                                                                "collection_kind": {
+                                                                  "Stream": {
+                                                                    "bound": "Unbounded",
+                                                                    "order": "TotalOrder",
+                                                                    "retry": "ExactlyOnce",
+                                                                    "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                                  }
+                                                                },
+                                                                "cardinality": null,
+                                                                "tag": null,
+                                                                "op": {
+                                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
+                                                                  "cpu_usage": null,
+                                                                  "network_recv_cpu_usage": null,
+                                                                  "id": null
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "metadata": {
+                                                            "location_id": {
+                                                              "Cluster": {
+                                                                "idx": 4,
+                                                                "version": 1
+                                                              }
+                                                            },
+                                                            "collection_kind": {
+                                                              "KeyedStream": {
+                                                                "bound": "Unbounded",
+                                                                "value_order": "TotalOrder",
+                                                                "value_retry": "ExactlyOnce",
+                                                                "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                                                                "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                              }
+                                                            },
+                                                            "cardinality": null,
+                                                            "tag": null,
+                                                            "op": {
+                                                              "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:185:14",
+                                                              "cpu_usage": null,
+                                                              "network_recv_cpu_usage": null,
+                                                              "id": null
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "metadata": {
+                                                        "location_id": {
+                                                          "Cluster": {
+                                                            "idx": 3,
+                                                            "version": 1
+                                                          }
+                                                        },
+                                                        "collection_kind": {
+                                                          "KeyedStream": {
+                                                            "bound": "Unbounded",
+                                                            "value_order": "TotalOrder",
+                                                            "value_retry": "ExactlyOnce",
+                                                            "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                                                            "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                          }
+                                                        },
+                                                        "cardinality": null,
+                                                        "tag": null,
+                                                        "op": {
+                                                          "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:186:14",
+                                                          "cpu_usage": null,
+                                                          "network_recv_cpu_usage": null,
+                                                          "id": null
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  "trusted": false,
+                                                  "metadata": {
+                                                    "location_id": {
+                                                      "Cluster": {
+                                                        "idx": 3,
+                                                        "version": 1
+                                                      }
+                                                    },
+                                                    "collection_kind": {
+                                                      "Stream": {
+                                                        "bound": "Unbounded",
+                                                        "order": "TotalOrder",
+                                                        "retry": "ExactlyOnce",
+                                                        "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
+                                                      }
+                                                    },
+                                                    "cardinality": null,
+                                                    "tag": null,
+                                                    "op": {
+                                                      "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:187:14",
+                                                      "cpu_usage": null,
+                                                      "network_recv_cpu_usage": null,
+                                                      "id": null
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "metadata": {
+                                                "location_id": {
+                                                  "Cluster": {
+                                                    "idx": 3,
+                                                    "version": 1
+                                                  }
+                                                },
+                                                "collection_kind": {
+                                                  "Stream": {
+                                                    "bound": "Unbounded",
+                                                    "order": "TotalOrder",
+                                                    "retry": "ExactlyOnce",
+                                                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
+                                                  }
+                                                },
+                                                "cardinality": null,
+                                                "tag": null,
+                                                "op": {
+                                                  "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:190:14",
+                                                  "cpu_usage": null,
+                                                  "network_recv_cpu_usage": null,
+                                                  "id": null
+                                                }
+                                              }
+                                            }
+                                          },
+                                          "metadata": {
+                                            "location_id": {
+                                              "Cluster": {
+                                                "idx": 3,
+                                                "version": 1
+                                              }
+                                            },
+                                            "collection_kind": {
+                                              "Stream": {
+                                                "bound": "Unbounded",
+                                                "order": "TotalOrder",
+                                                "retry": "ExactlyOnce",
+                                                "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
+                                              }
+                                            },
+                                            "cardinality": null,
+                                            "tag": null,
+                                            "op": {
+                                              "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:335:35",
+                                              "cpu_usage": null,
+                                              "network_recv_cpu_usage": null,
+                                              "id": null
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "metadata": {
+                                      "location_id": {
+                                        "Cluster": {
+                                          "idx": 3,
+                                          "version": 1
+                                        }
+                                      },
+                                      "collection_kind": {
+                                        "Stream": {
+                                          "bound": "Unbounded",
+                                          "order": "TotalOrder",
+                                          "retry": "ExactlyOnce",
+                                          "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
+                                        }
+                                      },
+                                      "cardinality": null,
+                                      "tag": null,
+                                      "op": {
+                                        "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:399:14",
+                                        "cpu_usage": null,
+                                        "network_recv_cpu_usage": null,
+                                        "id": null
+                                      }
+                                    }
+                                  }
+                                },
+                                "metadata": {
+                                  "location_id": {
+                                    "Cluster": {
+                                      "idx": 3,
+                                      "version": 1
+                                    }
+                                  },
+                                  "collection_kind": {
+                                    "Stream": {
+                                      "bound": "Unbounded",
+                                      "order": "TotalOrder",
+                                      "retry": "ExactlyOnce",
+                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                                    }
+                                  },
+                                  "cardinality": null,
+                                  "tag": null,
+                                  "op": {
+                                    "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:400:14",
+                                    "cpu_usage": null,
+                                    "network_recv_cpu_usage": null,
+                                    "id": null
+                                  }
+                                }
+                              }
+                            },
+                            "metadata": {
+                              "location_id": {
+                                "Process": {
+                                  "idx": 1,
+                                  "version": 1
+                                }
+                              },
+                              "collection_kind": {
+                                "Stream": {
+                                  "bound": "Unbounded",
+                                  "order": "TotalOrder",
+                                  "retry": "ExactlyOnce",
+                                  "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
+                                }
+                              },
+                              "cardinality": null,
+                              "tag": null,
+                              "op": {
+                                "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:287:44",
+                                "cpu_usage": null,
+                                "network_recv_cpu_usage": null,
+                                "id": null
+                              }
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "location_id": {
+                            "Process": {
+                              "idx": 1,
+                              "version": 1
+                            }
+                          },
+                          "collection_kind": {
+                            "KeyedStream": {
+                              "bound": "Unbounded",
+                              "value_order": "TotalOrder",
+                              "value_retry": "ExactlyOnce",
+                              "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
+                              "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
+                            }
+                          },
+                          "cardinality": null,
+                          "tag": null,
+                          "op": {
+                            "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:964:20",
+                            "cpu_usage": null,
+                            "network_recv_cpu_usage": null,
+                            "id": null
+                          }
+                        }
+                      }
+                    },
+                    "trusted": false,
+                    "metadata": {
+                      "location_id": {
+                        "Process": {
+                          "idx": 1,
+                          "version": 1
+                        }
+                      },
+                      "collection_kind": {
+                        "Stream": {
+                          "bound": "Unbounded",
+                          "order": "TotalOrder",
+                          "retry": "ExactlyOnce",
+                          "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
+                        }
+                      },
+                      "cardinality": null,
+                      "tag": null,
+                      "op": {
+                        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:289:10",
+                        "cpu_usage": null,
+                        "network_recv_cpu_usage": null,
+                        "id": null
+                      }
+                    }
+                  }
+                },
+                "metadata": {
+                  "location_id": {
+                    "Process": {
+                      "idx": 1,
+                      "version": 1
+                    }
+                  },
+                  "collection_kind": {
+                    "Stream": {
+                      "bound": "Unbounded",
+                      "order": "TotalOrder",
+                      "retry": "ExactlyOnce",
+                      "element_type": "(u64 , std :: string :: String)"
+                    }
+                  },
+                  "cardinality": null,
+                  "tag": null,
+                  "op": {
+                    "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:293:10",
+                    "cpu_usage": null,
+                    "network_recv_cpu_usage": null,
+                    "id": null
+                  }
+                }
+              }
+            }
+          },
+          "metadata": {
+            "location_id": {
+              "Process": {
+                "idx": 1,
+                "version": 1
+              }
+            },
+            "collection_kind": {
+              "Stream": {
+                "bound": "Unbounded",
+                "order": "TotalOrder",
+                "retry": "ExactlyOnce",
+                "element_type": "(u64 , std :: string :: String)"
+              }
+            },
+            "cardinality": null,
+            "tag": "client_responses_seq",
+            "op": {
+              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:297:23",
+              "cpu_usage": null,
+              "network_recv_cpu_usage": null,
+              "id": null
+            }
+          }
+        }
+      },
+      "op_metadata": {
+        "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:297:69",
+        "cpu_usage": null,
+        "network_recv_cpu_usage": null,
+        "id": null
+      }
+    }
+  },
+  {
     "CycleSink": {
       "cycle_id": 0,
       "input": {
         "Cast": {
           "inner": {
-            "FilterMap": {
-              "f": "q!(| (_member_id , response) | { response . client_id () . map (| cid | (cid , response . to_string ())) })",
-              "input": {
-                "Cast": {
+            "Cast": {
+              "inner": {
+                "Tee": {
                   "inner": {
-                    "Cast": {
-                      "inner": {
-                        "Network": {
-                          "name": null,
-                          "networking_info": {
-                            "Tcp": {
-                              "fault": "FailStop"
-                            }
-                          },
-                          "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > , _ > (| data | { hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into () }))",
-                          "instantiate_fn": "Building",
-                          "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
-                          "input": {
-                            "FilterMap": {
-                              "f": "q!(| emission | emission . response)",
-                              "input": {
-                                "Tee": {
-                                  "inner": {
-                                    "$shared": 36,
-                                    "node": {
-                                      "Scan": {
-                                        "init": "q!(| | crate :: __staged :: kvs_core :: OverwriteMap :: < KeyType , V > :: default ())",
-                                        "acc": "q!(| state , operation | { let request_id = operation . request_id () ; let client_id = operation . client_id () ; let should_emit_response = client_id . is_some () ; let (response , data , meta) = match operation { KVSOperation :: Put (key , value , _ , _) => { let value_for_event = value . clone () ; state . apply_put (key . clone () , value) ; let response = if should_emit_response { Some (KVSResponse :: PutOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Put { key : key . clone () , value : value_for_event , }) ; (response , data , None) } KVSOperation :: Get (key , _ , _) => { let value = state . apply_get (& key) . cloned () ; let response = if should_emit_response { Some (KVSResponse :: GetResult { request_id , client_id , value : value . clone () , }) } else { None } ; let data = Some (DataEvent :: Get { key : key . clone () , value , }) ; (response , data , None) } KVSOperation :: Delete (key , _ , _) => { state . apply_delete (key . clone ()) ; let response = if should_emit_response { Some (KVSResponse :: DeleteOk { request_id , client_id , }) } else { None } ; let data = Some (DataEvent :: Delete { key : key . clone () }) ; let meta = Some (MetaEvent :: Tomb { key : key . clone () }) ; (response , data , meta) } } ; Some (CoreEmission { response , data , meta , }) })",
-                                        "input": {
-                                          "ObserveNonDet": {
-                                            "inner": {
-                                              "Map": {
-                                                "f": "q!(| (_ , v) | v)",
-                                                "input": {
-                                                  "Cast": {
-                                                    "inner": {
-                                                      "Network": {
-                                                        "name": null,
-                                                        "networking_info": {
-                                                          "Tcp": {
-                                                            "fault": "FailStop"
-                                                          }
-                                                        },
-                                                        "serialize_fn": "q!(hydro_lang :: runtime_support :: stageleft :: runtime_support :: fn1_type_hint :: < (hydro_lang :: __staged :: location :: MemberId < _ > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >) , _ > (| (id , data) | { (id . into_tagless () , hydro_lang :: runtime_support :: bincode :: serialize (& data) . unwrap () . into ()) }))",
-                                                        "instantiate_fn": "Building",
-                                                        "deserialize_fn": "q!(| res | { let (id , b) = res . unwrap () ; (hydro_lang :: __staged :: location :: MemberId :: < kvs_zoo :: __staged :: kvs_core :: KVSNode > :: from_tagless (id as hydro_lang :: __staged :: location :: TaglessMemberId) , hydro_lang :: runtime_support :: bincode :: deserialize :: < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > > (& b) . unwrap ()) })",
-                                                        "input": {
-                                                          "Cast": {
-                                                            "inner": {
-                                                              "Map": {
-                                                                "f": "q!(| op | (hydro_lang :: location :: MemberId :: from_raw_id (0u32) , op))",
-                                                                "input": {
-                                                                  "YieldConcat": {
-                                                                    "inner": {
-                                                                      "FilterMap": {
-                                                                        "f": "q!(| sequenced | sequenced . payload)",
-                                                                        "input": {
-                                                                          "Tee": {
-                                                                            "inner": {
-                                                                              "$shared_ref": 35
-                                                                            },
-                                                                            "metadata": {
-                                                                              "location_id": {
-                                                                                "Tick": [
-                                                                                  14,
-                                                                                  {
-                                                                                    "Cluster": {
-                                                                                      "idx": 4,
-                                                                                      "version": 1
-                                                                                    }
-                                                                                  }
-                                                                                ]
-                                                                              },
-                                                                              "collection_kind": {
-                                                                                "Stream": {
-                                                                                  "bound": "Bounded",
-                                                                                  "order": "TotalOrder",
-                                                                                  "retry": "ExactlyOnce",
-                                                                                  "element_type": "kvs_zoo :: __staged :: before_storage :: ordering :: sequence_payloads :: SequencedPayload < kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String > >"
-                                                                                }
-                                                                              },
-                                                                              "cardinality": null,
-                                                                              "tag": null,
-                                                                              "op": {
-                                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:80:58",
-                                                                                "cpu_usage": null,
-                                                                                "network_recv_cpu_usage": null,
-                                                                                "id": null
-                                                                              }
-                                                                            }
-                                                                          }
-                                                                        },
-                                                                        "metadata": {
-                                                                          "location_id": {
-                                                                            "Tick": [
-                                                                              14,
-                                                                              {
-                                                                                "Cluster": {
-                                                                                  "idx": 4,
-                                                                                  "version": 1
-                                                                                }
-                                                                              }
-                                                                            ]
-                                                                          },
-                                                                          "collection_kind": {
-                                                                            "Stream": {
-                                                                              "bound": "Bounded",
-                                                                              "order": "TotalOrder",
-                                                                              "retry": "ExactlyOnce",
-                                                                              "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                            }
-                                                                          },
-                                                                          "cardinality": null,
-                                                                          "tag": null,
-                                                                          "op": {
-                                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:88:14",
-                                                                            "cpu_usage": null,
-                                                                            "network_recv_cpu_usage": null,
-                                                                            "id": null
-                                                                          }
-                                                                        }
-                                                                      }
-                                                                    },
-                                                                    "metadata": {
-                                                                      "location_id": {
-                                                                        "Cluster": {
-                                                                          "idx": 4,
-                                                                          "version": 1
-                                                                        }
-                                                                      },
-                                                                      "collection_kind": {
-                                                                        "Stream": {
-                                                                          "bound": "Unbounded",
-                                                                          "order": "TotalOrder",
-                                                                          "retry": "ExactlyOnce",
-                                                                          "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                        }
-                                                                      },
-                                                                      "cardinality": null,
-                                                                      "tag": null,
-                                                                      "op": {
-                                                                        "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:89:14",
-                                                                        "cpu_usage": null,
-                                                                        "network_recv_cpu_usage": null,
-                                                                        "id": null
-                                                                      }
-                                                                    }
-                                                                  }
-                                                                },
-                                                                "metadata": {
-                                                                  "location_id": {
-                                                                    "Cluster": {
-                                                                      "idx": 4,
-                                                                      "version": 1
-                                                                    }
-                                                                  },
-                                                                  "collection_kind": {
-                                                                    "Stream": {
-                                                                      "bound": "Unbounded",
-                                                                      "order": "TotalOrder",
-                                                                      "retry": "ExactlyOnce",
-                                                                      "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
-                                                                    }
-                                                                  },
-                                                                  "cardinality": null,
-                                                                  "tag": null,
-                                                                  "op": {
-                                                                    "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:181:14",
-                                                                    "cpu_usage": null,
-                                                                    "network_recv_cpu_usage": null,
-                                                                    "id": null
-                                                                  }
-                                                                }
-                                                              }
-                                                            },
-                                                            "metadata": {
-                                                              "location_id": {
-                                                                "Cluster": {
-                                                                  "idx": 4,
-                                                                  "version": 1
-                                                                }
-                                                              },
-                                                              "collection_kind": {
-                                                                "KeyedStream": {
-                                                                  "bound": "Unbounded",
-                                                                  "value_order": "TotalOrder",
-                                                                  "value_retry": "ExactlyOnce",
-                                                                  "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
-                                                                  "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                                }
-                                                              },
-                                                              "cardinality": null,
-                                                              "tag": null,
-                                                              "op": {
-                                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:185:14",
-                                                                "cpu_usage": null,
-                                                                "network_recv_cpu_usage": null,
-                                                                "id": null
-                                                              }
-                                                            }
-                                                          }
-                                                        },
-                                                        "metadata": {
-                                                          "location_id": {
-                                                            "Cluster": {
-                                                              "idx": 3,
-                                                              "version": 1
-                                                            }
-                                                          },
-                                                          "collection_kind": {
-                                                            "KeyedStream": {
-                                                              "bound": "Unbounded",
-                                                              "value_order": "TotalOrder",
-                                                              "value_retry": "ExactlyOnce",
-                                                              "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
-                                                              "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                            }
-                                                          },
-                                                          "cardinality": null,
-                                                          "tag": null,
-                                                          "op": {
-                                                            "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:186:14",
-                                                            "cpu_usage": null,
-                                                            "network_recv_cpu_usage": null,
-                                                            "id": null
-                                                          }
-                                                        }
-                                                      }
-                                                    },
-                                                    "metadata": {
-                                                      "location_id": {
-                                                        "Cluster": {
-                                                          "idx": 3,
-                                                          "version": 1
-                                                        }
-                                                      },
-                                                      "collection_kind": {
-                                                        "Stream": {
-                                                          "bound": "Unbounded",
-                                                          "order": "NoOrder",
-                                                          "retry": "ExactlyOnce",
-                                                          "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >)"
-                                                        }
-                                                      },
-                                                      "cardinality": null,
-                                                      "tag": null,
-                                                      "op": {
-                                                        "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:14",
-                                                        "cpu_usage": null,
-                                                        "network_recv_cpu_usage": null,
-                                                        "id": null
-                                                      }
-                                                    }
-                                                  }
-                                                },
-                                                "metadata": {
-                                                  "location_id": {
-                                                    "Cluster": {
-                                                      "idx": 3,
-                                                      "version": 1
-                                                    }
-                                                  },
-                                                  "collection_kind": {
-                                                    "Stream": {
-                                                      "bound": "Unbounded",
-                                                      "order": "NoOrder",
-                                                      "retry": "ExactlyOnce",
-                                                      "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                    }
-                                                  },
-                                                  "cardinality": null,
-                                                  "tag": null,
-                                                  "op": {
-                                                    "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:614:24",
-                                                    "cpu_usage": null,
-                                                    "network_recv_cpu_usage": null,
-                                                    "id": null
-                                                  }
-                                                }
-                                              }
-                                            },
-                                            "trusted": false,
-                                            "metadata": {
-                                              "location_id": {
-                                                "Cluster": {
-                                                  "idx": 3,
-                                                  "version": 1
-                                                }
-                                              },
-                                              "collection_kind": {
-                                                "Stream": {
-                                                  "bound": "Unbounded",
-                                                  "order": "TotalOrder",
-                                                  "retry": "ExactlyOnce",
-                                                  "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSOperation < std :: string :: String , std :: string :: String >"
-                                                }
-                                              },
-                                              "cardinality": null,
-                                              "tag": null,
-                                              "op": {
-                                                "span": "/Users/jmhwork/code/kvs_zoo/src/before_storage/ordering/paxos.rs:188:14",
-                                                "cpu_usage": null,
-                                                "network_recv_cpu_usage": null,
-                                                "id": null
-                                              }
-                                            }
-                                          }
-                                        },
-                                        "metadata": {
-                                          "location_id": {
-                                            "Cluster": {
-                                              "idx": 3,
-                                              "version": 1
-                                            }
-                                          },
-                                          "collection_kind": {
-                                            "Stream": {
-                                              "bound": "Unbounded",
-                                              "order": "TotalOrder",
-                                              "retry": "ExactlyOnce",
-                                              "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                                            }
-                                          },
-                                          "cardinality": null,
-                                          "tag": null,
-                                          "op": {
-                                            "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:265:35",
-                                            "cpu_usage": null,
-                                            "network_recv_cpu_usage": null,
-                                            "id": null
-                                          }
-                                        }
-                                      }
-                                    }
-                                  },
-                                  "metadata": {
-                                    "location_id": {
-                                      "Cluster": {
-                                        "idx": 3,
-                                        "version": 1
-                                      }
-                                    },
-                                    "collection_kind": {
-                                      "Stream": {
-                                        "bound": "Unbounded",
-                                        "order": "TotalOrder",
-                                        "retry": "ExactlyOnce",
-                                        "element_type": "kvs_zoo :: __staged :: kvs_core :: CoreEmission < std :: string :: String , std :: string :: String >"
-                                      }
-                                    },
-                                    "cardinality": null,
-                                    "tag": null,
-                                    "op": {
-                                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
-                                      "cpu_usage": null,
-                                      "network_recv_cpu_usage": null,
-                                      "id": null
-                                    }
-                                  }
-                                }
-                              },
-                              "metadata": {
-                                "location_id": {
-                                  "Cluster": {
-                                    "idx": 3,
-                                    "version": 1
-                                  }
-                                },
-                                "collection_kind": {
-                                  "Stream": {
-                                    "bound": "Unbounded",
-                                    "order": "TotalOrder",
-                                    "retry": "ExactlyOnce",
-                                    "element_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
-                                  }
-                                },
-                                "cardinality": null,
-                                "tag": null,
-                                "op": {
-                                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:330:14",
-                                  "cpu_usage": null,
-                                  "network_recv_cpu_usage": null,
-                                  "id": null
-                                }
-                              }
-                            }
-                          },
-                          "metadata": {
-                            "location_id": {
-                              "Process": {
-                                "idx": 1,
-                                "version": 1
-                              }
-                            },
-                            "collection_kind": {
-                              "Stream": {
-                                "bound": "Unbounded",
-                                "order": "TotalOrder",
-                                "retry": "ExactlyOnce",
-                                "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
-                              }
-                            },
-                            "cardinality": null,
-                            "tag": null,
-                            "op": {
-                              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:288:44",
-                              "cpu_usage": null,
-                              "network_recv_cpu_usage": null,
-                              "id": null
-                            }
-                          }
-                        }
-                      },
-                      "metadata": {
-                        "location_id": {
-                          "Process": {
-                            "idx": 1,
-                            "version": 1
-                          }
-                        },
-                        "collection_kind": {
-                          "KeyedStream": {
-                            "bound": "Unbounded",
-                            "value_order": "TotalOrder",
-                            "value_retry": "ExactlyOnce",
-                            "key_type": "kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode >",
-                            "value_type": "kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >"
-                          }
-                        },
-                        "cardinality": null,
-                        "tag": null,
-                        "op": {
-                          "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/networking.rs:958:20",
-                          "cpu_usage": null,
-                          "network_recv_cpu_usage": null,
-                          "id": null
-                        }
-                      }
-                    }
+                    "$shared_ref": 36
                   },
                   "metadata": {
                     "location_id": {
@@ -18665,15 +18739,15 @@
                     "collection_kind": {
                       "Stream": {
                         "bound": "Unbounded",
-                        "order": "NoOrder",
+                        "order": "TotalOrder",
                         "retry": "ExactlyOnce",
-                        "element_type": "(kvs_zoo :: __staged :: __deps :: hydro_lang :: location :: member_id :: MemberId < kvs_zoo :: __staged :: kvs_core :: KVSNode > , kvs_zoo :: __staged :: protocol :: kvs_ops :: KVSResponse < std :: string :: String , std :: string :: String >)"
+                        "element_type": "(u64 , std :: string :: String)"
                       }
                     },
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:290:10",
+                      "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:297:23",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -18689,17 +18763,18 @@
                   }
                 },
                 "collection_kind": {
-                  "Stream": {
+                  "KeyedStream": {
                     "bound": "Unbounded",
-                    "order": "NoOrder",
-                    "retry": "ExactlyOnce",
-                    "element_type": "(u64 , std :: string :: String)"
+                    "value_order": "TotalOrder",
+                    "value_retry": "ExactlyOnce",
+                    "key_type": "u64",
+                    "value_type": "std :: string :: String"
                   }
                 },
                 "cardinality": null,
-                "tag": null,
+                "tag": "client_responses",
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:291:10",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:298:41",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -18724,9 +18799,9 @@
               }
             },
             "cardinality": null,
-            "tag": "client_responses",
+            "tag": null,
             "op": {
-              "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:294:10",
+              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/keyed_stream/mod.rs:425:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -18755,7 +18830,7 @@
                   "input": {
                     "Tee": {
                       "inner": {
-                        "$shared_ref": 36
+                        "$shared_ref": 37
                       },
                       "metadata": {
                         "location_id": {
@@ -18775,7 +18850,7 @@
                         "cardinality": null,
                         "tag": null,
                         "op": {
-                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
+                          "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:399:14",
                           "cpu_usage": null,
                           "network_recv_cpu_usage": null,
                           "id": null
@@ -18801,7 +18876,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:332:29",
+                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:402:29",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -18827,7 +18902,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:284:10",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:283:10",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -18853,7 +18928,7 @@
             "cardinality": null,
             "tag": "meta_events",
             "op": {
-              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2034:14",
+              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2029:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -18879,7 +18954,7 @@
               "input": {
                 "Tee": {
                   "inner": {
-                    "$shared_ref": 36
+                    "$shared_ref": 37
                   },
                   "metadata": {
                     "location_id": {
@@ -18899,7 +18974,7 @@
                     "cardinality": null,
                     "tag": null,
                     "op": {
-                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:329:14",
+                      "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:399:14",
                       "cpu_usage": null,
                       "network_recv_cpu_usage": null,
                       "id": null
@@ -18925,7 +19000,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:331:37",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/kvs_core/mod.rs:401:37",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null
@@ -18951,7 +19026,7 @@
             "cardinality": null,
             "tag": "data_events",
             "op": {
-              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2034:14",
+              "span": "/Users/jmhwork/code/calm/hydro/hydro_lang/src/live_collections/stream/mod.rs:2029:14",
               "cpu_usage": null,
               "network_recv_cpu_usage": null,
               "id": null
@@ -18996,7 +19071,7 @@
                 "cardinality": null,
                 "tag": null,
                 "op": {
-                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:264:15",
+                  "span": "/Users/jmhwork/code/kvs_zoo/src/plumbing.rs:263:15",
                   "cpu_usage": null,
                   "network_recv_cpu_usage": null,
                   "id": null

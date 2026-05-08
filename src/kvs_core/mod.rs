@@ -125,9 +125,15 @@ pub struct KVSCore;
 impl KVSCore {
     /// Lattice merge path: coordination-free processing for lattice value types.
     ///
-    /// All operations (puts, gets, deletes) go through a single c+i fold.
-    /// The fold buffers operations per tick, applies writes first, then reads.
-    /// This ensures reads see the latest lattice state without snapshot+join.
+    /// All operations go through a single c+i fold per key. The fold accumulates
+    /// both the lattice value (via merge) and the set of responses. This avoids
+    /// the batch+join pattern that would introduce batch nondeterminism.
+    ///
+    /// The fold is commutative+idempotent because:
+    /// - The lattice value merges commutatively and idempotently (V: Merge)
+    /// - Get responses are threshold reads: reading from a larger lattice value
+    ///   yields a ≥ result, so the response set grows monotonically
+    /// - Put/Delete acks are set-union (each unique request_id adds one response)
     pub fn process_lattice<'a, K, V, L>(
         operations: impl Into<Stream<KVSOperation<K, V>, L, Unbounded, NoOrder>>,
     ) -> CoreOutput<K, V, L, NoOrder>
@@ -159,25 +165,83 @@ impl KVSCore {
         L: hydro_lang::location::Location<'a> + hydro_lang::location::NoTick + Clone + 'a,
     {
         let operations = operations.into();
+
+        // Key all operations by their key field
+        let keyed_ops = operations.clone().map(q!(|op| match op {
+            KVSOperation::Put(ref k, _, _, _) => (k.clone(), op),
+            KVSOperation::Get(ref k, _, _) => (k.clone(), op),
+            KVSOperation::Delete(ref k, _, _) => (k.clone(), op),
+        })).into_keyed();
+
+        // Single c+i fold per key: accumulates (lattice_value, responses)
+        // The lattice value grows monotonically via merge.
+        // Responses are a set that grows monotonically (threshold reads).
+        // Weaken retries to AtLeastOnce: the fold is idempotent (lattice merge),
+        // so duplicates are harmless. This lets the analysis derive i=true.
+        let folded = keyed_ops.weaken_retries::<hydro_lang::live_collections::stream::AtLeastOnce>().fold(
+            q!(|| (V::default(), Vec::<KVSResponse<K, V>>::new())),
+            q!(|(state, responses): &mut (V, Vec<KVSResponse<K, V>>), op: KVSOperation<K, V>| {
+                let request_id = op.request_id();
+                let client_id = op.client_id();
+                match op {
+                    KVSOperation::Put(_key, value, _, _) => {
+                        lattices::Merge::merge(state, value);
+                        if client_id.is_some() {
+                            responses.push(KVSResponse::PutOk { request_id, client_id });
+                        }
+                    }
+                    KVSOperation::Get(_key, _, _) => {
+                        if client_id.is_some() {
+                            let value = if lattices::IsBot::is_bot(state) {
+                                None
+                            } else {
+                                Some(state.clone())
+                            };
+                            responses.push(KVSResponse::GetResult { request_id, client_id, value });
+                        }
+                    }
+                    KVSOperation::Delete(_key, _, _) => {
+                        // For lattice types, delete resets to bottom
+                        *state = V::default();
+                        if client_id.is_some() {
+                            responses.push(KVSResponse::DeleteOk { request_id, client_id });
+                        }
+                    }
+                }
+            },
+                commutative = manual_proof!(/** V: Merge is commutative; response set is union */),
+                idempotent = manual_proof!(/** V: Merge is idempotent; duplicate ops produce same responses */),
+                monotone = manual_proof!(/** lattice value only grows; response set only grows */))
+        );
+
+        // Snapshot the fold (MonotonicValue → Bounded) and extract responses.
+        // This snapshot is safe: the fold output is monotone, so different
+        // snapshot times yield valid lower bounds (no batch nondeterminism).
         let tick = operations.location().tick();
-        let (puts, deletes, gets) = Self::split_operations(operations);
+        let responses = folded
+            .snapshot(&tick, nondet!(/** snapshot monotone fold for response extraction */))
+            .values()
+            .flat_map_unordered(q!(|(_value, responses)| responses))
+            .all_ticks();
 
-        // Monotone fold: lattice merge. The monotone annotation tells Hydro
-        // (and our analysis tool) that the accumulated value only grows.
-        let put_updates = puts.clone().map(q!(|(key, value, _, _)| (key, value)));
-        let storage = put_updates
-            .into_keyed()
-            .fold(
-                q!(|| V::default()),
-                q!(|old, new| {
-                    lattices::Merge::merge(old, new);
-                },
-                    commutative = manual_proof!(/** V: Merge — lattice merge is commutative */),
-                    idempotent = manual_proof!(/** V: Merge — lattice merge is idempotent */),
-                    monotone = manual_proof!(/** V: Merge — lattice value only grows */))
-            );
+        // Extract data events from the original operations stream
+        let data = operations.clone().filter_map(q!(|op| match op {
+            KVSOperation::Put(key, value, _, _) => Some(DataEvent::Put { key, value }),
+            KVSOperation::Delete(key, _, _) => Some(DataEvent::Delete { key }),
+            KVSOperation::Get(_, _, _) => None,
+        }));
 
-        Self::build_output(puts, deletes, gets, storage, &tick)
+        // Extract meta events
+        let meta = operations.filter_map(q!(|op| match op {
+            KVSOperation::Delete(key, _, _) => Some(MetaEvent::Tomb { key }),
+            _ => None,
+        }));
+
+        CoreOutput {
+            responses,
+            data,
+            meta,
+        }
     }
 
     /// Overwrite path: last-writer-wins processing for plain value types.

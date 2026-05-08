@@ -254,7 +254,6 @@ where
         + ReplicationPlumb<KeyType, V>
         + crate::background::BackgroundPlumb<KeyType, V>,
 {
-    use hydro_lang::live_collections::stream::TotalOrder;
 
     let mut kvs = kvs;
     let mut layers = crate::kvs_layer::KVSClusters::new();
@@ -286,12 +285,17 @@ where
     let (_bg_data, _bg_meta) = kvs.plumb_background(&layers, data_events.weaken_ordering().ir_node_named("data_events"), meta_stream.weaken_ordering().ir_node_named("meta_events"));
 
     let proxy_responses = client_responses.send(proxy, TCP.fail_stop().bincode());
-    let to_complete = proxy_responses
-        .entries()
+    let ordered_responses = proxy_responses
+        .entries_partially_ordered(nondet!(
+            /// Paxos total order: all members process the same sequence,
+            /// so per-member response streams are consistent prefixes.
+        ))
         .filter_map(q!(|(_member_id, response)| {
             response.client_id().map(|cid| (cid, response.to_string()))
-        }))
-        .into_keyed();
+        }));
+    // Observable output: ordered response stream (creates a ForEach sink)
+    ordered_responses.clone().ir_node_named("client_responses_seq").for_each(q!(|_| {}));
+    let to_complete = ordered_responses.into_keyed();
     complete_sink.complete(to_complete.ir_node_named("client_responses"));
 
     (layers, bidi_port)

@@ -8,7 +8,7 @@ use hydro_lang::viz::config::GraphConfig;
 use kvs_zoo::after_storage::replication::{BroadcastReplication, BroadcastReplicationConfig};
 use kvs_zoo::before_storage::routing::{RoundRobinRouter, ShardedRouter};
 use kvs_zoo::kvs_layer::KVSCluster;
-use kvs_zoo::plumbing::plumb_kvs_dataflow;
+use kvs_zoo::plumbing::plumb_kvs_dataflow_lattice;
 use kvs_zoo::protocol::KVSOperation;
 use kvs_zoo::values::CausalString;
 
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build a Hydro graph for the ShardedReplicatedKVS type, return layer handles and client I/O ports
     let (layers, port) =
-        plumb_kvs_dataflow::<String, CausalString, _>(&proxy, &client_external, &mut flow, kvs_spec);
+        plumb_kvs_dataflow_lattice::<String, CausalString, _>(&proxy, &client_external, &mut flow, kvs_spec);
 
     let built = flow.finalize();
     
