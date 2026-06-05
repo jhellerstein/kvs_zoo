@@ -75,12 +75,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "allocator-api2"
-version = "0.2.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "copy_span"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1065,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "dfir_lang"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "auto_impl",
  "clap",
@@ -1085,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "dfir_macro"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "dfir_lang",
  "hydro_build_utils",
@@ -1104,6 +1098,7 @@ dependencies = [
  "futures-sink",
  "hydro_build_utils",
  "itertools 0.14.0",
+ "lattices",
  "pin-project-lite",
  "rustc-hash 2.1.2",
  "sealed",
@@ -1113,9 +1108,10 @@ dependencies = [
 
 [[package]]
 name = "dfir_rs"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "bincode",
+ "bumpalo",
  "bytes",
  "dfir_lang",
  "dfir_macro",
@@ -1599,8 +1595,7 @@ version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
- "ahash",
- "allocator-api2",
+ "rustc-std-workspace-alloc",
 ]
 
 [[package]]
@@ -1685,7 +1680,7 @@ dependencies = [
 
 [[package]]
 name = "hydro_build_utils"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "insta",
  "rustc_version",
@@ -1693,7 +1688,7 @@ dependencies = [
 
 [[package]]
 name = "hydro_deploy"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "append-only-vec",
@@ -1725,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "hydro_deploy_integration"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -1742,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "hydro_lang"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "auto_impl",
  "backtrace",
@@ -1777,8 +1772,8 @@ dependencies = [
  "sha2",
  "sinktools",
  "slotmap",
- "stageleft",
- "stageleft_tool",
+ "stageleft 0.14.0",
+ "stageleft_tool 0.14.0",
  "syn",
  "tempfile",
  "tokio",
@@ -1793,13 +1788,13 @@ dependencies = [
 
 [[package]]
 name = "hydro_std"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "hdrhistogram",
  "hydro_lang",
  "serde",
- "stageleft",
- "stageleft_tool",
+ "stageleft 0.14.0",
+ "stageleft_tool 0.14.0",
 ]
 
 [[package]]
@@ -2126,8 +2121,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "stageleft",
- "stageleft_tool",
+ "stageleft 0.13.5",
+ "stageleft_tool 0.13.5",
  "tokio",
  "tokio-stream",
  "trybuild",
@@ -2135,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "lattices"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "cc-traits",
  "fst",
@@ -2150,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "lattices_macro"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "hydro_build_utils",
  "proc-macro-crate 3.5.0",
@@ -3141,6 +3136,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
 
 [[package]]
+name = "rustc-std-workspace-alloc"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9d441c3b2ebf55cebf796bfdc265d67fa09db17b7bb6bd4be75c509e1e8fec3"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3426,7 +3427,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "sinktools"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -3535,7 +3536,22 @@ dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
- "stageleft_macro",
+ "stageleft_macro 0.13.5",
+ "syn",
+]
+
+[[package]]
+name = "stageleft"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22031b9d645815e5b3169ade69433c284b48df797882a30e6be87584efec3ef2"
+dependencies = [
+ "ctor 0.4.3",
+ "parking_lot",
+ "proc-macro-crate 3.5.0",
+ "proc-macro2",
+ "quote",
+ "stageleft_macro 0.14.0",
  "syn",
 ]
 
@@ -3553,10 +3569,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "stageleft_macro"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71d26dbe0848def4b7321df73217dbbc8ebf823b8d8bc94c700f3851edb67a25"
+dependencies = [
+ "proc-macro-crate 3.5.0",
+ "proc-macro2",
+ "quote",
+ "sha2",
+ "syn",
+]
+
+[[package]]
 name = "stageleft_tool"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba88edb18395d26627c6480435a08a30a84056b16ec5e920775716f5f4d92375"
+dependencies = [
+ "prettyplease",
+ "proc-macro-crate 3.5.0",
+ "proc-macro2",
+ "quote",
+ "sha2",
+ "syn",
+ "syn-inline-mod",
+ "toml_edit 0.22.27",
+]
+
+[[package]]
+name = "stageleft_tool"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab9d0ec35c71f510a76f93d5d404983a968c5337dcb9a0161cdfb676d2497256"
 dependencies = [
  "prettyplease",
  "proc-macro-crate 3.5.0",
@@ -4103,7 +4148,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "variadics"
-version = "0.0.10"
+version = "0.1.0"
 dependencies = [
  "hashbrown 0.14.5",
  "hydro_build_utils",
@@ -4112,7 +4157,7 @@ dependencies = [
 
 [[package]]
 name = "variadics_macro"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
